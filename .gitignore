@@ -1,0 +1,33 @@
+# Local environment and secrets
+.env
+.env.*
+app/.env
+app/.env.*
+!app/.env.example
+app/auth.json
+app/storage/*.key
+app/ssl/*.pem
+app/ssl/*.key
+
+# Docker data and logs
+data/mysql/*
+!data/mysql/.gitignore
+data/dragonfly/*
+!data/dragonfly/.gitignore
+log/nginx/*
+!log/nginx/.gitignore
+log/mysql/*
+!log/mysql/.gitignore
+
+# Dependencies and build output
+app/vendor/
+app/node_modules/
+app/public/build/
+app/public/hot
+
+# Nested git metadata backup
+app/.git-backup/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

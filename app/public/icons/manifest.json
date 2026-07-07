@@ -1,0 +1,13 @@
+{
+  "name": "AI Image Editor",
+  "short_name": "AI Editor",
+  "description": "Chỉnh ảnh bằng AI nhanh trên web và màn hình chính.",
+  "id": "/chinh-anh-ai",
+  "start_url": "/chinh-anh-ai?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0a",
+  "theme_color": "#7c3aed",
+  "categories": ["photo", "graphics", "productivity"]
+}
