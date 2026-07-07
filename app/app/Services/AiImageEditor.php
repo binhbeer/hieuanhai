@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AiImage;
+use GdImage;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Request;
@@ -16,6 +17,10 @@ use Throwable;
 
 class AiImageEditor
 {
+    private const REFERENCE_MAX_WIDTH = 1024;
+
+    private const REFERENCE_JPEG_QUALITY = 88;
+
     public function create(Request $request, array $photos, string $prompt, ?string $customPrompt = null, ?string $preset = null): AiImage
     {
         $photo = $photos[0] ?? null;
@@ -202,15 +207,15 @@ class AiImageEditor
                 continue;
             }
 
-            $sourcePath = 'ai-image-sources/'.Str::uuid().$this->extensionFor($photo->getMimeType() ?: 'image/png');
-            $sourceContent = $photo->get();
+            $sourceContent = $this->referenceImageContent($photo);
+            $sourcePath = 'ai-image-sources/'.Str::uuid().'.jpg';
 
             if (! Storage::disk('public')->put($sourcePath, $sourceContent, ['visibility' => 'public'])) {
                 throw new \RuntimeException('Không lưu được ảnh nguồn.');
             }
 
             $sourcePaths[] = $sourcePath;
-            $referenceImages[] = 'data:'.($photo->getMimeType() ?: 'image/png').';base64,'.base64_encode($sourceContent);
+            $referenceImages[] = 'data:image/jpeg;base64,'.base64_encode($sourceContent);
         }
 
         if ($referenceImages === []) {
@@ -273,6 +278,104 @@ class AiImageEditor
     public function dailyLimit(): int
     {
         return max(1, (int) config('ai.image_daily_limit', 3));
+    }
+
+    private function referenceImageContent(UploadedFile $photo): string
+    {
+        $path = $photo->getRealPath();
+
+        if (! is_string($path)) {
+            throw new \InvalidArgumentException('Không đọc được ảnh tải lên.');
+        }
+
+        $info = @getimagesize($path);
+        $mime = is_array($info) ? (string) ($info['mime'] ?? '') : (string) $photo->getMimeType();
+        $image = $this->imageFromPath($path, $mime);
+
+        if (! $image) {
+            throw new \InvalidArgumentException('Định dạng ảnh chưa hỗ trợ. Hãy dùng JPG, PNG, WEBP hoặc AVIF.');
+        }
+
+        $image = $this->orientImage($image, $path, $mime);
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $targetWidth = min($width, self::REFERENCE_MAX_WIDTH);
+        $targetHeight = (int) round($height * $targetWidth / $width);
+        $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
+
+        if (! $canvas) {
+            imagedestroy($image);
+
+            throw new \RuntimeException('Không resize được ảnh nguồn.');
+        }
+
+        imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+
+        if (! imagecopyresampled($canvas, $image, 0, 0, 0, 0, $targetWidth, $targetHeight, $width, $height)) {
+            imagedestroy($image);
+            imagedestroy($canvas);
+
+            throw new \RuntimeException('Không resize được ảnh nguồn.');
+        }
+
+        imagedestroy($image);
+
+        ob_start();
+        $encoded = imagejpeg($canvas, null, self::REFERENCE_JPEG_QUALITY);
+        $content = ob_get_clean();
+        imagedestroy($canvas);
+
+        if (! $encoded || ! is_string($content)) {
+            throw new \RuntimeException('Không nén được ảnh nguồn.');
+        }
+
+        return $content;
+    }
+
+    private function imageFromPath(string $path, string $mime): ?GdImage
+    {
+        $image = match ($mime) {
+            'image/jpeg', 'image/pjpeg' => @imagecreatefromjpeg($path),
+            'image/png' => @imagecreatefrompng($path),
+            'image/webp' => @imagecreatefromwebp($path),
+            'image/avif' => function_exists('imagecreatefromavif') ? @imagecreatefromavif($path) : false,
+            default => false,
+        };
+
+        return $image instanceof GdImage ? $image : null;
+    }
+
+    private function orientImage(GdImage $image, string $path, string $mime): GdImage
+    {
+        if ($mime !== 'image/jpeg' || ! function_exists('exif_read_data')) {
+            return $image;
+        }
+
+        $exif = @exif_read_data($path);
+        $orientation = is_array($exif) ? (int) ($exif['Orientation'] ?? 1) : 1;
+
+        if ($orientation === 1) {
+            return $image;
+        }
+
+        if (in_array($orientation, [2, 4, 5, 7], true)) {
+            imageflip($image, IMG_FLIP_HORIZONTAL);
+        }
+
+        $rotated = match ($orientation) {
+            3, 4 => imagerotate($image, 180, 0),
+            5, 6 => imagerotate($image, -90, 0),
+            7, 8 => imagerotate($image, 90, 0),
+            default => $image,
+        };
+
+        if ($rotated instanceof GdImage && $rotated !== $image) {
+            imagedestroy($image);
+
+            return $rotated;
+        }
+
+        return $image;
     }
 
     private function extensionFor(string $mime): string

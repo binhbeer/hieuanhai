@@ -25,6 +25,7 @@ return [
     'image_reference_field' => env('AI_IMAGE_REFERENCE_FIELD', 'image'),
     'image_daily_limit' => (int) env('AI_IMAGE_DAILY_LIMIT', 3),
     'image_max_reference_photos' => (int) env('AI_IMAGE_MAX_REFERENCE_PHOTOS', 1),
+    'image_upload_max_kb' => (int) env('AI_IMAGE_UPLOAD_MAX_KB', 32768),
 
     /*
     |--------------------------------------------------------------------------

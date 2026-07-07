@@ -23,8 +23,8 @@ class AiImageEditorTest extends TestCase
     {
         $this->get(route('home'))
             ->assertOk()
-            ->assertSee('Chỉnh ảnh AI')
-            ->assertSee('Chỉnh ảnh AI chất lượng cao miễn phí không cần đăng ký.');
+            ->assertSee('Chọn phong cách')
+            ->assertSee('Comic');
     }
 
     public function test_guest_is_limited_to_three_images_per_day(): void
@@ -95,7 +95,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $photo = UploadedFile::fake()->image('source.png');
+        $photo = UploadedFile::fake()->image('source.png', 2000, 1000);
 
         $image = app(AiImageEditor::class)->create(
             $request,
@@ -107,7 +107,8 @@ class AiImageEditorTest extends TestCase
             && $request['model'] === 'cx/gpt-5.5-image'
             && str_contains($request['prompt'], 'Edit that image according to the instructions')
             && str_contains($request['prompt'], 'A cute cat wearing a hat')
-            && $request['image'] === 'data:image/png;base64,'.base64_encode($photo->get())
+            && str_starts_with($request['image'], 'data:image/jpeg;base64,')
+            && $this->encodedImageSizeIs($request['image'], 1024, 512)
             && $request['quality'] === 'auto'
             && $request['image_detail'] === 'high'
             && $request['output_format'] === 'png');
@@ -147,10 +148,18 @@ class AiImageEditorTest extends TestCase
         Http::assertSent(fn (HttpRequest $request) => is_array($request['images'])
             && count($request['images']) === 3
             && ! isset($request['image'])
-            && $request['images'][0] === 'data:image/png;base64,'.base64_encode($photos[0]->get())
-            && $request['images'][2] === 'data:image/png;base64,'.base64_encode($photos[2]->get()));
+            && str_starts_with($request['images'][0], 'data:image/jpeg;base64,')
+            && str_starts_with($request['images'][2], 'data:image/jpeg;base64,'));
 
         $this->assertSame('succeeded', $image->status);
         $this->assertCount(3, $image->response_meta['source_paths']);
+    }
+
+    private function encodedImageSizeIs(string $image, int $width, int $height): bool
+    {
+        $content = base64_decode(substr($image, strlen('data:image/jpeg;base64,')), true);
+        $size = is_string($content) ? getimagesizefromstring($content) : false;
+
+        return is_array($size) && $size[0] === $width && $size[1] === $height;
     }
 }

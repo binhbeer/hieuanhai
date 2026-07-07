@@ -76,7 +76,7 @@ new class extends Component {
         $this->validate([
             'selectedPreset' => ['required', 'string'],
             'photos' => ['required', 'array', 'min:1', 'max:' . $this->maxReferencePhotos()],
-            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:' . config('ai.image_upload_max_kb', 32768)],
             'customPrompt' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -101,6 +101,8 @@ new class extends Component {
             $this->reset('photos', 'newPhotos', 'customPrompt');
             unset($this->remainingToday);
             $this->dispatch('image-usage-updated');
+        } catch (InvalidArgumentException $e) {
+            $this->errorMessage = $e->getMessage();
         } catch (Throwable $e) {
             report($e);
 
@@ -224,7 +226,7 @@ new class extends Component {
 						<div class="grid grid-cols-2 gap-3 overflow-y-auto overflow-x-hidden pe-1 md:grid-cols-4">
 							@foreach ($this->presets() as $key => $preset)
 								<flux:card
-									class="min-w-0 cursor-pointer !p-4 text-center transition hover:border-orange-300/40 hover:bg-white/15"
+									class="min-w-0 cursor-pointer p-4! text-center transition hover:border-orange-300/40 hover:bg-white/15"
 									size="sm" role="button" tabindex="0" wire:key="preset-{{ $key }}"
 									wire:click="selectPreset('{{ $key }}')" wire:keydown.enter="selectPreset('{{ $key }}')">
 									<p class="truncate font-medium text-white">{{ $preset['title'] }}</p>
@@ -246,7 +248,7 @@ new class extends Component {
 
 						<div class="space-y-3">
 							<div
-								class="relative overflow-hidden rounded-xl border border-dashed border-white/10 bg-white/[0.04] p-3">
+								class="relative overflow-hidden rounded-xl border border-dashed border-white/10 bg-white/4 p-3">
 								@if ($photos)
 									<div @class([
 										'grid h-72 gap-2',
@@ -290,7 +292,7 @@ new class extends Component {
 										<flux:icon class="size-10 text-zinc-400" name="cloud-arrow-up" />
 										<div>
 											<p class="font-medium text-white">Tải ảnh cần chỉnh</p>
-											<flux:text class="text-sm" variant="subtle">Tối đa {{ $maxReferencePhotos }} ảnh JPG, PNG, WEBP.</flux:text>
+											<flux:text class="text-sm" variant="subtle">Tối đa {{ $maxReferencePhotos }} ảnh JPG, PNG, WEBP, AVIF.</flux:text>
 										</div>
 									</div>
 								@endif
@@ -311,7 +313,7 @@ new class extends Component {
 									class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/15">
 									<flux:icon class="size-5" name="plus" />
 									<span>{{ $photos ? 'Upload thêm ảnh' : 'Upload ảnh' }}</span>
-									<input class="sr-only" type="file" wire:model="newPhotos" accept="image/jpeg,image/png,image/webp"
+									<input class="sr-only" type="file" wire:model="newPhotos" accept="image/jpeg,image/png,image/webp,image/avif"
 										@if ($maxReferencePhotos > 1) multiple @endif>
 								</label>
 							@endif
