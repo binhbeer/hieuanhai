@@ -95,12 +95,14 @@ class AiImageEditor
 
     public function visitorKey(Request $request): string
     {
-        return hash('sha256', $request->session()->getId().'|'.$request->ip());
+        $sessionId = $request->hasSession() ? $request->session()->getId() : null;
+
+        return hash('sha256', ($sessionId ?: 'stateless').'|'.$request->ip());
     }
 
     public function remainingToday(Request $request): ?int
     {
-        if (Auth::check()) {
+        if (Auth::id() === 1) {
             return null;
         }
 
@@ -109,13 +111,18 @@ class AiImageEditor
 
     public function isLimitExceeded(Request $request): bool
     {
-        return Auth::guest() && $this->remainingToday($request) <= 0;
+        return $this->remainingToday($request) === 0;
     }
 
     public function countToday(Request $request): int
     {
-        return AiImage::query()
-            ->where('visitor_key', $this->visitorKey($request))
+        $query = AiImage::query();
+
+        Auth::check()
+            ? $query->where('user_id', Auth::id())
+            : $query->where('visitor_key', $this->visitorKey($request));
+
+        return $query
             ->whereIn('status', ['pending', 'succeeded'])
             ->where('created_at', '>=', now()->startOfDay())
             ->count();
@@ -277,7 +284,7 @@ class AiImageEditor
 
     public function dailyLimit(): int
     {
-        return max(1, (int) config('ai.image_daily_limit', 3));
+        return max(1, (int) config('ai.image_daily_limit', 10));
     }
 
     private function referenceImageContent(UploadedFile $photo): string

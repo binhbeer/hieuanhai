@@ -23,7 +23,7 @@ return [
     'image_model' => env('AI_IMAGE_MODEL', 'cx/gpt-5.5-image'),
     'image_timeout' => (int) env('AI_IMAGE_TIMEOUT', 600),
     'image_reference_field' => env('AI_IMAGE_REFERENCE_FIELD', 'image'),
-    'image_daily_limit' => (int) env('AI_IMAGE_DAILY_LIMIT', 3),
+    'image_daily_limit' => (int) env('AI_IMAGE_DAILY_LIMIT', 10),
     'image_max_reference_photos' => (int) env('AI_IMAGE_MAX_REFERENCE_PHOTOS', 1),
     'image_upload_max_kb' => (int) env('AI_IMAGE_UPLOAD_MAX_KB', 32768),
 

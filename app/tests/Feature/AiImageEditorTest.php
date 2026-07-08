@@ -27,15 +27,17 @@ class AiImageEditorTest extends TestCase
             ->assertSee('Comic');
     }
 
-    public function test_guest_is_limited_to_three_images_per_day(): void
+    public function test_guest_is_limited_to_ten_images_per_day(): void
     {
+        config(['ai.image_daily_limit' => 10]);
+
         $editor = app(AiImageEditor::class);
         $request = Request::create('/', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
         $request->setLaravelSession($session);
 
-        foreach (range(1, 3) as $i) {
+        foreach (range(1, 10) as $i) {
             AiImage::create([
                 'visitor_key' => $editor->visitorKey($request),
                 'prompt' => 'Prompt '.$i,
@@ -49,9 +51,12 @@ class AiImageEditorTest extends TestCase
         $this->assertTrue($editor->isLimitExceeded($request));
     }
 
-    public function test_logged_in_users_have_no_daily_image_limit(): void
+    public function test_non_admin_users_are_limited_to_ten_images_per_day(): void
     {
-        $this->actingAs(User::factory()->create());
+        config(['ai.image_daily_limit' => 10]);
+
+        $user = User::factory()->create(['id' => 2]);
+        $this->actingAs($user);
 
         $editor = app(AiImageEditor::class);
         $request = Request::create('/', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -59,8 +64,34 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        foreach (range(1, 3) as $i) {
+        foreach (range(1, 10) as $i) {
             AiImage::create([
+                'user_id' => $user->id,
+                'visitor_key' => $editor->visitorKey($request),
+                'prompt' => 'Prompt '.$i,
+                'provider' => 'openai',
+                'model' => 'cx/gpt-5.5-image',
+                'status' => 'succeeded',
+            ]);
+        }
+
+        $this->assertSame(0, $editor->remainingToday($request));
+        $this->assertTrue($editor->isLimitExceeded($request));
+    }
+
+    public function test_user_id_one_has_no_daily_image_limit(): void
+    {
+        $this->actingAs(User::factory()->create(['id' => 1]));
+
+        $editor = app(AiImageEditor::class);
+        $request = Request::create('/', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+
+        foreach (range(1, 10) as $i) {
+            AiImage::create([
+                'user_id' => 1,
                 'visitor_key' => $editor->visitorKey($request),
                 'prompt' => 'Prompt '.$i,
                 'provider' => 'openai',

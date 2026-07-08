@@ -20,6 +20,14 @@
 					<flux:sidebar.item icon="home" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
 						{{ __('Tạo ảnh') }}
 					</flux:sidebar.item>
+					<flux:sidebar.item icon="chart-bar" :href="route('quota-check.index')" :current="request()->routeIs('quota-check.*')" wire:navigate>
+						{{ __('Quota Check') }}
+					</flux:sidebar.item>
+					@if (auth()->id() === 1)
+						<flux:sidebar.item icon="key" :href="route('api-keys.index')" :current="request()->routeIs('api-keys.*')" wire:navigate>
+							{{ __('API key') }}
+						</flux:sidebar.item>
+					@endif
 				</flux:sidebar.group>
 			</flux:sidebar.nav>
 

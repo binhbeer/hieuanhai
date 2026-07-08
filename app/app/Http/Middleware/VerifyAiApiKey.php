@@ -1,0 +1,48 @@
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Models\AiApiKey;
+use Closure;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
+
+class VerifyAiApiKey
+{
+    /**
+     * @param  Closure(Request): Response  $next
+     */
+    public function handle(Request $request, Closure $next): Response
+    {
+        $token = $request->bearerToken();
+
+        if (! is_string($token) || $token === '') {
+            return $this->unauthorized();
+        }
+
+        $key = AiApiKey::query()
+            ->with('user')
+            ->where('token_hash', AiApiKey::hashToken($token))
+            ->first();
+
+        $user = $key?->user;
+
+        if (! $key || ! $user instanceof Authenticatable) {
+            return $this->unauthorized();
+        }
+
+        $key->forceFill(['last_used_at' => now()])->save();
+
+        Auth::setUser($user);
+        $request->attributes->set('ai_api_key', $key);
+
+        return $next($request);
+    }
+
+    private function unauthorized(): Response
+    {
+        return response()->json(['message' => 'API key không hợp lệ.'], 401);
+    }
+}
