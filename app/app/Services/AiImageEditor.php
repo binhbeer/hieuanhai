@@ -786,10 +786,13 @@ class AiImageEditor
         }
 
         $review = $response instanceof Arrayable ? $response->toArray() : [];
+        $blockedPolicy = is_string($review['blocked_policy'] ?? null) ? $review['blocked_policy'] : 'none';
 
-        if (($review['allowed'] ?? false) !== true) {
+        if (in_array($blockedPolicy, ['sexual', 'political'], true)) {
             throw new \InvalidArgumentException('Prompt không phù hợp để tạo hoặc publish ảnh.');
         }
+
+        $review['allowed'] = true;
 
         return $review;
     }

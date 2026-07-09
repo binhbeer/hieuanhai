@@ -122,7 +122,7 @@ class AiImageApiTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'reason' => 'Không phù hợp.']]);
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.']]);
         Http::fake();
         [$plain, $key] = $this->apiKey(quotaLimit: 2);
 
@@ -143,6 +143,32 @@ class AiImageApiTest extends TestCase
             'status' => 'validation_failed',
             'quota_charged' => false,
         ]);
+    }
+
+    public function test_api_allows_non_blocked_false_review_policy(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+        [$plain, $key] = $this->apiKey(quotaLimit: 2);
+
+        $this
+            ->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images', [
+                'prompt' => 'Tạo ảnh comic bất kì',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('quota.used', 1);
+
+        Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations');
+        $key->refresh();
+        $this->assertSame(1, $key->quota_used);
     }
 
     public function test_api_rate_limit_allows_ten_requests_per_second(): void
@@ -356,11 +382,11 @@ class AiImageApiTest extends TestCase
     }
 
     /**
-     * @return array{allowed: bool, reason: string}
+     * @return array{allowed: bool, blocked_policy: string, reason: string}
      */
     private function allowedReview(): array
     {
-        return ['allowed' => true, 'reason' => 'An toàn.'];
+        return ['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.'];
     }
 
     /**

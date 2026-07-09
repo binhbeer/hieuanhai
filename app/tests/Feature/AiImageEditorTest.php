@@ -302,7 +302,7 @@ class AiImageEditorTest extends TestCase
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'reason' => 'Không phù hợp.']]);
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.']]);
         Http::fake();
 
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -321,6 +321,29 @@ class AiImageEditorTest extends TestCase
         }
     }
 
+    public function test_non_blocked_false_review_policy_still_creates_image(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+
+        $image = app(AiImageEditor::class)->create($request, [], 'Tạo ảnh comic bất kì');
+
+        $this->assertSame('succeeded', $image->status);
+        Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations');
+    }
+
     public function test_publish_sets_category_and_category_route_filters_gallery(): void
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
@@ -332,10 +355,9 @@ class AiImageEditorTest extends TestCase
         $agent = new ImageReviewAgent;
         $this->assertStringContainsString('- internal-meme: Meme nội bộ', $agent->instructions());
         $this->assertStringContainsString('tạo 3-5 tags ngắn', $agent->instructions());
-        $this->assertStringContainsString('Mặc định allowed=true', $agent->instructions());
-        $this->assertStringContainsString('Chỉ trả allowed=false', $agent->instructions());
-        $this->assertStringContainsString('nội dung tình dục', $agent->instructions());
-        $this->assertStringContainsString('nội dung chính trị', $agent->instructions());
+        $this->assertStringContainsString('Mặc định allowed=true và blocked_policy=none', $agent->instructions());
+        $this->assertStringContainsString('blocked_policy=sexual', $agent->instructions());
+        $this->assertStringContainsString('blocked_policy=political', $agent->instructions());
         $this->assertStringContainsString('Không từ chối vì thương hiệu, logo, người nổi tiếng, nhân vật bản quyền, deepfake', $agent->instructions());
         $this->assertStringContainsString('mô phỏng giao diện hồ sơ mạng xã hội', $agent->instructions());
 
@@ -464,7 +486,7 @@ class AiImageEditorTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'reason' => 'Không phù hợp.']]);
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.']]);
 
         $editor = app(AiImageEditor::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -562,20 +584,20 @@ class AiImageEditorTest extends TestCase
     }
 
     /**
-     * @return array{allowed: bool, reason: string}
+     * @return array{allowed: bool, blocked_policy: string, reason: string}
      */
     private function allowedReview(): array
     {
-        return ['allowed' => true, 'reason' => 'An toàn.'];
+        return ['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.'];
     }
 
     /**
      * @param  list<string>  $tags
-     * @return array{allowed: bool, category: string, tags: list<string>, reason: string}
+     * @return array{allowed: bool, blocked_policy: string, category: string, tags: list<string>, reason: string}
      */
     private function publishReview(string $category, array $tags = ['nước hoa', 'banner ads', 'sản phẩm']): array
     {
-        return ['allowed' => true, 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
+        return ['allowed' => true, 'blocked_policy' => 'none', 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
     }
 
     private function encodedImageSizeIs(string $image, int $width, int $height): bool

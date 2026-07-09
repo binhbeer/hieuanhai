@@ -14,9 +14,15 @@ new #[Title('Created images')] class extends Component
     {
         $this->refreshImages();
 
-        ($payload['status'] ?? null) === 'succeeded'
-            ? Flux::toast(variant: 'success', text: __('Image created successfully.'))
-            : Flux::toast(text: __('Could not create this image.'));
+        if (($payload['status'] ?? null) === 'succeeded') {
+            Flux::toast(variant: 'success', text: __('Image created successfully.'));
+
+            return;
+        }
+
+        if (($payload['status'] ?? null) === 'failed') {
+            Flux::toast(text: __('Could not create this image.'));
+        }
     }
 
     public function togglePublish(int $id, AiImageEditor $editor): void

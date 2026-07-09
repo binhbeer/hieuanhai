@@ -50,6 +50,30 @@ class CreatedImagesTest extends TestCase
             ->assertSee('wire:poll.2s', false);
     }
 
+    public function test_pending_progress_broadcast_refreshes_without_failure_toast(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        Livewire::test('pages::images')
+            ->call('refreshCompletedImage', ['status' => 'pending', 'progress' => 'generating'])
+            ->assertNotDispatched('toast-show');
+    }
+
+    public function test_terminal_broadcast_statuses_show_toasts(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        Livewire::test('pages::images')
+            ->call('refreshCompletedImage', ['status' => 'succeeded'])
+            ->assertDispatched('toast-show');
+
+        Livewire::test('pages::images')
+            ->call('refreshCompletedImage', ['status' => 'failed'])
+            ->assertDispatched('toast-show');
+    }
+
     public function test_created_image_detail_opens_failed_images(): void
     {
         $user = User::factory()->create();
