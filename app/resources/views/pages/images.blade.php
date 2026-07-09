@@ -90,6 +90,15 @@ new #[Title('Created images')] class extends Component
         return app(AiImageEditor::class)->resultUrl($image);
     }
 
+    public function imageThumbUrl(AiImage $image): ?string
+    {
+        if (! $image->result_path) {
+            return null;
+        }
+
+        return '/thumb_x720x/storage/'.ltrim($image->result_path, '/');
+    }
+
     public function progressLabel(AiImage $image): string
     {
         return match (data_get($image->request_meta, 'progress', 'queued')) {
@@ -160,11 +169,12 @@ new #[Title('Created images')] class extends Component
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
 			@foreach ($this->images as $image)
 				@php($url = $this->imageUrl($image))
+				@php($thumbUrl = $this->imageThumbUrl($image))
 				@php($progressStep = $this->progressStep($image))
 				<flux:card class="overflow-hidden p-0" wire:key="created-image-{{ $image->id }}">
 					<button class="block w-full text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
-						@if ($url)
-							<img class="aspect-square w-full bg-zinc-100 object-cover dark:bg-white/10" src="{{ $url }}" alt="{{ __('Image #:id', ['id' => $image->id]) }}" loading="lazy" />
+						@if ($thumbUrl)
+							<img class="aspect-square w-full bg-zinc-100 object-cover dark:bg-white/10" src="{{ $thumbUrl }}" alt="{{ __('Image #:id', ['id' => $image->id]) }}" loading="lazy" />
 						@elseif ($image->status === 'pending')
 							<div class="relative flex aspect-square items-center justify-center overflow-hidden bg-zinc-100 text-zinc-700 dark:bg-white/10 dark:text-white/80">
 								<div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-zinc-50),var(--color-zinc-200))] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,.12),rgba(255,255,255,.04))]"></div>

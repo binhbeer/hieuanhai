@@ -6,7 +6,7 @@
 ])
 
 <div {{ $attributes->class('group relative mb-3 break-inside-avoid overflow-hidden rounded-2xl bg-zinc-200 text-left opacity-0 shadow-sm transition duration-500 hover:-translate-y-0.5 hover:shadow-xl focus-within:-translate-y-0.5 focus-within:shadow-xl dark:bg-white/10') }} x-data="{ loaded: false }" x-bind:class="loaded && 'opacity-100!'">
-	<a class="block" href="{{ $detailUrl }}" aria-label="{{ __('View image details') }}" x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $image->id }} })">
+	<a class="block" href="{{ $detailUrl }}" aria-label="{{ __('View image details') }}" x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $image->id }}, url: @js($detailUrl) })">
 		<img class="h-auto w-full object-cover transition duration-500 group-hover:scale-[1.02]" src="{{ $url }}" alt="{{ Str::limit($image->prompt, 80) }}" loading="lazy" decoding="async" x-on:load="loaded = true" x-init="$el.complete && (loaded = true)">
 	</a>
 

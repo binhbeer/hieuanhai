@@ -303,6 +303,8 @@ class CreatedImagesTest extends TestCase
         $this->get(route('images.index'))
             ->assertOk()
             ->assertSee(__('Created images'))
+            ->assertSee('/thumb_x720x/storage/ai-images/202607/08/created.png')
+            ->assertSee('/storage/ai-images/202607/08/created.png')
             ->assertSee('Created portrait image')
             ->assertSee(__('Publish image'));
 
