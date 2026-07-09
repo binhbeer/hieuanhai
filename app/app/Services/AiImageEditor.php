@@ -748,10 +748,6 @@ class AiImageEditor
         $reason = is_string($review['reason'] ?? null) ? $review['reason'] : '';
         $tags = $this->tagNames($review['tags'] ?? []);
 
-        if (count($tags) < 3) {
-            throw new \InvalidArgumentException('Không tạo được tags phù hợp để publish ảnh.');
-        }
-
         $categoryNames = $this->categoryNames();
 
         return [

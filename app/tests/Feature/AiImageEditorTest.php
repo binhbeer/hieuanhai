@@ -354,7 +354,7 @@ class AiImageEditorTest extends TestCase
 
         $agent = new ImageReviewAgent;
         $this->assertStringContainsString('- internal-meme: Meme nội bộ', $agent->instructions());
-        $this->assertStringContainsString('tạo 3-5 tags ngắn', $agent->instructions());
+        $this->assertStringContainsString('tạo 0-5 tags ngắn', $agent->instructions());
         $this->assertStringContainsString('Mặc định allowed=true và blocked_policy=none', $agent->instructions());
         $this->assertStringContainsString('blocked_policy=sexual', $agent->instructions());
         $this->assertStringContainsString('blocked_policy=political', $agent->instructions());
@@ -423,6 +423,33 @@ class AiImageEditorTest extends TestCase
             ->assertSee('0')
             ->assertSee('Đóng')
             ->assertSee('og:image');
+    }
+
+    public function test_publish_allows_missing_review_tags(): void
+    {
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([$this->publishReview('other', [])]);
+
+        $editor = app(AiImageEditor::class);
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+
+        $image = AiImage::create([
+            'visitor_key' => $editor->visitorKey($request),
+            'prompt' => 'Tạo ảnh comic bất kì',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/202607/08/result.png',
+        ]);
+
+        $published = $editor->publish($image, $request);
+
+        $this->assertTrue($published->is_published);
+        $this->assertSame([], $published->tags->pluck('slug')->sort()->values()->all());
     }
 
     public function test_publish_reviews_settings_provider_via_chat_completions_sdk_driver(): void

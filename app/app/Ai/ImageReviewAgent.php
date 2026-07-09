@@ -40,7 +40,7 @@ PROMPT;
 {$base}
 Nếu allowed=true, chọn đúng một category phù hợp nhất trong danh sách hiện có:
 {$categories}
-Nếu allowed=true, tạo 3-5 tags ngắn bằng tiếng Việt không dấu hoặc tiếng Anh thường, mô tả chủ thể, phong cách, mục đích sử dụng, bối cảnh. Tránh tag chính trị, sexual, hoặc tag quá chung như ai, image, ảnh.
+Nếu allowed=true, tạo 0-5 tags ngắn bằng tiếng Việt không dấu hoặc tiếng Anh thường, mô tả chủ thể, phong cách, mục đích sử dụng, bối cảnh. Nếu không chắc tag phù hợp thì trả tags=[]. Tránh tag chính trị, sexual, hoặc tag quá chung như ai, image, ảnh.
 PROMPT;
     }
 
@@ -74,10 +74,10 @@ PROMPT;
                 ->required(),
             'tags' => $schema->array()
                 ->items($schema->string())
-                ->min(3)
+                ->min(0)
                 ->max(5)
                 ->unique()
-                ->description('Three to five short safe visual tags.')
+                ->description('Zero to five short safe visual tags.')
                 ->required(),
         ];
     }
