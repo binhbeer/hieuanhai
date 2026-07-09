@@ -421,7 +421,7 @@ class AiImageEditorTest extends TestCase
         $this->get(route('images.show', $published))
             ->assertOk()
             ->assertSee('/anh/'.$published->id)
-            ->assertSee('/thumb_x1024x1024/storage/ai-images/202607/08/result.png')
+            ->assertSee('/thumb_x1024x/storage/ai-images/202607/08/result.png')
             ->assertSee('Tạo ads banner cho sản phẩm nước hoa')
             ->assertSee('Sao chép prompt')
             ->assertSee('Tạo ảnh tương tự')
