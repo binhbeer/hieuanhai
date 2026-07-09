@@ -145,32 +145,6 @@ class AiImageApiTest extends TestCase
         ]);
     }
 
-    public function test_api_allows_safe_profile_image_edit_false_positive(): void
-    {
-        Storage::fake('public');
-        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
-        Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'reason' => 'Không phù hợp.']]);
-        Http::fake([
-            '42.112.31.227:22150/v1/images/generations' => Http::response([
-                'data' => [['b64_json' => base64_encode('fake-png')]],
-            ]),
-        ]);
-        [$plain, $key] = $this->apiKey(quotaLimit: 2);
-
-        $this
-            ->withHeader('Authorization', 'Bearer '.$plain)
-            ->postJson('/api/ai/images', [
-                'prompt' => 'Tác phẩm chỉnh sửa ảnh 3D sáng tạo, mô phỏng giao diện hồ sơ mạng xã hội hiện đại, nhân vật khác.',
-            ])
-            ->assertCreated()
-            ->assertJsonPath('quota.used', 1);
-
-        Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations');
-        $key->refresh();
-        $this->assertSame(1, $key->quota_used);
-    }
-
     public function test_api_rate_limit_allows_ten_requests_per_second(): void
     {
         $token = 'invalid-'.Str::random(32);

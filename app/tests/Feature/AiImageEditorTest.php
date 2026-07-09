@@ -321,29 +321,6 @@ class AiImageEditorTest extends TestCase
         }
     }
 
-    public function test_safe_profile_image_edit_false_positive_can_create_image(): void
-    {
-        Storage::fake('public');
-        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
-        Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'reason' => 'Không phù hợp.']]);
-        Http::fake([
-            '42.112.31.227:22150/v1/images/generations' => Http::response([
-                'data' => [['b64_json' => base64_encode('fake-png')]],
-            ]),
-        ]);
-
-        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
-        $session = new Store('test', new ArraySessionHandler(120));
-        $session->start();
-        $request->setLaravelSession($session);
-
-        $image = app(AiImageEditor::class)->create($request, [], 'Tác phẩm chỉnh sửa ảnh 3D sáng tạo, mô phỏng giao diện hồ sơ mạng xã hội hiện đại, nhân vật khác.');
-
-        $this->assertSame('succeeded', $image->status);
-        Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations');
-    }
-
     public function test_publish_sets_category_and_category_route_filters_gallery(): void
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
@@ -355,9 +332,12 @@ class AiImageEditorTest extends TestCase
         $agent = new ImageReviewAgent;
         $this->assertStringContainsString('- internal-meme: Meme nội bộ', $agent->instructions());
         $this->assertStringContainsString('tạo 3-5 tags ngắn', $agent->instructions());
-        $this->assertStringContainsString('Mặc định allowed=true với prompt chỉnh ảnh/tạo ảnh lành mạnh', $agent->instructions());
-        $this->assertStringContainsString('Tạo chân dung phong cách comic, thay nhân vật khác', $agent->instructions());
-        $this->assertStringContainsString('Không suy diễn "nhân vật khác" là deepfake', $agent->instructions());
+        $this->assertStringContainsString('Mặc định allowed=true', $agent->instructions());
+        $this->assertStringContainsString('Chỉ trả allowed=false', $agent->instructions());
+        $this->assertStringContainsString('nội dung tình dục', $agent->instructions());
+        $this->assertStringContainsString('nội dung chính trị', $agent->instructions());
+        $this->assertStringContainsString('Không từ chối vì thương hiệu, logo, người nổi tiếng, nhân vật bản quyền, deepfake', $agent->instructions());
+        $this->assertStringContainsString('mô phỏng giao diện hồ sơ mạng xã hội', $agent->instructions());
 
         $editor = app(AiImageEditor::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -509,34 +489,6 @@ class AiImageEditorTest extends TestCase
         } finally {
             $this->assertFalse($image->fresh()->is_published);
         }
-    }
-
-    public function test_safe_profile_image_edit_false_positive_can_publish_image(): void
-    {
-        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
-        Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'reason' => 'Không phù hợp.']]);
-
-        $editor = app(AiImageEditor::class);
-        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
-        $session = new Store('test', new ArraySessionHandler(120));
-        $session->start();
-        $request->setLaravelSession($session);
-
-        $image = AiImage::create([
-            'visitor_key' => $editor->visitorKey($request),
-            'prompt' => 'Tác phẩm chỉnh sửa ảnh 3D sáng tạo, mô phỏng giao diện hồ sơ mạng xã hội hiện đại, nhân vật khác.',
-            'provider' => 'openai',
-            'model' => 'cx/gpt-5.5-image',
-            'status' => 'succeeded',
-            'result_path' => 'ai-images/202607/08/result.png',
-        ]);
-
-        $published = $editor->publish($image, $request);
-
-        $this->assertTrue($published->is_published);
-        $this->assertSame('portraits', $published->category->slug);
-        $this->assertSame(['3d', 'avatar', 'chan-dung'], $published->tags->pluck('slug')->sort()->values()->all());
     }
 
     public function test_related_images_are_ranked_by_shared_tags(): void

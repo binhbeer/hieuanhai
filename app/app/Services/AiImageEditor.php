@@ -788,94 +788,10 @@ class AiImageEditor
         $review = $response instanceof Arrayable ? $response->toArray() : [];
 
         if (($review['allowed'] ?? false) !== true) {
-            if ($this->isSafeImageEditFalsePositive($prompt)) {
-                return [
-                    'allowed' => true,
-                    'reason' => 'An toàn.',
-                    ...($publish ? [
-                        'category' => 'portraits',
-                        'tags' => ['chan dung', 'avatar', '3d'],
-                    ] : []),
-                ];
-            }
-
             throw new \InvalidArgumentException('Prompt không phù hợp để tạo hoặc publish ảnh.');
         }
 
         return $review;
-    }
-
-    private function isSafeImageEditFalsePositive(string $prompt): bool
-    {
-        $text = strtolower(Str::ascii($prompt));
-
-        if (! Str::contains($text, ['chinh sua anh', 'chinh sua chan dung', 'edit anh', 'edit portrait'])) {
-            return false;
-        }
-
-        if (! Str::contains($text, [
-            '3d',
-            'comic',
-            'anime',
-            'poster',
-            'avatar',
-            'oc',
-            'ho so mang xa hoi',
-            'nhan vat khac',
-            'nhan vat moi',
-        ])) {
-            return false;
-        }
-
-        if (preg_match('/(?<!\pL)\p{Lu}\p{Ll}{2,}(?:\s+\p{Lu}\p{Ll}{2,})+/u', $prompt) === 1) {
-            return false;
-        }
-
-        return ! Str::contains($text, [
-            'ho chi minh',
-            'lanh tu',
-            'lanh dao',
-            'dang cong san',
-            'nha nuoc',
-            'chinh tri',
-            'chinh phu',
-            'quoc hoi',
-            'nguoi noi tieng',
-            'celebrity',
-            'idol',
-            'deepfake',
-            'mao danh',
-            'gia mao',
-            'lua dao',
-            'boi xau',
-            'phi bang',
-            'xuc pham',
-            'khieu dam',
-            'khoa than',
-            'sex',
-            '18+',
-            'tre em',
-            'bao luc',
-            'gore',
-            'mau me',
-            'tu sat',
-            'tu hai',
-            'thu han',
-            'phan biet',
-            'ma tuy',
-            'vu khi',
-            'khung bo',
-            'ban quyen',
-            'thuong hieu',
-            'logo',
-            'facebook',
-            'instagram',
-            'tiktok',
-            'zalo',
-            'youtube',
-            'twitter',
-            'linkedin',
-        ]);
     }
 
     private function configureReviewProvider(string $provider): void
