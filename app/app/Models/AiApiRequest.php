@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
@@ -36,7 +35,7 @@ use Illuminate\Support\Carbon;
     'request_meta',
     'response_meta',
 ])]
-class AiApiRequest extends Model
+class AiApiRequest extends BaseModel
 {
     /**
      * @return BelongsTo<AiApiKey, $this>

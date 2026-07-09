@@ -1,0 +1,73 @@
+{
+    "name": "accordion",
+    "title": "Accordion",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/accordion",
+    "pro": true,
+    "sections": [
+        {
+            "title": "Shorthand",
+            "content": "You can save on markup by passing the heading text as a prop directly.",
+            "examples": [
+                "<flux:accordion.item heading=\"What's your refund policy?\"> If you are not satisfied with your purchase, we offer a 30-day money-back guarantee. Please contact our support team for assistance.</flux:accordion.item>"
+            ]
+        },
+        {
+            "title": "With transition",
+            "content": "Enable expanding transitions for smoother interactions.",
+            "examples": [
+                "<flux:accordion transition> <!-- ... --></flux:accordion>"
+            ]
+        },
+        {
+            "title": "Disabled",
+            "content": "Restrict an accordion item from being expanded.",
+            "examples": [
+                "<flux:accordion.item disabled> <!-- ... --></flux:accordion.item>"
+            ]
+        },
+        {
+            "title": "Exclusive",
+            "content": "Enforce that only a single accordion item is expanded at a time.",
+            "examples": [
+                "<flux:accordion exclusive> <!-- ... --></flux:accordion>"
+            ]
+        },
+        {
+            "title": "Expanded",
+            "content": "Expand a specific accordion by default.",
+            "examples": [
+                "<flux:accordion.item expanded> <!-- ... --></flux:accordion.item>"
+            ]
+        },
+        {
+            "title": "Leading icon",
+            "content": "Display the icon before the heading instead of after it.",
+            "examples": [
+                "<flux:accordion variant=\"reverse\"> <!-- ... --></flux:accordion>"
+            ]
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [
+        "accordion",
+        "accordion.item"
+    ],
+    "sub_components": [
+        "accordion.item"
+    ],
+    "scraped_at": "2026-02-11T03:24:40+00:00"
+}

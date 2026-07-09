@@ -5,8 +5,14 @@
         </flux:text>
 
         @if (session('status') == 'verification-link-sent')
-            <flux:text class="text-center font-medium !dark:text-green-400 !text-green-600">
+            <flux:text class="text-center font-medium dark:text-green-400! text-green-600!">
                 {{ __('A new verification link has been sent to the email address you provided during registration.') }}
+            </flux:text>
+        @endif
+
+        @if (session('status') == 'image-creation-requires-verification')
+            <flux:text class="text-center font-medium text-amber-600! dark:text-amber-400!">
+                {{ __('Please verify your email to continue receiving daily image generations after your registration day.') }}
             </flux:text>
         @endif
 

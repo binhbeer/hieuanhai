@@ -1,0 +1,31 @@
+{
+    "name": "autocomplete",
+    "title": "Autocomplete",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/autocomplete",
+    "pro": true,
+    "sections": [
+        {
+            "title": "Related components",
+            "content": "Text fields for collecting user input\nDisplay a dropdown menu for selecting one option from many",
+            "examples": []
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [],
+    "sub_components": [],
+    "scraped_at": "2026-02-11T03:24:41+00:00"
+}

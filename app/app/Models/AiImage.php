@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property int|null $user_id
+ * @property int|null $category_id
  * @property string $visitor_key
  * @property string|null $ip_address
  * @property string|null $preset
@@ -19,6 +22,10 @@ use Illuminate\Support\Carbon;
  * @property string $provider
  * @property string $model
  * @property string $status
+ * @property bool $is_published
+ * @property Carbon|null $published_at
+ * @property int $favorites_count
+ * @property bool $is_featured
  * @property string|null $error
  * @property array<string, mixed>|null $request_meta
  * @property array<string, mixed>|null $response_meta
@@ -27,6 +34,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'user_id',
+    'category_id',
     'visitor_key',
     'ip_address',
     'preset',
@@ -37,22 +45,63 @@ use Illuminate\Support\Carbon;
     'provider',
     'model',
     'status',
+    'is_published',
+    'published_at',
+    'is_featured',
     'error',
     'request_meta',
     'response_meta',
 ])]
-class AiImage extends Model
+class AiImage extends BaseModel
 {
     public function downloadName(): string
     {
         $extension = pathinfo($this->result_path ?? '', PATHINFO_EXTENSION) ?: 'png';
 
-        return 'HieuAnhAI.COM-'.($this->created_at?->timestamp ?? time()).'.'.$extension;
+        $timestamp = $this->created_at instanceof Carbon ? $this->created_at->timestamp : time();
+
+        return 'HieuAnhAI.COM-'.$timestamp.'.'.$extension;
+    }
+
+    /**
+     * @return BelongsTo<Category, $this>
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return HasMany<AiImageFavorite, $this>
+     */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(AiImageFavorite::class);
+    }
+
+    /**
+     * @return BelongsToMany<AiTag, $this>
+     */
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(AiTag::class, 'ai_image_tag', 'ai_image_id', 'ai_tag_id')->withTimestamps();
     }
 
     protected function casts(): array
     {
         return [
+            'is_published' => 'bool',
+            'published_at' => 'datetime',
+            'favorites_count' => 'int',
+            'is_featured' => 'bool',
             'request_meta' => 'array',
             'response_meta' => 'array',
         ];

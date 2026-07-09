@@ -1,0 +1,50 @@
+{
+    "name": "switch",
+    "title": "Switch",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/switch",
+    "pro": false,
+    "sections": [
+        {
+            "title": "Fieldset",
+            "content": "Group related switches within a fieldset.",
+            "examples": [
+                "<flux:fieldset> <flux:legend>Email notifications</flux:legend> <div class=\"space-y-4\"> <flux:switch wire:model.live=\"communication\" label=\"Communication emails\" description=\"Receive emails about your account activity.\" /> <flux:separator variant=\"subtle\" /> <flux:switch wire:model.live=\"marketing\" label=\"Marketing emails\" description=\"Receive emails about new products, features, and more.\" /> <flux:separator variant=\"subtle\" /> <flux:switch wire:model.live=\"social\" label=\"Social emails\" description=\"Receive emails for friend requests, follows, and more.\" /> <flux:separator variant=\"subtle\" /> <flux:switch wire:model.live=\"security\" label=\"Security emails\" description=\"Receive emails about your account activity and security.\" /> </div></flux:fieldset>"
+            ]
+        },
+        {
+            "title": "Left align",
+            "content": "Left align switches for more compact layouts using the align prop.",
+            "examples": [
+                "<flux:fieldset> <flux:legend>Email notifications</flux:legend> <div class=\"space-y-3\"> <flux:switch label=\"Communication emails\" align=\"left\" /> <flux:switch label=\"Marketing emails\" align=\"left\" /> <flux:switch label=\"Social emails\" align=\"left\" /> <flux:switch label=\"Security emails\" align=\"left\" /> </div></flux:fieldset>"
+            ]
+        },
+        {
+            "title": "Related components",
+            "content": "Structured form field with label\nToggleable control for multiple selections",
+            "examples": []
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [
+        "fieldset",
+        "legend",
+        "separator",
+        "switch"
+    ],
+    "sub_components": [],
+    "scraped_at": "2026-02-11T03:25:14+00:00"
+}

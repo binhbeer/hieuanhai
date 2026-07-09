@@ -1,0 +1,191 @@
+{
+    "name": "calendar",
+    "title": "Calendar",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/calendar",
+    "pro": true,
+    "sections": [
+        {
+            "title": "Basic Usage",
+            "content": "",
+            "examples": [
+                "<flux:calendar value=\"2026-02-11\" />",
+                "<flux:calendar wire:model=\"date\" />",
+                "<?phpuse Illuminate\\Support\\Carbon;use Livewire\\Component;class BookAppointment extends Component { public Carbon $date; public function mount() { $this->date = now(); }}"
+            ]
+        },
+        {
+            "title": "Multiple dates",
+            "content": "Select multiple non-consecutive dates.",
+            "examples": [
+                "<flux:calendar multiple />",
+                "<flux:calendar multiple value=\"2026-02-02,2026-02-05,2026-02-15\"/>",
+                "<flux:calendar multiple wire:model=\"dates\" />",
+                "<?phpuse Illuminate\\Support\\Carbon;use Livewire\\Component;class RequestTimeOff extends Component { public array $dates = []; public function mount() { $this->dates = [ now()->format('Y-m-d'), now()->addDays(1)->format('Y-m-d'), ]; }}"
+            ]
+        },
+        {
+            "title": "Date range",
+            "content": "Select a range of dates.",
+            "examples": [
+                "<flux:calendar mode=\"range\" />",
+                "<flux:calendar mode=\"range\" value=\"2026-02-02/2026-02-06\" />",
+                "<flux:calendar mode=\"range\" wire:model=\"range\" />",
+                "<?phpuse Livewire\\Component;class BookFlight extends Component { public ?array $range; public function book() { // ... $flight->depart_on = $this->range['start']; $flight->return_on = $this->range['end']; // ... }}",
+                "<?phpuse Livewire\\Component;use Flux\\DateRange;class BookFlight extends Component { public ?DateRange $range; public function book() { // ... $flight->depart_on = $this->range->start(); $flight->return_on = $this->range->end(); // ... }}",
+                "<!-- Set minimum and maximum range limits --><flux:calendar mode=\"range\" min-range=\"3\" max-range=\"10\" /><!-- Control number of months shown --><flux:calendar mode=\"range\" months=\"2\" />"
+            ]
+        },
+        {
+            "title": "Range Configuration",
+            "content": "",
+            "examples": [
+                "<flux:calendar mode=\"range\" value=\"2026-02-02/2026-02-06\" />",
+                "<flux:calendar mode=\"range\" wire:model=\"range\" />",
+                "<?phpuse Livewire\\Component;class BookFlight extends Component { public ?array $range; public function book() { // ... $flight->depart_on = $this->range['start']; $flight->return_on = $this->range['end']; // ... }}",
+                "<?phpuse Livewire\\Component;use Flux\\DateRange;class BookFlight extends Component { public ?DateRange $range; public function book() { // ... $flight->depart_on = $this->range->start(); $flight->return_on = $this->range->end(); // ... }}",
+                "<!-- Set minimum and maximum range limits --><flux:calendar mode=\"range\" min-range=\"3\" max-range=\"10\" /><!-- Control number of months shown --><flux:calendar mode=\"range\" months=\"2\" />"
+            ]
+        },
+        {
+            "title": "Size",
+            "content": "Adjust the calendar's size to fit your layout. Available sizes include xs, sm, lg, xl, and 2xl.",
+            "examples": [
+                "<flux:calendar size=\"xl\" />"
+            ]
+        },
+        {
+            "title": "Static",
+            "content": "Create a non-interactive calendar for display purposes.",
+            "examples": [
+                "<flux:calendar static value=\"2026-02-11\" size=\"xs\" :navigation=\"false\"/>"
+            ]
+        },
+        {
+            "title": "Min/max dates",
+            "content": "Restrict the selectable date range by setting minimum and maximum boundaries.",
+            "examples": [
+                "<flux:calendar max=\"2026-02-11\" />",
+                "<!-- Prevent selection before today... --><flux:calendar min=\"today\" /><!-- Prevent selection after today... --><flux:calendar max=\"today\" />"
+            ]
+        },
+        {
+            "title": "Unavailable dates",
+            "content": "Disable specific dates from being selected. Useful for blocking out holidays, showing booked dates, or indicating unavailable time slots.",
+            "examples": [
+                "<flux:calendar unavailable=\"2026-02-10,2026-02-12\" />"
+            ]
+        },
+        {
+            "title": "With today shortcut",
+            "content": "Add a shortcut button to quickly navigate to today's date. When viewing a different month, it jumps to the current month. When already viewing the current month, it selects today's date.",
+            "examples": [
+                "<flux:calendar with-today />"
+            ]
+        },
+        {
+            "title": "Selectable header",
+            "content": "Enable quick navigation by making the month and year in the header selectable.",
+            "examples": [
+                "<flux:calendar selectable-header />"
+            ]
+        },
+        {
+            "title": "Fixed weeks",
+            "content": "Display a consistent number of weeks in every month. Prevents layout shifts when navigating between months with different numbers of weeks.",
+            "examples": [
+                "<flux:calendar fixed-weeks />"
+            ]
+        },
+        {
+            "title": "Start day",
+            "content": "By default, the first day of the week will be automatically set based on the user's locale. You can override this by setting the start-day attribute to any day of the week.",
+            "examples": [
+                "<flux:calendar start-day=\"1\" />"
+            ]
+        },
+        {
+            "title": "Open to",
+            "content": "Set the date that the calendar will open to, if there is no selected date.",
+            "examples": [
+                "<flux:calendar open-to=\"2027-03-01\" />",
+                "<flux:calendar open-to=\"2027-03-01\" force-open-to />"
+            ]
+        },
+        {
+            "title": "Week numbers",
+            "content": "Display the week number for each week.",
+            "examples": [
+                "<flux:calendar week-numbers />"
+            ]
+        },
+        {
+            "title": "Localization",
+            "content": "By default, the calendar will use the browser's locale (e.g. navigator.language).\nYou can override this behavior by setting the locale attribute to any valid locale string (e.g. fr for French, en-US for English, etc.):",
+            "examples": [
+                "<flux:calendar locale=\"ja-JP\" />"
+            ]
+        },
+        {
+            "title": "The DateRange object",
+            "content": "",
+            "examples": [
+                "<flux:calendar wire:model.live=\"range\" />",
+                "<?phpuse Livewire\\Component;use Flux\\DateRange;class Dashboard extends Component { public DateRange $range;}"
+            ]
+        },
+        {
+            "title": "Instantiation",
+            "content": "",
+            "examples": [
+                "<?phpuse Livewire\\Component;use Flux\\DateRange;class Dashboard extends Component { public DateRange $range; public function mount() { $this->range = new DateRange(now(), now()->addDays(7)); }}"
+            ]
+        },
+        {
+            "title": "Persisting to the session",
+            "content": "",
+            "examples": [
+                "<?phpuse Livewire\\Attributes\\Session;use Livewire\\Component;use Flux\\DateRange;class Dashboard extends Component { #[Session] public DateRange $range;}"
+            ]
+        },
+        {
+            "title": "Using with Eloquent",
+            "content": "",
+            "examples": [
+                "<?phpuse Livewire\\Attributes\\Computed;use Livewire\\Component;use App\\Models\\Order;use Flux\\DateRange;class Dashboard extends Component { public ?DateRange $range; #[Computed] public function orders() { return $this->range ? Order::whereBetween('created_at', $this->range)->get() : Order::all(); }}"
+            ]
+        },
+        {
+            "title": "Available methods",
+            "content": "",
+            "examples": [
+                "$range = new Flux\\DateRange( now()->subDays(1), now()->addDays(1),);// Get the start and end dates as Carbon instances...$start = $range->start();$end = $range->end();// Check if the range contains a date...$range->contains(now());// Get the number of days in the range...$range->length();// Loop over the range by day...foreach ($range as $date) { // $date is a Carbon instance...}// Get the range as an array of Carbon instances representing each day in the range...$range->toArray();",
+                "$orders = Order::whereBetween('created_at', $range)->get();"
+            ]
+        },
+        {
+            "title": "DateRange Object",
+            "content": "A specialized object for handling date ranges when using `mode=\"range\"`.",
+            "examples": []
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [
+        "calendar"
+    ],
+    "sub_components": [],
+    "scraped_at": "2026-02-11T03:24:46+00:00"
+}

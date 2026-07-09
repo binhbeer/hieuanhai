@@ -1,0 +1,87 @@
+{
+    "name": "toast",
+    "title": "Toast",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/toast",
+    "pro": true,
+    "sections": [
+        {
+            "title": "With heading",
+            "content": "Use a heading to provide additional context for the toast.",
+            "examples": [
+                "Flux::toast( heading: 'Changes saved.', text: 'You can always update this in your settings.',);"
+            ]
+        },
+        {
+            "title": "Variants",
+            "content": "Use the variant prop to change the visual style of the toast.",
+            "examples": [
+                "Flux::toast(variant: 'success', ...);Flux::toast(variant: 'warning', ...);Flux::toast(variant: 'danger', ...);"
+            ]
+        },
+        {
+            "title": "Positioning",
+            "content": "By default, the toast will appear in the bottom right corner of the page. You can customize this position using the position prop.",
+            "examples": [
+                "<flux:toast position=\"top end\" /><!-- Customize top padding for things like navbars... --><flux:toast position=\"top end\" class=\"pt-24\" />"
+            ]
+        },
+        {
+            "title": "Duration",
+            "content": "By default, the toast will automatically dismiss after 5 seconds. You can customize this duration by passing a number of milliseconds to the duration prop.",
+            "examples": [
+                "// 1 second...Flux::toast(duration: 1000, ...);"
+            ]
+        },
+        {
+            "title": "Permanent",
+            "content": "Use a value of 0 as the duration prop to make the toast stay open indefinitely.",
+            "examples": [
+                "// Show indefinitely...Flux::toast(duration: 0, ...);"
+            ]
+        },
+        {
+            "title": "Stack",
+            "content": "To show a stack of toasts, you can wrap the flux:toast component in a flux:toast.group component. By default, toasts in a stack overlap and expand on hover to show each toast vertically.\nUse the expanded prop to always show the toast stack in an expanded state, making all toasts visible at once.\nThe group component also accepts the position prop to control where the toast stack appears on the screen.",
+            "examples": [
+                "<flux:toast.group> <flux:toast /></flux:toast.group>",
+                "<flux:toast.group expanded> <flux:toast /></flux:toast.group>",
+                "<flux:toast.group position=\"top end\"> <flux:toast /></flux:toast.group>"
+            ]
+        },
+        {
+            "title": "Related components",
+            "content": "A flexible content container for alerts, messages, and notifications\nDisplay temporary content in a modal dialog",
+            "examples": []
+        },
+        {
+            "title": "$flux.toast()",
+            "content": "The Alpine.js magic method used to trigger toasts from Alpine components. It can be used in two ways:",
+            "examples": [
+                "// Simple usage with just a message...$flux.toast('Your changes have been saved')// Advanced usage with full configuration...$flux.toast({ heading: 'Success!', text: 'Your changes have been saved', variant: 'success', duration: 3000})"
+            ]
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [
+        "toast",
+        "toast.group"
+    ],
+    "sub_components": [
+        "toast.group"
+    ],
+    "scraped_at": "2026-02-11T03:25:20+00:00"
+}

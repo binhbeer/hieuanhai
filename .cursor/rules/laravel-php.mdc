@@ -1,0 +1,15 @@
+---
+description: Laravel PHP standards for Chinhanh
+alwaysApply: false
+globs: "app/**/*.php,app/routes/**/*.php,app/database/**/*.php"
+---
+
+# Laravel PHP Standards
+
+- Keep diffs small. Use Laravel features before custom abstractions.
+- Follow existing Pint style; verify with `composer lint:check` in container when PHP changed.
+- Keep Larastan level 7 clean; verify with `composer types:check` for non-trivial PHP changes.
+- Put validation at controllers/form requests and trust database constraints for invariants where possible.
+- For migrations, make changes reversible, safe for existing rows, and test with `php artisan migrate` in container.
+- Prefer typed properties/return values and precise PHPDoc only where static analysis needs it.
+- Do not leak provider errors or secrets in API responses; report server errors and return safe Vietnamese messages.

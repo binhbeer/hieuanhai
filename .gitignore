@@ -31,3 +31,4 @@ app/.git-backup/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+app/.pnpm-store/

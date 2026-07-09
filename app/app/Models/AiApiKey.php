@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -14,6 +13,7 @@ use Illuminate\Support\Str;
  * @property int $user_id
  * @property string $token_hash
  * @property string $token_prefix
+ * @property string|null $token
  * @property int $quota_limit
  * @property int $quota_used
  * @property Carbon|null $last_used_at
@@ -24,11 +24,12 @@ use Illuminate\Support\Str;
     'user_id',
     'token_hash',
     'token_prefix',
+    'token',
     'quota_limit',
     'quota_used',
     'last_used_at',
 ])]
-class AiApiKey extends Model
+class AiApiKey extends BaseModel
 {
     public static function hashToken(string $token): string
     {
@@ -52,6 +53,14 @@ class AiApiKey extends Model
     public function quotaRemaining(): int
     {
         return max(0, $this->quota_limit - $this->quota_used);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'last_used_at' => 'datetime',
+            'token' => 'encrypted',
+        ];
     }
 
     public function hasQuota(): bool

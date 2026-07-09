@@ -1,53 +1,87 @@
 <?php
 
+use App\Jobs\CreateAiImage;
 use App\Models\AiImage;
 use App\Services\AiImageEditor;
+use App\Support\AppSettings;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new class extends Component {
+new class extends Component
+{
     use WithFileUploads;
 
-    public ?string $selectedPreset = null;
+    public bool $showComposer = false;
 
     public array $photos = [];
 
+    public array $referenceImageIds = [];
+
     public mixed $newPhotos = [];
 
-    public string $customPrompt = '';
+    public string $prompt = '';
+
+    public string $rewriteInstruction = '';
 
     public ?int $resultId = null;
 
     public ?string $errorMessage = null;
 
-    public function updatedSelectedPreset(): void
+    public ?string $publishMessage = null;
+
+    public function mount(): void
     {
-        if (!$this->selectedPreset || !array_key_exists($this->selectedPreset, $this->presets())) {
-            $this->selectedPreset = null;
+        $this->showComposer = Auth::check() && request()->boolean('composer');
+    }
+
+    public function openComposer(): void
+    {
+        if (! Auth::check()) {
+            $this->redirectRoute('login', navigate: true);
 
             return;
         }
 
-        $this->resultId = null;
-        $this->errorMessage = null;
-        $this->resetValidation();
+        $this->showComposer = true;
     }
 
-    public function selectPreset(string $preset): void
+    public function closeComposer(): void
     {
-        $this->selectedPreset = $preset;
-        $this->updatedSelectedPreset();
+        $this->showComposer = false;
+    }
+
+    #[On('use-prompt')]
+    public function usePrompt(string $prompt, ?int $imageId = null): void
+    {
+        if (! Auth::check()) {
+            $this->redirectRoute('login', navigate: true);
+
+            return;
+        }
+
+        $this->prompt = $prompt;
+        $this->rewriteInstruction = '';
+        $this->resultId = null;
+        $this->publishMessage = null;
+        $this->showComposer = true;
+
+        if ($imageId) {
+            $this->referenceImageIds = array_slice(array_values(array_unique([$imageId, ...$this->referenceImageIds])), 0, $this->maxReferencePhotos());
+            $this->photos = array_slice($this->photos, 0, max(0, $this->maxReferencePhotos() - count($this->referenceImageIds)));
+        }
     }
 
     public function updatedNewPhotos(): void
     {
         $newPhotos = is_array($this->newPhotos) ? $this->newPhotos : [$this->newPhotos];
-        $this->photos = array_slice([...$this->photos, ...$newPhotos], 0, $this->maxReferencePhotos());
+        $this->photos = array_slice([...$this->photos, ...$newPhotos], 0, max(0, $this->maxReferencePhotos() - count($this->referenceImageIds)));
         $this->newPhotos = [];
         $this->resultId = null;
         $this->errorMessage = null;
+        $this->publishMessage = null;
         $this->resetValidation(['photos', 'photos.*', 'newPhotos', 'newPhotos.*']);
     }
 
@@ -58,62 +92,120 @@ new class extends Component {
         $this->resetValidation(['photos', 'photos.*']);
     }
 
-    public function maxReferencePhotos(): int
+    public function removeReferenceImage(int $id): void
     {
-        return min(3, max(1, (int) config('ai.image_max_reference_photos', 1)));
+        $this->referenceImageIds = array_values(array_filter($this->referenceImageIds, fn (int $imageId) => $imageId !== $id));
     }
 
-    public function backToPresets(): void
+    public function maxReferencePhotos(): int
     {
-        $this->reset('selectedPreset', 'photos', 'newPhotos', 'customPrompt', 'errorMessage');
-        $this->resetValidation();
+        return min(3, max(1, AppSettings::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 1))));
     }
 
     public function createImage(AiImageEditor $editor): void
     {
+        if (! Auth::check()) {
+            $this->redirectRoute('login', navigate: true);
+
+            return;
+        }
+
+        if ($editor->requiresEmailVerificationForImageCreation()) {
+            session()->flash('status', 'image-creation-requires-verification');
+            $this->redirectRoute('verification.notice', navigate: true);
+
+            return;
+        }
+
         $this->errorMessage = null;
+        $this->publishMessage = null;
 
         $this->validate([
-            'selectedPreset' => ['required', 'string'],
-            'photos' => ['required', 'array', 'min:1', 'max:' . $this->maxReferencePhotos()],
-            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:' . config('ai.image_upload_max_kb', 32768)],
-            'customPrompt' => ['nullable', 'string', 'max:1000'],
+            'prompt' => ['required', 'string', 'max:2000'],
+            'referenceImageIds' => ['array', 'max:'.$this->maxReferencePhotos()],
+            'referenceImageIds.*' => ['integer'],
+            'photos' => ['array', 'max:'.max(0, $this->maxReferencePhotos() - count($this->referenceImageIds))],
+            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::int('ai.image_upload_max_kb', (int) config('ai.image_upload_max_kb', 32768))],
         ]);
 
-        if (!$this->selectedPreset || !isset($this->presets()[$this->selectedPreset])) {
-            $this->addError('selectedPreset', 'Hãy chọn một phong cách.');
-
-            return;
-        }
-
         if ($editor->isLimitExceeded(request())) {
-            $this->errorMessage = 'Bạn đã dùng hết lượt tạo ảnh hôm nay.';
+            $this->errorMessage = __('You have used all image generations for today.');
 
             return;
         }
-
-        $preset = $this->presets()[$this->selectedPreset];
 
         try {
-            $image = $editor->create(request(), $this->photos, $preset['prompt'], trim($this->customPrompt) ?: null, $this->selectedPreset);
+            $image = $editor->createPending(request(), $this->photos, $this->prompt, $this->referenceImageIds);
 
-            $this->resultId = $image->id;
-            $this->reset('photos', 'newPhotos', 'customPrompt');
-            unset($this->remainingToday);
+            CreateAiImage::dispatch($image->id, $image->user_id);
+            $this->resultId = null;
+            unset($this->remainingToday, $this->resultImage);
+            $this->dispatch('image-usage-updated');
+            $this->redirectRoute('images.index', ['composer' => 1], navigate: true);
+        } catch (InvalidArgumentException $e) {
+            $this->errorMessage = $e->getMessage();
+        } catch (Throwable $e) {
+            report($e);
+
+            $this->errorMessage = __('Could not create an image right now. Please try again later.');
+        }
+    }
+
+    public function rewritePrompt(AiImageEditor $editor): void
+    {
+        if (! Auth::check()) {
+            $this->redirectRoute('login', navigate: true);
+
+            return;
+        }
+
+        $this->validate([
+            'prompt' => ['required', 'string', 'max:2000'],
+            'rewriteInstruction' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $this->prompt = $editor->rewritePrompt($this->prompt, $this->rewriteInstruction);
+            $this->rewriteInstruction = '';
+            $this->errorMessage = null;
+        } catch (InvalidArgumentException $e) {
+            $this->errorMessage = $e->getMessage();
+        } catch (Throwable $e) {
+            report($e);
+
+            $this->errorMessage = __('Could not rewrite the prompt right now. Please try again later.');
+        }
+    }
+
+    public function publishResult(AiImageEditor $editor): void
+    {
+        $this->errorMessage = null;
+        $this->publishMessage = null;
+
+        if (! $this->resultImage) {
+            return;
+        }
+
+        try {
+            $image = $editor->publish($this->resultImage, request());
+            $this->publishMessage = __('Published to :category.', ['category' => $image->category?->name ?? __('Other')]);
+            unset($this->resultImage);
+            $this->dispatch('gallery-updated');
             $this->dispatch('image-usage-updated');
         } catch (InvalidArgumentException $e) {
             $this->errorMessage = $e->getMessage();
         } catch (Throwable $e) {
             report($e);
 
-            $this->errorMessage = 'Không tạo được ảnh lúc này. Vui lòng thử lại sau.';
+            $this->errorMessage = __('Could not publish the image right now.');
         }
     }
 
     public function createNew(): void
     {
-        $this->reset('selectedPreset', 'photos', 'newPhotos', 'customPrompt', 'resultId', 'errorMessage');
+        $this->reset('photos', 'referenceImageIds', 'newPhotos', 'prompt', 'rewriteInstruction', 'resultId', 'errorMessage', 'publishMessage');
         $this->resetValidation();
+        $this->showComposer = true;
     }
 
     #[On('image-deleted')]
@@ -126,55 +218,6 @@ new class extends Component {
         $this->resultId = null;
     }
 
-    /**
-				 * @return array<string, array{title: string, prompt: string}>
-				 */
-    public function presets(): array
-    {
-        return [
-            'comic' => [
-                'title' => 'Comic',
-                'prompt' => 'Biến ảnh thành comic hiện đại: nét mực rõ, màu tươi, giữ nhận diện và bố cục.',
-            ],
-            'studio' => [
-                'title' => 'Studio',
-                'prompt' => 'Tạo chân dung studio cao cấp: ánh sáng mềm, da tự nhiên, nền sạch, giữ nhận diện.',
-            ],
-            'cinematic' => [
-                'title' => 'Film',
-                'prompt' => 'Tạo ảnh điện ảnh: ánh sáng kịch tính, màu film, tương phản đẹp, giữ chủ thể tự nhiên.',
-            ],
-            'product' => [
-                'title' => 'Shop',
-                'prompt' => 'Tối ưu ảnh sản phẩm: sắc nét, nền sạch, ánh sáng thương mại, giữ đúng hình dáng.',
-            ],
-            'oil-painting' => [
-                'title' => 'Sơn dầu',
-                'prompt' => 'Biến ảnh thành tranh sơn dầu: nét cọ tự nhiên, màu sâu, giữ khuôn mặt và bố cục.',
-            ],
-            '3d' => [
-                'title' => '3D',
-                'prompt' => 'Biến ảnh thành phong cách 3D: tạo hình mượt, ánh sáng studio, vật liệu rõ, giữ nhận diện.',
-            ],
-            'sharpen' => [
-                'title' => 'Làm nét',
-                'prompt' => 'Làm nét tự nhiên: giảm mờ, tăng chi tiết, giữ màu và khuôn mặt không bị giả.',
-            ],
-            'restore' => [
-                'title' => 'Phục hồi',
-                'prompt' => 'Phục hồi ảnh cũ: giảm xước, giảm nhiễu, tăng nét và màu, giữ người và bối cảnh.',
-            ],
-            'id-photo' => [
-                'title' => 'Ảnh thẻ',
-                'prompt' => 'Tạo ảnh thẻ sạch: nền trơn, ánh sáng đều, mặt rõ, giữ nhận diện tự nhiên.',
-            ],
-            'photo-merge' => [
-                'title' => 'Ghép ảnh',
-                'prompt' => 'Ghép ảnh tự nhiên: đồng nhất ánh sáng, màu sắc và bố cục, giữ chi tiết chính.',
-            ],
-        ];
-    }
-
     #[Computed]
     public function remainingToday(): ?int
     {
@@ -182,9 +225,25 @@ new class extends Component {
     }
 
     #[Computed]
+    public function referenceImages()
+    {
+        if ($this->referenceImageIds === []) {
+            return collect();
+        }
+
+        return AiImage::query()
+            ->whereIn('id', $this->referenceImageIds)
+            ->where('is_published', true)
+            ->where('status', 'succeeded')
+            ->whereNotNull('result_path')
+            ->get()
+            ->sortBy(fn (AiImage $image) => array_search($image->id, $this->referenceImageIds, true));
+    }
+
+    #[Computed]
     public function resultImage(): ?AiImage
     {
-        return $this->resultId ? AiImage::find($this->resultId) : null;
+        return $this->resultId ? AiImage::with('category')->find($this->resultId) : null;
     }
 
     public function imageUrl(AiImage $image): ?string
@@ -197,141 +256,196 @@ new class extends Component {
 	$resultImage = $this->resultImage;
 	$resultUrl = $resultImage ? $this->imageUrl($resultImage) : null;
 	$resultDownloadName = $resultImage?->downloadName();
-	$selectedPresetData = $selectedPreset ? $this->presets()[$selectedPreset] ?? null : null;
 	$maxReferencePhotos = $this->maxReferencePhotos();
+	$referenceImages = $this->referenceImages;
+	$referenceCount = count($photos) + $referenceImages->count();
 @endphp
-<section
-	class="flex h-full w-full flex-1 flex-col gap-4 rounded-xl">
-	<div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5">
-		@if ($resultUrl)
-			<div class="space-y-4">
-				<a data-lightbox data-alt="Ảnh đã chỉnh bằng AI" href="{{ $resultUrl }}">
-					<img class="max-h-[55svh] w-full cursor-zoom-in rounded-3xl border border-white/10 object-contain"
-						src="{{ $resultUrl }}" alt="Ảnh đã chỉnh bằng AI" />
-				</a>
 
-				<div class="space-y-3 p-4 text-center">
-					<flux:text class="text-emerald-100">Ảnh đã tạo xong.</flux:text>
-					<div class="grid grid-cols-2 gap-2">
-						<flux:button :href="$resultUrl" download="{{ $resultDownloadName }}">Tải về</flux:button>
-						<flux:button type="button" variant="outline" wire:click="createNew">Tạo ảnh mới</flux:button>
-					</div>
-				</div>
+<div class="contents" x-data x-on:open-image-composer.window="$wire.openComposer()">
+	<flux:modal name="image-composer" flyout class="md:w-[470px]" wire:model.self="showComposer" @close="closeComposer">
+		<div class="space-y-5">
+			<div class="space-y-1">
+				<flux:heading size="xl">{{ __('Create image') }}</flux:heading>
+				<flux:text variant="subtle">{{ __('Prompt is required. Reference images are optional.') }}</flux:text>
 			</div>
-		@else
-			<form class="space-y-4 overflow-x-hidden" wire:submit="createImage">
-				@if (!$selectedPresetData)
-					<div class="space-y-3">
-						<flux:heading size="lg">Chọn phong cách</flux:heading>
-						<div class="grid grid-cols-2 gap-3 overflow-y-auto overflow-x-hidden pe-1 md:grid-cols-4">
-							@foreach ($this->presets() as $key => $preset)
-								<flux:card
-									class="min-w-0 cursor-pointer p-4! text-center transition hover:border-orange-300/40 hover:bg-white/15"
-									size="sm" role="button" tabindex="0" wire:key="preset-{{ $key }}"
-									wire:click="selectPreset('{{ $key }}')" wire:keydown.enter="selectPreset('{{ $key }}')">
-									<p class="truncate font-medium text-white">{{ $preset['title'] }}</p>
-								</flux:card>
-							@endforeach
+
+				@if ($errorMessage)
+					<div class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-100">{{ $errorMessage }}</div>
+				@endif
+
+				@if ($publishMessage)
+					<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100">{{ $publishMessage }}</div>
+				@endif
+
+				@if ($resultUrl)
+					<div class="space-y-4">
+						<button class="block w-full" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $resultImage->id }} })" aria-label="{{ __('View image details') }}">
+							<img class="max-h-[58svh] w-full rounded-[1.75rem] bg-zinc-100 object-contain shadow-inner"
+								src="{{ $resultUrl }}" alt="{{ __('AI-generated image') }}" />
+						</button>
+
+						<div class="rounded-3xl bg-zinc-50 p-4">
+							<p class="text-sm font-medium text-emerald-700">{{ __('Image created successfully.') }}</p>
+							@if ($resultImage?->is_published)
+								<p class="mt-1 text-sm text-zinc-500">{{ __('Published in :category.', ['category' => $resultImage->category?->name ?? __('Other')]) }}</p>
+							@else
+								<p class="mt-1 text-sm text-zinc-500">{{ __('Publish to make the image appear in the community gallery.') }}</p>
+							@endif
+						</div>
+
+						<div class="grid grid-cols-2 gap-2">
+							<flux:button :href="$resultUrl" download="{{ $resultDownloadName }}">{{ __('Download') }}</flux:button>
+							<flux:button type="button" variant="outline" wire:click="createNew">{{ __('Create new image') }}</flux:button>
+							<flux:button class="col-span-2" type="button" variant="primary" wire:click="publishResult"
+								:disabled="$resultImage?->is_published" wire:loading.attr="disabled" wire:target="publishResult">
+								{{ $resultImage?->is_published ? __('Published') : __('Publish image') }}
+							</flux:button>
 						</div>
 					</div>
 				@else
-					<div class="space-y-4">
-						<div class="flex items-center justify-between gap-3">
-							<flux:button type="button" variant="ghost" icon="arrow-left" wire:click="backToPresets">Quay lại</flux:button>
-							<flux:text class="truncate text-sm" variant="subtle">{{ $selectedPresetData['title'] }}</flux:text>
-						</div>
-
-						@if ($errorMessage)
-							<div class="rounded-2xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-100">{{ $errorMessage }}
+					<form class="space-y-4" wire:submit="createImage">
+						<flux:card class="space-y-3">
+							<div class="flex items-center justify-between gap-3">
+								<flux:heading size="sm">{{ __('Reference images') }}</flux:heading>
+								<flux:text class="text-sm" variant="subtle">{{ $referenceCount }}/{{ $maxReferencePhotos }}</flux:text>
 							</div>
-						@endif
 
-						<div class="space-y-3">
-							<div
-								class="relative overflow-hidden rounded-xl border border-dashed border-white/10 bg-white/4 p-3">
-								@if ($photos)
-									<div @class([
-										'grid h-72 gap-2',
-										'grid-cols-1' => count($photos) === 1,
-										'grid-rows-2' => count($photos) === 2,
-										'grid-rows-[2fr_1fr]' => count($photos) === 3,
-									])>
-										@foreach ($photos as $index => $item)
-											<div @class([
-												'group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30',
-												'grid grid-cols-2 gap-2 border-0 bg-transparent' =>
-													count($photos) === 3 && $index === 1,
-											])>
-												@if (count($photos) === 3 && $index === 1)
-													<div class="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-														<img class="size-full object-cover" src="{{ $photos[1]->temporaryUrl() }}" alt="Ảnh tham chiếu 2" />
-														<flux:button class="absolute left-2 top-2 z-20" type="button" size="xs" variant="filled"
-															icon="x-mark" wire:click="removePhoto(1)" wire:loading.remove wire:target="createImage"
-															aria-label="Bỏ ảnh tham chiếu 2" />
-													</div>
-													<div class="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-														<img class="size-full object-cover" src="{{ $photos[2]->temporaryUrl() }}" alt="Ảnh tham chiếu 3" />
-														<flux:button class="absolute left-2 top-2 z-20" type="button" size="xs" variant="filled"
-															icon="x-mark" wire:click="removePhoto(2)" wire:loading.remove wire:target="createImage"
-															aria-label="Bỏ ảnh tham chiếu 3" />
-													</div>
-													@break
-
-												@else
-													<img class="size-full object-contain transition-opacity" src="{{ $item->temporaryUrl() }}"
-														alt="Ảnh tham chiếu {{ $index + 1 }}" wire:loading.class="opacity-20" wire:target="createImage" />
-													<flux:button class="absolute left-2 top-2 z-20" type="button" size="xs" variant="filled"
-														icon="x-mark" wire:click="removePhoto({{ $index }})" wire:loading.remove
-														wire:target="createImage" aria-label="Bỏ ảnh tham chiếu {{ $index + 1 }}" />
-												@endif
+							@if ($referenceCount > 0)
+								<div class="grid grid-cols-3 gap-2">
+									@foreach ($referenceImages as $image)
+										@php($url = $this->imageUrl($image))
+										@if ($url)
+											<div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
+												<img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" />
+												<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled" icon="x-mark"
+													wire:click="removeReferenceImage({{ $image->id }})" wire:loading.remove wire:target="createImage"
+													aria-label="{{ __('Remove reference image :number', ['number' => $loop->iteration]) }}" />
 											</div>
-										@endforeach
-									</div>
-								@else
-									<div class="flex h-72 flex-col items-center justify-center gap-4 rounded-2xl bg-black/20 p-3 text-center">
-										<flux:icon class="size-10 text-zinc-400" name="cloud-arrow-up" />
-										<div>
-											<p class="font-medium text-white">Tải ảnh cần chỉnh</p>
-											<flux:text class="text-sm" variant="subtle">Tối đa {{ $maxReferencePhotos }} ảnh JPG, PNG, WEBP, AVIF.</flux:text>
+										@endif
+									@endforeach
+									@foreach ($photos as $index => $item)
+										<div class="overflow-hidden rounded-2xl bg-zinc-100 text-xs text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+											<div class="group relative bg-zinc-200 dark:bg-white/10">
+												<img class="aspect-square size-full object-cover" src="{{ $item->temporaryUrl() }}" alt="{{ __('Reference image :number', ['number' => $referenceImages->count() + $index + 1]) }}" />
+												<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled" icon="x-mark"
+													wire:click="removePhoto({{ $index }})" wire:loading.remove wire:target="createImage"
+													aria-label="{{ __('Remove reference image :number', ['number' => $referenceImages->count() + $index + 1]) }}" />
+											</div>
+											<div class="flex items-center gap-1.5 px-2 py-1.5">
+												<flux:icon class="size-3.5 text-emerald-500" name="check-circle" />
+												<span class="truncate">{{ $item->getClientOriginalName() }}</span>
+											</div>
 										</div>
-									</div>
-								@endif
+									@endforeach
+								</div>
+							@endif
 
-								<div class="absolute inset-0 z-10 hidden items-center justify-center bg-black/35" wire:loading.flex
-									wire:target="createImage">
-									<flux:skeleton class="absolute inset-3 h-auto rounded-2xl opacity-70" animate="shimmer" />
-									<div
-										class="relative z-10 flex items-center gap-3 rounded-2xl border border-orange-300/20 bg-zinc-950/90 px-4 py-3 text-sm text-orange-100 shadow-xl">
-										<span class="size-5 animate-spin rounded-full border-2 border-orange-200 border-t-transparent"></span>
-										<span>Đang tạo ảnh...</span>
-									</div>
+							@if ($referenceCount < $maxReferencePhotos)
+								<flux:file-upload wire:model="newPhotos" accept="image/jpeg,image/png,image/webp,image/avif" :multiple="$maxReferencePhotos > 1">
+									<flux:file-upload.dropzone
+										:heading="$referenceCount > 0 ? __('Add image') : __('Upload optional image')"
+										:text="__('Drop images here or click to browse')"
+										with-progress
+										inline />
+								</flux:file-upload>
+							@endif
+							<div class="mt-2 text-sm text-zinc-500" wire:loading wire:target="newPhotos">{{ __('Uploading image...') }}</div>
+						</flux:card>
+
+						<div x-data="{
+							pickerOpen: false,
+							openPicker() {
+								this.pickerOpen = true
+								this.$nextTick(() => this.$refs.picker?.open?.())
+							},
+							closePicker() {
+								this.pickerOpen = false
+								this.$refs.picker?.close?.()
+							},
+							handlePromptInput(event) {
+								const textarea = event.target
+								const pos = textarea.selectionStart
+								const char = textarea.value.charAt(pos - 1)
+								const before = textarea.value.charAt(pos - 2)
+
+								if (char === '#' && (before === ' ' || before === '')) {
+									this.openPicker()
+								}
+							},
+							insertColor(event) {
+								const value = event.target.closest('ui-color-picker')?.getValue?.()
+								const textarea = this.$refs.prompt
+
+								if (! value || ! textarea) return
+
+								const pos = textarea.selectionStart ?? textarea.value.length
+								const before = textarea.value.slice(0, pos).replace(/#$/, '')
+								const after = textarea.value.slice(pos)
+								const next = before + value + after
+
+								textarea.value = next
+								const insertPos = (before + value).length
+								textarea.dispatchEvent(new Event('input', { bubbles: true }))
+								this.closePicker()
+
+								const restoreCursor = () => {
+									textarea.focus()
+									textarea.setSelectionRange(insertPos, insertPos)
+								}
+
+								requestAnimationFrame(restoreCursor)
+								setTimeout(restoreCursor, 350)
+							},
+						}">
+							<div class="space-y-2">
+								<div class="flex items-center justify-between gap-2">
+									<span class="text-sm font-medium text-zinc-800 dark:text-white">{{ __('Prompt') }}</span>
+									<flux:tooltip content="{{ __('Rewrite prompt') }}" position="top">
+										<flux:dropdown position="bottom" align="end">
+											<flux:button type="button" size="sm" variant="filled" icon="sparkles">{{ __('Rewrite prompt') }}</flux:button>
+											<flux:popover class="w-80 space-y-3">
+												<div>
+													<flux:heading size="sm">{{ __('Rewrite prompt') }}</flux:heading>
+													<flux:text variant="subtle">{{ __('Tell AI how to rewrite your current prompt.') }}</flux:text>
+												</div>
+												<flux:textarea wire:model="rewriteInstruction" rows="4" resize="vertical" :label="__('Rewrite instruction')" :placeholder="__('e.g. Make it more cinematic, add product lighting, keep the same subject...')" />
+												<flux:button class="w-full" type="button" size="sm" variant="primary" wire:click="rewritePrompt" wire:loading.attr="disabled" wire:target="rewritePrompt">
+													<span wire:loading.remove wire:target="rewritePrompt">{{ __('Rewrite prompt') }}</span>
+													<span wire:loading wire:target="rewritePrompt">{{ __('Rewriting prompt...') }}</span>
+												</flux:button>
+											</flux:popover>
+										</flux:dropdown>
+									</flux:tooltip>
+								</div>
+								<flux:textarea
+									class="max-h-[400px] overflow-y-auto [&_textarea]:max-h-[400px] [&_textarea]:overflow-y-auto"
+									wire:model.live.debounce.300ms="prompt"
+									rows="auto"
+									:placeholder="__('Describe the image you want to create...')"
+									x-ref="prompt"
+									x-on:input="handlePromptInput($event)"
+									required />
+							</div>
+
+							<div class="relative">
+								<div
+									class="absolute bottom-2 inset-s-2 z-10"
+									x-show="pickerOpen"
+									x-cloak
+									x-transition
+									@keydown.escape="closePicker()">
+									<flux:color-picker type="button" size="xs" x-ref="picker" x-on:input="insertColor($event)" />
 								</div>
 							</div>
-
-							@if (count($photos) < $maxReferencePhotos)
-								<label
-									class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/15">
-									<flux:icon class="size-5" name="plus" />
-									<span>{{ $photos ? 'Upload thêm ảnh' : 'Upload ảnh' }}</span>
-									<input class="sr-only" type="file" wire:model="newPhotos" accept="image/jpeg,image/png,image/webp,image/avif"
-										@if ($maxReferencePhotos > 1) multiple @endif>
-								</label>
-							@endif
-							<div class="text-sm text-zinc-400" wire:loading wire:target="newPhotos">Đang tải ảnh lên...</div>
 						</div>
 
-						<flux:textarea wire:model="customPrompt" rows="3" label="Yêu cầu tùy chỉnh"
-							placeholder="Ví dụ: giữ nguyên nền, tăng ánh sáng mặt..." />
-
-						<div class="grid grid-cols-[auto_1fr] gap-2">
-							<flux:button class="w-full" type="submit" variant="primary"
-								:disabled="count($photos) === 0 || $this->remainingToday === 0" wire:loading.attr="disabled"
-								wire:target="createImage">
-								Tạo ảnh</flux:button>
-						</div>
-					</div>
+						<flux:button class="w-full" type="submit" variant="primary" wire:loading.attr="disabled" wire:target="newPhotos,createImage">
+							<span wire:loading.remove wire:target="newPhotos,createImage">{{ __('Create image') }}</span>
+							<span wire:loading wire:target="newPhotos">{{ __('Uploading image...') }}</span>
+							<span wire:loading wire:target="createImage">{{ __('Creating image...') }}</span>
+						</flux:button>
+					</form>
 				@endif
-			</form>
-		@endif
-	</div>
-</section>
+		</div>
+	</flux:modal>
+</div>

@@ -3,8 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Models\AiApiKey;
+use App\Models\User;
 use Closure;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
@@ -29,8 +29,12 @@ class VerifyAiApiKey
 
         $user = $key?->user;
 
-        if (! $key || ! $user instanceof Authenticatable) {
+        if (! $key || ! $user instanceof User) {
             return $this->unauthorized();
+        }
+
+        if ($user->isBanned()) {
+            return response()->json(['message' => 'Tài khoản đã bị khóa.'], 403);
         }
 
         $key->forceFill(['last_used_at' => now()])->save();

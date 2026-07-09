@@ -14,18 +14,19 @@ return [
     */
 
     'default' => 'openai',
-    'default_for_images' => env('AI_IMAGE_PROVIDER', 'openai'),
+    'default_for_images' => 'openai',
     'default_for_audio' => 'openai',
     'default_for_transcription' => 'openai',
     'default_for_embeddings' => 'openai',
     'default_for_reranking' => 'cohere',
 
-    'image_model' => env('AI_IMAGE_MODEL', 'cx/gpt-5.5-image'),
-    'image_timeout' => (int) env('AI_IMAGE_TIMEOUT', 600),
-    'image_reference_field' => env('AI_IMAGE_REFERENCE_FIELD', 'image'),
-    'image_daily_limit' => (int) env('AI_IMAGE_DAILY_LIMIT', 10),
-    'image_max_reference_photos' => (int) env('AI_IMAGE_MAX_REFERENCE_PHOTOS', 1),
-    'image_upload_max_kb' => (int) env('AI_IMAGE_UPLOAD_MAX_KB', 32768),
+    'image_model' => 'cx/gpt-5.5-image',
+    'image_review_model' => env('AI_IMAGE_REVIEW_MODEL', 'gpt-5.5'),
+    'prompt_rewrite_model' => env('AI_PROMPT_REWRITE_MODEL', 'gpt-5.5'),
+    'image_timeout' => 600,
+    'image_reference_field' => 'image',
+    'image_max_reference_photos' => 1,
+    'image_upload_max_kb' => 32768,
 
     /*
     |--------------------------------------------------------------------------
@@ -128,12 +129,12 @@ return [
 
         'openai' => [
             'driver' => 'openai',
-            'key' => env('OPENAI_API_KEY'),
-            'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
+            'key' => null,
+            'url' => 'https://api.openai.com/v1',
             'store' => env('OPENAI_STORE', true),
             'models' => [
                 'image' => [
-                    'default' => env('AI_IMAGE_MODEL', 'cx/gpt-5.5-image'),
+                    'default' => 'cx/gpt-5.5-image',
                 ],
             ],
         ],

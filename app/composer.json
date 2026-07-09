@@ -8,16 +8,31 @@
         "framework"
     ],
     "license": "MIT",
+    "repositories": [
+        {
+            "type": "path",
+            "url": "packages/livewire/flux-pro",
+            "options": {
+                "symlink": true,
+                "versions": {
+                    "livewire/flux-pro": "2.15.0"
+                }
+            }
+        }
+    ],
     "require": {
         "php": "^8.3",
         "laravel/ai": "^0.8.1",
         "laravel/chisel": "^0.1.0",
         "laravel/fortify": "^1.37.2",
         "laravel/framework": "^13.17",
+        "laravel/horizon": "^5.47",
+        "laravel/reverb": "^1.10",
         "laravel/tinker": "^3.0",
         "livewire/blaze": "^1.0",
-        "livewire/flux": "^2.13.1",
-        "livewire/livewire": "^4.1"
+        "livewire/flux-pro": "2.15.0",
+        "livewire/livewire": "^4.1",
+        "mike-bronner/laravel-model-caching": "13.1.5"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",

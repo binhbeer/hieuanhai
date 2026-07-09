@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AiApiKey;
 use App\Models\AiApiRequest;
 use App\Services\AiImageEditor;
+use App\Support\AppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -36,8 +37,8 @@ class AiImageController extends Controller
 
         $validator = Validator::make($request->all(), [
             'prompt' => ['required', 'string', 'max:2000'],
-            'images' => ['required', 'array', 'min:1', 'max:'.min(3, max(1, (int) config('ai.image_max_reference_photos', 1)))],
-            'images.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.config('ai.image_upload_max_kb', 32768)],
+            'images' => ['sometimes', 'array', 'max:'.min(3, max(1, AppSettings::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 1))))],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::int('ai.image_upload_max_kb', (int) config('ai.image_upload_max_kb', 32768))],
         ]);
 
         if ($validator->fails()) {
@@ -73,6 +74,10 @@ class AiImageController extends Controller
                 'created_at' => $image->created_at?->toISOString(),
                 'quota' => $this->quotaPayload($key),
             ], 201);
+        } catch (\InvalidArgumentException $e) {
+            $this->logRequest($key, $request, $startedAt, 422, 'validation_failed', false, $image?->id, $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (Throwable $e) {
             report($e);
 

@@ -1,0 +1,69 @@
+{
+    "name": "text",
+    "title": "Text",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/text",
+    "pro": false,
+    "sections": [
+        {
+            "title": "Size",
+            "content": "Use standard Tailwind to control the size of the text so that you can more easily adapt to different screen sizes.\nLarger text size\nDefault text size\nSmaller text",
+            "examples": [
+                "<flux:text class=\"text-base\">Base text size</flux:text><flux:text>Default text size</flux:text><flux:text class=\"text-xs\">Smaller text</flux:text>"
+            ]
+        },
+        {
+            "title": "Color",
+            "content": "Use the variant and color props to adjust the text color based on its importance and context.\nStrong text color\nDefault text color\nSubtle text color\nColored text",
+            "examples": [
+                "<flux:text variant=\"strong\">Strong text color</flux:text><flux:text>Default text color</flux:text><flux:text variant=\"subtle\">Subtle text color</flux:text><flux:text color=\"blue\">Colored text</flux:text>"
+            ]
+        },
+        {
+            "title": "Link",
+            "content": "Use the link component to create clickable text that navigates to other pages or resources.\nVisit our documentation for more information.",
+            "examples": [
+                "<flux:text>Visit our <flux:link href=\"#\">documentation</flux:link> for more information.</flux:text>"
+            ]
+        },
+        {
+            "title": "Link variants",
+            "content": "Links can be styled differently based on their context and importance.\nDefault link\nGhost link\nSubtle link",
+            "examples": [
+                "<flux:link href=\"#\">Default link</flux:link><flux:link href=\"#\" variant=\"ghost\">Ghost link</flux:link><flux:link href=\"#\" variant=\"subtle\">Subtle link</flux:link>"
+            ]
+        },
+        {
+            "title": "Link as button",
+            "content": "Use the as=\"button\" prop to render the link as a button.",
+            "examples": [
+                "<flux:link as=\"button\" wire:click=\"...\">Create new account →</flux:link>"
+            ]
+        },
+        {
+            "title": "Related components",
+            "content": "Create hierarchical section headings\nContainers for content with consistent styling",
+            "examples": []
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [
+        "link",
+        "text"
+    ],
+    "sub_components": [],
+    "scraped_at": "2026-02-11T03:25:17+00:00"
+}

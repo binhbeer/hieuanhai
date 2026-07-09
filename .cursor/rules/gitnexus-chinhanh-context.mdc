@@ -1,0 +1,12 @@
+---
+description: GitNexus must use Chinhanh repository context in this workspace
+alwaysApply: true
+---
+
+# GitNexus Chinhanh Context
+
+- This workspace is Chinhanh, not TSS.
+- When using GitNexus MCP tools, pass `repo: "hieuanhai"` unless user explicitly asks for another repo.
+- GitNexus repo `hieuanhai` maps to `/home/chinhanh` on branch `main`.
+- Do not omit `repo` for GitNexus queries because indexed TSS repos also exist.
+- If GitNexus data seems stale, run from `/home/chinhanh/app`: `npx gitnexus analyze`.

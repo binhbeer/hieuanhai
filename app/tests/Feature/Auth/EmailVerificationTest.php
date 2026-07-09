@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,6 +29,22 @@ class EmailVerificationTest extends TestCase
         $response = $this->actingAs($user)->get(route('verification.notice'));
 
         $response->assertOk();
+    }
+
+    public function test_verified_routes_require_email_verification_by_default(): void
+    {
+        $user = User::factory()->unverified()->create();
+
+        $this->actingAs($user)->get(route('appearance.edit'))
+            ->assertRedirect(route('verification.notice'));
+    }
+
+    public function test_verified_routes_allow_unverified_users_when_email_verification_is_disabled(): void
+    {
+        Setting::putValue('auth.email_verification_required', false);
+        $user = User::factory()->unverified()->create();
+
+        $this->actingAs($user)->get(route('appearance.edit'))->assertOk();
     }
 
     public function test_email_can_be_verified(): void

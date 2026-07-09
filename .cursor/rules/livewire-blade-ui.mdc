@@ -1,0 +1,14 @@
+---
+description: Blade, Livewire, Flux, Tailwind UI standards
+alwaysApply: false
+globs: "app/resources/**/*.blade.php,app/resources/**/*.js,app/resources/**/*.css,app/app/Livewire/**/*.php"
+---
+
+# Livewire Blade UI Standards
+
+- Use existing Blade/Flux/Livewire patterns before adding JS.
+- Prefer Tailwind utilities and native form/browser behavior over custom scripts.
+- Keep Vietnamese UI copy consistent with surrounding views.
+- Preserve accessibility: labels, focus states, keyboard access, and meaningful button text.
+- For image UI, keep paths compatible with `AiImageEditor`, `AiImage::downloadName()`, and imgproxy volumes.
+- Verify visible UI changes with `npm run build` in container when assets changed.

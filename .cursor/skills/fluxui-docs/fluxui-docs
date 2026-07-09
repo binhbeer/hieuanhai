@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.realpath(__file__))
+DATA = os.path.join(ROOT, "data")
+
+
+def load_json(path):
+    with open(path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def doc_paths():
+    for category in ("components", "layouts", "guides"):
+        base = os.path.join(DATA, category)
+        if not os.path.isdir(base):
+            continue
+        for name in sorted(os.listdir(base)):
+            if name.endswith(".json"):
+                yield category, name[:-5], os.path.join(base, name)
+
+
+def all_docs():
+    docs = []
+    for category, name, path in doc_paths():
+        doc = load_json(path)
+        docs.append((category, name, doc))
+    return docs
+
+
+def doc_title(doc, fallback):
+    return str(doc.get("title") or doc.get("name") or fallback)
+
+
+def doc_text(doc):
+    return json.dumps(doc, ensure_ascii=False).lower()
+
+
+def print_json(data):
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def list_docs(args):
+    rows = []
+    for category, name, doc in all_docs():
+        if args.category and category != args.category:
+            continue
+        rows.append({
+            "category": category,
+            "name": name,
+            "title": doc_title(doc, name),
+            "pro": bool(doc.get("pro", False)),
+        })
+
+    if args.json:
+        print_json(rows)
+        return
+
+    for row in rows:
+        pro = " [Pro]" if row["pro"] else ""
+        print(f'{row["category"]}/{row["name"]}{pro} - {row["title"]}')
+
+
+def search_docs(args):
+    query = args.query.lower()
+    terms = query.split()
+    results = []
+
+    for category, name, doc in all_docs():
+        title = doc_title(doc, name)
+        label = f"{category} {name} {title}".lower()
+        body = doc_text(doc)
+        if query in {name.lower(), title.lower()}:
+            score = 0
+        elif query in name.lower() or query in title.lower():
+            score = 1
+        elif all(term in label for term in terms):
+            score = 2
+        elif all(term in body for term in terms):
+            score = 3
+        else:
+            continue
+
+        results.append({
+            "category": category,
+            "name": name,
+            "title": title,
+            "pro": bool(doc.get("pro", False)),
+            "score": score,
+        })
+
+    results.sort(key=lambda row: (row.pop("score"), row["category"], row["name"]))
+
+    if args.json:
+        print_json(results)
+        return
+
+    if not results:
+        print(f"No results for: {args.query}")
+        return
+
+    for row in results:
+        pro = " [Pro]" if row["pro"] else ""
+        print(f'{row["category"]}/{row["name"]}{pro} - {row["title"]}')
+
+
+def find_doc(item):
+    item = item.lower().removeprefix("flux:")
+    candidates = [item, item.replace(".", "-"), item.replace("_", "-")]
+    for category, name, path in doc_paths():
+        if name.lower() in candidates:
+            return category, name, load_json(path)
+    for category, name, doc in all_docs():
+        if item in {name.lower(), doc_title(doc, name).lower()}:
+            return category, name, doc
+    return None
+
+
+def show_doc(args):
+    found = find_doc(args.item)
+    if not found:
+        print(f"Not found: {args.item}", file=sys.stderr)
+        sys.exit(1)
+
+    category, name, doc = found
+    if args.section:
+        section = args.section.lower()
+        if section in doc:
+            doc = doc[section]
+        elif section in ("props", "prop", "attributes", "attribute"):
+            doc = doc.get("props") or doc.get("attributes") or doc.get("sections", [])
+        else:
+            doc = {"error": f"Section not found: {args.section}", "available": list(doc.keys())}
+
+    if args.json:
+        print_json(doc)
+        return
+
+    print(f"# {category}/{name} - {doc_title(doc, name)}")
+    print(json.dumps(doc, ensure_ascii=False, indent=2))
+
+
+def usages(args):
+    usage_path = os.path.join(DATA, "usages.json")
+    if not os.path.exists(usage_path):
+        print("usages.json missing", file=sys.stderr)
+        sys.exit(1)
+
+    data = load_json(usage_path)
+    key = args.item.lower().removeprefix("flux:")
+    matches = {}
+
+    if isinstance(data, dict):
+        for component, pages in data.items():
+            normalized = component.lower().removeprefix("flux:")
+            if key in normalized:
+                matches[component] = pages
+
+    if args.json:
+        print_json(matches)
+        return
+
+    if not matches:
+        print(f"No usages for: {args.item}")
+        return
+
+    for component, pages in matches.items():
+        print(f"{component} is used in:")
+        if isinstance(pages, dict):
+            iterable = pages.keys()
+        else:
+            iterable = pages
+        for page in iterable:
+            print(f"  {page}")
+
+
+def discover(args):
+    usage_path = os.path.join(DATA, "usages.json")
+    documented = {f"flux:{name}" for _, name, _ in doc_paths()}
+    data = load_json(usage_path) if os.path.exists(usage_path) else {}
+    items = []
+
+    if isinstance(data, dict):
+        for component, pages in sorted(data.items()):
+            if component not in documented:
+                items.append({"component": component, "used_in": pages})
+
+    if args.json:
+        print_json(items)
+        return
+
+    for item in items:
+        print(item["component"])
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="fluxui-docs")
+    parser.add_argument("--version", action="version", version="fluxui-docs local")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    docs_parser = subparsers.add_parser("docs")
+    docs_parser.add_argument("--category", choices=["components", "layouts", "guides"])
+    docs_parser.add_argument("--json", action="store_true")
+    docs_parser.set_defaults(func=list_docs)
+
+    search_parser = subparsers.add_parser("search")
+    search_parser.add_argument("query")
+    search_parser.add_argument("--json", action="store_true")
+    search_parser.set_defaults(func=search_docs)
+
+    show_parser = subparsers.add_parser("show")
+    show_parser.add_argument("item")
+    show_parser.add_argument("--section")
+    show_parser.add_argument("--json", action="store_true")
+    show_parser.set_defaults(func=show_doc)
+
+    usages_parser = subparsers.add_parser("usages")
+    usages_parser.add_argument("item")
+    usages_parser.add_argument("--json", action="store_true")
+    usages_parser.set_defaults(func=usages)
+
+    discover_parser = subparsers.add_parser("discover")
+    discover_parser.add_argument("--json", action="store_true")
+    discover_parser.set_defaults(func=discover)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

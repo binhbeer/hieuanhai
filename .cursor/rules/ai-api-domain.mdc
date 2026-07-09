@@ -1,0 +1,16 @@
+---
+description: AI image API, quota, and gallery domain rules
+alwaysApply: false
+globs: "app/app/Http/**/*.php,app/app/Models/Ai*.php,app/app/Services/**/*.php,app/routes/api.php,app/tests/Feature/*Ai*.php"
+---
+
+# AI API Domain Rules
+
+- Public app domain is `https://chinhanh.local`; API endpoint base is `https://chinhanh.local/api`.
+- API route is `POST /api/ai/images` with `throttle:ai-api` and `ai.api.key` middleware.
+- API key object lives on request attribute `ai_api_key`; verify type before use.
+- Charge quota only after successful image creation; log every API attempt to `AiApiRequest`.
+- Keep upload limits tied to `config('ai.image_max_reference_photos')` and `config('ai.image_upload_max_kb')`.
+- Accept only image MIME types already allowed by controller unless user requests expansion.
+- Response errors must not expose provider stack traces, filesystem paths, tokens, or raw prompts beyond intended fields.
+- Add/update feature tests for quota, auth, validation, or image generation behavior changes.

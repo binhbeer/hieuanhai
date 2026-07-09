@@ -3,7 +3,7 @@
 return [
     'temporary_file_upload' => [
         'disk' => env('LIVEWIRE_TEMPORARY_FILE_UPLOAD_DISK'),
-        'rules' => ['required', 'file', 'max:'.(int) env('AI_IMAGE_UPLOAD_MAX_KB', 32768)],
+        'rules' => ['required', 'file', 'max:102400'],
         'directory' => null,
         'middleware' => null,
         'preview_mimes' => [

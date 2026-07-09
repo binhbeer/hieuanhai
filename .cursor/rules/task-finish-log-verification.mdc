@@ -1,0 +1,15 @@
+---
+description: Conditional log verification before finishing relevant tasks
+alwaysApply: true
+---
+
+# Task Finish Log Verification
+
+Apply this rule on every prompt, then decide if log verification is relevant.
+
+- No code/runtime change, or task only asks explanation/planning/rule text: no log verification needed.
+- PHP/Laravel/runtime changed or tested: before saying finished, check `app/storage/logs/laravel.log` for new task-related errors.
+- Blade/Livewire/UI/browser behavior changed or tested: before saying finished, check browser console/network output (`browser.log` if available, otherwise browser automation output) for task-related errors. If UI also touches Laravel backend, check both browser output and `app/storage/logs/laravel.log`.
+- Use a task-specific prompt/check before each log review: include feature, route/page, user action, and expected success state.
+- If related errors appear, fix them or report the blocker. Do not finish with unchecked relevant log errors.
+- If a relevant log does not exist or no browser run happened, say that explicitly in final summary.

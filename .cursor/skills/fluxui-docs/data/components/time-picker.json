@@ -1,0 +1,104 @@
+{
+    "name": "time-picker",
+    "title": "Time picker",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/time-picker",
+    "pro": true,
+    "sections": [
+        {
+            "title": "Basic usage",
+            "content": "",
+            "examples": [
+                "<flux:time-picker value=\"11:30\" />",
+                "<flux:time-picker wire:model=\"time\" />"
+            ]
+        },
+        {
+            "title": "Input trigger",
+            "content": "Attach the time picker to a time input for more precise time selection control.",
+            "examples": [
+                "<flux:time-picker type=\"input\" />",
+                "<flux:time-picker type=\"input\" :dropdown=\"false\" />"
+            ]
+        },
+        {
+            "title": "Without dropdown",
+            "content": "",
+            "examples": []
+        },
+        {
+            "title": "Multiple times",
+            "content": "Allow users to select multiple times.",
+            "examples": [
+                "<flux:time-picker multiple />"
+            ]
+        },
+        {
+            "title": "Time format",
+            "content": "By default, the time picker will use the browser's locale to determine the time format.\nYou can override this by setting the time-format attribute to 12-hour or 24-hour.",
+            "examples": [
+                "<flux:time-picker time-format=\"12-hour\" /><flux:time-picker time-format=\"24-hour\" />"
+            ]
+        },
+        {
+            "title": "Interval",
+            "content": "You can set the interval between the displayed time options by setting the interval attribute to a number of minutes. The default is 30 minutes.",
+            "examples": [
+                "<flux:time-picker interval=\"60\" />"
+            ]
+        },
+        {
+            "title": "Min/max times",
+            "content": "Restrict the selectable times by setting minimum and maximum boundaries.",
+            "examples": [
+                "<flux:time-picker min=\"09:00\" max=\"17:00\" />",
+                "<!-- Prevent selection before now... --><flux:time-picker min=\"now\" /><!-- Prevent selection after now... --><flux:time-picker max=\"now\" />"
+            ]
+        },
+        {
+            "title": "Unavailable times",
+            "content": "Disable specific times from being selected. Useful for blocking out appointments, showing booked times, or indicating unavailable time slots.",
+            "examples": [
+                "<flux:time-picker unavailable=\"03:00,04:00,05:30-07:29\" />"
+            ]
+        },
+        {
+            "title": "Open to",
+            "content": "Set the time that the time picker will open to. Otherwise, the time picker defaults to the selected time, or the current time.",
+            "examples": [
+                "<flux:time-picker open-to=\"10:00\" />"
+            ]
+        },
+        {
+            "title": "Localization",
+            "content": "By default, the time picker will use the browser's locale (e.g. navigator.language).\nYou can override this behavior by setting the locale attribute to any valid locale string (e.g. fr for French, en-US for English, etc.):",
+            "examples": [
+                "<flux:time-picker locale=\"ja-JP\" />"
+            ]
+        },
+        {
+            "title": "Related components",
+            "content": "Displays a date picker interface for selecting dates\nDisplays a calendar interface for selecting dates\nText fields for collecting user input",
+            "examples": []
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [
+        "time-picker"
+    ],
+    "sub_components": [],
+    "scraped_at": "2026-02-11T03:25:19+00:00"
+}

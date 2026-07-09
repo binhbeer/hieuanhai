@@ -1,0 +1,47 @@
+{
+    "name": "pagination",
+    "title": "Pagination",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/pagination",
+    "pro": false,
+    "sections": [
+        {
+            "title": "Simple paginator",
+            "content": "Use the simple paginator when working with large datasets where counting the total number of results would be expensive. The simple paginator provides \"Previous\" and \"Next\" buttons without displaying the total number of pages or records.",
+            "examples": [
+                "<!-- $orders = Order::simplePaginate() --><flux:pagination :paginator=\"$orders\" />"
+            ]
+        },
+        {
+            "title": "Large result set",
+            "content": "When working with large result sets, the pagination component automatically adapts to show a reasonable number of page links. It shows the first and last pages, along with a window of pages around the current page, and adds ellipses for any gaps to ensure efficient navigation through numerous pages.",
+            "examples": [
+                "<!-- $orders = Order::paginate(5) --><flux:pagination :paginator=\"$orders\" />"
+            ]
+        },
+        {
+            "title": "Related components",
+            "content": "Display tabular data",
+            "examples": []
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [
+        "pagination"
+    ],
+    "sub_components": [],
+    "scraped_at": "2026-02-11T03:25:05+00:00"
+}

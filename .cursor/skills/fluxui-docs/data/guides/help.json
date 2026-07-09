@@ -1,0 +1,41 @@
+{
+    "name": "help",
+    "title": "Help",
+    "description": "",
+    "category": "guide",
+    "url": "https://fluxui.dev/docs/help",
+    "pro": false,
+    "sections": [
+        {
+            "title": "Found a bug?",
+            "content": "",
+            "examples": []
+        },
+        {
+            "title": "Have a feature request?",
+            "content": "",
+            "examples": []
+        },
+        {
+            "title": "Need help with billing, licensing, etc.",
+            "content": "",
+            "examples": []
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [],
+    "sub_components": [],
+    "scraped_at": "2026-02-11T03:25:29+00:00"
+}

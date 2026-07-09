@@ -1,0 +1,63 @@
+{
+    "name": "breadcrumbs",
+    "title": "Breadcrumbs",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/breadcrumbs",
+    "pro": false,
+    "sections": [
+        {
+            "title": "With slashes",
+            "content": "Use slashes instead of chevrons to separate breadcrumb items.",
+            "examples": [
+                "<flux:breadcrumbs> <flux:breadcrumbs.item href=\"#\" separator=\"slash\">Home</flux:breadcrumbs.item> <flux:breadcrumbs.item href=\"#\" separator=\"slash\">Blog</flux:breadcrumbs.item> <flux:breadcrumbs.item separator=\"slash\">Post</flux:breadcrumbs.item></flux:breadcrumbs>"
+            ]
+        },
+        {
+            "title": "With icon",
+            "content": "Use an icon instead of text for a particular breadcrumb item.",
+            "examples": [
+                "<flux:breadcrumbs> <flux:breadcrumbs.item href=\"#\" icon=\"home\" /> <flux:breadcrumbs.item href=\"#\">Blog</flux:breadcrumbs.item> <flux:breadcrumbs.item>Post</flux:breadcrumbs.item></flux:breadcrumbs>"
+            ]
+        },
+        {
+            "title": "With ellipsis",
+            "content": "Truncate a long breadcrumb list with an ellipsis.",
+            "examples": [
+                "<flux:breadcrumbs> <flux:breadcrumbs.item href=\"#\" icon=\"home\" /> <flux:breadcrumbs.item icon=\"ellipsis-horizontal\" /> <flux:breadcrumbs.item>Post</flux:breadcrumbs.item></flux:breadcrumbs>"
+            ]
+        },
+        {
+            "title": "With ellipsis dropdown",
+            "content": "Truncate a long breadcrumb list into a single ellipsis dropdown.",
+            "examples": [
+                "<flux:breadcrumbs> <flux:breadcrumbs.item href=\"#\" icon=\"home\" /> <flux:breadcrumbs.item> <flux:dropdown> <flux:button icon=\"ellipsis-horizontal\" variant=\"ghost\" size=\"sm\" /> <flux:navmenu> <flux:navmenu.item>Client</flux:navmenu.item> <flux:navmenu.item icon=\"arrow-turn-down-right\">Team</flux:navmenu.item> <flux:navmenu.item icon=\"arrow-turn-down-right\">User</flux:navmenu.item> </flux:navmenu> </flux:dropdown> </flux:breadcrumbs.item> <flux:breadcrumbs.item>Post</flux:breadcrumbs.item></flux:breadcrumbs>"
+            ]
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [
+        "breadcrumbs",
+        "breadcrumbs.item",
+        "button",
+        "dropdown",
+        "navmenu",
+        "navmenu.item"
+    ],
+    "sub_components": [
+        "breadcrumbs.item"
+    ],
+    "scraped_at": "2026-02-11T03:24:45+00:00"
+}

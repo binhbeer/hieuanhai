@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Settings;
 
+use App\Models\AiApiKey;
+use App\Models\AiApiRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -52,6 +54,59 @@ class ProfileUpdateTest extends TestCase
         $response->assertHasNoErrors();
 
         $this->assertNotNull($user->refresh()->email_verified_at);
+    }
+
+    public function test_api_key_page_is_displayed(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $this->get(route('api-key.edit'))->assertOk()->assertSee('API key');
+    }
+
+    public function test_user_can_generate_one_settings_api_key_and_view_stats(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user);
+
+        $component = Livewire::test('pages::settings.api-key')
+            ->call('generateApiKey')
+            ->assertHasNoErrors();
+
+        $firstPlain = $component->get('newApiToken');
+        $key = AiApiKey::query()->where('user_id', $user->id)->firstOrFail();
+
+        $this->assertIsString($firstPlain);
+        $this->assertStringStartsWith('hai_', $firstPlain);
+        $this->assertSame(100, $key->quota_limit);
+
+        $key->update(['quota_used' => 1]);
+        AiApiRequest::create([
+            'ai_api_key_id' => $key->id,
+            'user_id' => $user->id,
+            'status_code' => 201,
+            'status' => 'succeeded',
+            'duration_ms' => 123,
+            'quota_charged' => true,
+        ]);
+
+        Livewire::test('pages::settings.api-key')
+            ->assertSee('HTTP 201')
+            ->assertSee('99');
+
+        $component->call('generateApiKey');
+        $secondPlain = $component->get('newApiToken');
+
+        $this->assertIsString($secondPlain);
+        $this->assertSame(1, AiApiKey::query()->where('user_id', $user->id)->count());
+        $this->assertDatabaseMissing('ai_api_keys', [
+            'id' => $key->id,
+            'token_hash' => AiApiKey::hashToken($firstPlain),
+        ]);
+        $this->assertDatabaseHas('ai_api_keys', [
+            'id' => $key->id,
+            'token_hash' => AiApiKey::hashToken($secondPlain),
+        ]);
     }
 
     public function test_user_can_delete_their_account(): void

@@ -1,0 +1,12 @@
+---
+description: Laravel i18n keys and Vietnamese translations
+alwaysApply: false
+globs: "app/resources/views/**/*.blade.php,app/lang/*.json"
+---
+
+# Laravel i18n
+
+- Use English source strings in `__()` calls inside Blade views.
+- Keep Vietnamese translations in `app/lang/vi.json`; update it whenever adding, changing, or removing a visible English key.
+- Do not add new Vietnamese source strings like `__('Đăng nhập')`; use `__('Log in')` with a `vi.json` entry instead.
+- Preserve Laravel placeholders exactly, e.g. `:time`, `:name`.

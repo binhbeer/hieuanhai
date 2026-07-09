@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+TARGET="${1:-$HOME/.local/bin}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+mkdir -p "$TARGET"
+chmod +x "$SCRIPT_DIR/fluxui-docs"
+ln -sf "$SCRIPT_DIR/fluxui-docs" "$TARGET/fluxui-docs"
+printf 'Installed: %s/fluxui-docs\n' "$TARGET"

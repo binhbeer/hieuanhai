@@ -1,0 +1,14 @@
+---
+description: Project Docker context and command policy
+alwaysApply: true
+---
+
+# Chinhanh Docker Context
+
+- Workspace root is `/home/chinhanh`; Laravel app root is `app/` and container app root is `/var/www/html`.
+- Use Docker for runtime commands. Prefer `docker compose exec app sh -lc 'cd /var/www/html && <command>'` from workspace root.
+- Start services with `docker compose up -d` only when needed; do not run `docker compose down -v`, prune, or delete `data/` without explicit user approval.
+- Services: `app` (`chinhanh-app`, ports 80/443), `mysql` (host port 33060), `dragonfly` (6380), `memcached` (11212), `imgproxy` (8083).
+- Do not run host `php`, `composer`, `artisan`, `npm`, or `pnpm` unless user explicitly asks or container is unavailable.
+- Project domain is `https://chinhanh.local`; use it for browser/manual checks and generated absolute app URLs.
+- If HTTPS certificate blocks automation, use `curl -k https://chinhanh.local/...` for smoke checks; avoid falling back to `localhost` unless the user asks.

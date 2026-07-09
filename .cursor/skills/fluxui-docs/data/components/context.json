@@ -1,0 +1,31 @@
+{
+    "name": "context",
+    "title": "Context menu",
+    "description": "",
+    "category": "component",
+    "url": "https://fluxui.dev/components/context",
+    "pro": true,
+    "sections": [
+        {
+            "title": "Related components",
+            "content": "Display expandable menus for navigational options\nExecute actions with keyboard shortcuts",
+            "examples": []
+        }
+    ],
+    "reference": [],
+    "related": [
+        "accordion",
+        "autocomplete",
+        "avatar",
+        "badge",
+        "brand",
+        "button",
+        "breadcrumbs",
+        "calendar",
+        "callout",
+        "card"
+    ],
+    "components_used": [],
+    "sub_components": [],
+    "scraped_at": "2026-02-11T03:24:52+00:00"
+}
