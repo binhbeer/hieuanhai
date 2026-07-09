@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Ai\ImageReviewAgent;
 use App\Models\AiApiKey;
 use App\Models\AiApiRequest;
+use App\Models\AiImage;
+use App\Models\Category;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,12 +60,131 @@ class AiImageApiTest extends TestCase
 
         $key->refresh();
         $this->assertSame(1, $key->quota_used);
+        $this->assertFalse(AiImage::query()->latest('id')->firstOrFail()->is_published);
         $this->assertDatabaseHas('ai_api_requests', [
             'ai_api_key_id' => $key->id,
             'status_code' => 201,
             'status' => 'succeeded',
             'quota_charged' => true,
         ]);
+    }
+
+    public function test_publish_api_creates_publishes_and_logs_image(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([
+            $this->allowedReview(),
+            $this->publishReview('portraits', ['avatar', 'studio']),
+        ]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+        [$plain, $key] = $this->apiKey(quotaLimit: 2);
+
+        $response = $this
+            ->withHeader('Authorization', 'Bearer '.$plain)
+            ->post('/api/ai/images/publish', [
+                'prompt' => 'Make this a public avatar portrait',
+                'images' => [UploadedFile::fake()->image('source.jpg', 800, 600)],
+            ]);
+
+        $image = AiImage::query()->latest('id')->firstOrFail()->load(['category', 'tags']);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('id', $image->id)
+            ->assertJsonPath('status', 'succeeded')
+            ->assertJsonPath('published', true)
+            ->assertJsonPath('category.slug', 'portraits')
+            ->assertJsonPath('tags.0', 'avatar')
+            ->assertJsonPath('tags.1', 'studio')
+            ->assertJsonPath('quota.used', 1)
+            ->assertJsonPath('quota.remaining', 1)
+            ->assertJson(fn ($json) => $json
+                ->where('public_url', route('images.show', $image))
+                ->has('url')
+                ->has('download_name')
+                ->etc()
+            );
+
+        $key->refresh();
+        $this->assertSame(1, $key->quota_used);
+        $this->assertTrue($image->is_published);
+        $this->assertSame('portraits', $image->category?->slug);
+        $this->assertSame(['avatar', 'studio'], $image->tags->pluck('name')->values()->all());
+        $this->assertDatabaseHas('ai_api_requests', [
+            'ai_api_key_id' => $key->id,
+            'ai_image_id' => $image->id,
+            'status_code' => 201,
+            'status' => 'succeeded',
+            'quota_charged' => true,
+        ]);
+    }
+
+    public function test_publish_api_rejection_does_not_charge_quota(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([
+            $this->allowedReview(),
+            ['allowed' => false, 'blocked_policy' => 'sexual', 'reason' => 'Không phù hợp.'],
+        ]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+        [$plain, $key] = $this->apiKey(quotaLimit: 2);
+
+        $this
+            ->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images/publish', [
+                'prompt' => 'Unsafe public image',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Prompt không phù hợp để tạo hoặc publish ảnh.');
+
+        $key->refresh();
+        $image = AiImage::query()->latest('id')->firstOrFail();
+        $this->assertSame(0, $key->quota_used);
+        $this->assertFalse($image->is_published);
+        $this->assertDatabaseHas('ai_api_requests', [
+            'ai_api_key_id' => $key->id,
+            'ai_image_id' => $image->id,
+            'status_code' => 422,
+            'status' => 'validation_failed',
+            'quota_charged' => false,
+        ]);
+    }
+
+    public function test_categories_api_returns_active_categories_without_key(): void
+    {
+        Category::create(['name' => 'ZZZ Hidden', 'slug' => 'hidden', 'sort_order' => 1, 'status' => 'inactive']);
+        Category::create(['name' => 'AAA Public', 'slug' => 'aaa-public', 'sort_order' => 1, 'status' => 'active']);
+
+        $response = $this->getJson('/api/categories');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.0.slug', 'aaa-public')
+            ->assertJsonMissing(['slug' => 'hidden'])
+            ->assertJsonStructure(['data' => [['id', 'name', 'slug']]]);
+    }
+
+    public function test_categories_api_is_rate_limited_by_ip(): void
+    {
+        $ip = '203.0.113.'.random_int(1, 254);
+
+        for ($i = 0; $i < 60; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => $ip])->getJson('/api/categories')->assertOk();
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => $ip])->getJson('/api/categories')->assertTooManyRequests();
     }
 
     public function test_api_accepts_prompt_without_images(): void
@@ -415,6 +536,21 @@ class AiImageApiTest extends TestCase
     private function allowedReview(): array
     {
         return ['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.'];
+    }
+
+    /**
+     * @param  list<string>  $tags
+     * @return array{allowed: bool, blocked_policy: string, reason: string, category: string, tags: list<string>}
+     */
+    private function publishReview(string $category = 'portraits', array $tags = []): array
+    {
+        return [
+            'allowed' => true,
+            'blocked_policy' => 'none',
+            'reason' => 'An toàn.',
+            'category' => $category,
+            'tags' => $tags,
+        ];
     }
 
     /**

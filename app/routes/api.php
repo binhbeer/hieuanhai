@@ -10,4 +10,11 @@ RateLimiter::for('ai-api', fn (Request $request) => Limit::perSecond(10)->by(
     sha1($request->bearerToken() ?: $request->ip()),
 ));
 
-Route::middleware(['throttle:ai-api', 'ai.api.key'])->post('ai/images', [AiImageController::class, 'store']);
+RateLimiter::for('public-api', fn (Request $request) => Limit::perMinute(60)->by($request->ip() ?: 'guest'));
+
+Route::middleware(['throttle:ai-api', 'ai.api.key'])->group(function (): void {
+    Route::post('ai/images', [AiImageController::class, 'store']);
+    Route::post('ai/images/publish', [AiImageController::class, 'storeAndPublish']);
+});
+
+Route::middleware('throttle:public-api')->get('categories', [AiImageController::class, 'categories']);
