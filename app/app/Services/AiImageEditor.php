@@ -634,10 +634,10 @@ class AiImageEditor
             'model' => $model,
             'prompt' => $prompt,
             'n' => 1,
-            'size' => 'auto',
-            'quality' => 'auto',
+            'size' => AppSettings::string('ai.image_size', (string) config('ai.image_size', 'auto')),
+            'quality' => AppSettings::string('ai.image_quality', (string) config('ai.image_quality', 'auto')),
             'background' => 'auto',
-            'image_detail' => 'high',
+            'image_detail' => AppSettings::string('ai.image_detail', (string) config('ai.image_detail', 'high')),
             'output_format' => 'png',
         ];
 

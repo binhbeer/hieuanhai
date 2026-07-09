@@ -172,7 +172,7 @@ new #[Title('Quota Check')] class extends Component {
 		<div class="space-y-2 text-sm">
 			<div class="font-medium">Body</div>
 			<ul class="list-disc space-y-1 ps-5 text-zinc-300">
-				<li>{!! __('<span class="font-mono">prompt</span>: required image generation request, maximum 2000 characters.') !!}</li>
+				<li>{!! __('<span class="font-mono">prompt</span>: required image generation request, maximum 1200 words.') !!}</li>
 				<li>{!! __('<span class="font-mono">images[]</span>: optional, up to :count reference images, jpg, jpeg, png, webp, or avif, up to :mbMB each.', ['count' => $maxImages, 'mb' => $maxUploadMb]) !!}</li>
 			</ul>
 		</div>

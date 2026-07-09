@@ -102,6 +102,23 @@ new class extends Component
         return min(3, max(1, AppSettings::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 1))));
     }
 
+    /**
+     * @return array<int, mixed>
+     */
+    private function promptRules(): array
+    {
+        return [
+            'required',
+            'string',
+            'max:12000',
+            function (string $attribute, mixed $value, \Closure $fail): void {
+                if (preg_match_all('/[\p{L}\p{N}]+/u', (string) $value) > 1200) {
+                    $fail(__('Prompt must not exceed 1200 words.'));
+                }
+            },
+        ];
+    }
+
     public function createImage(AiImageEditor $editor): void
     {
         if (! Auth::check()) {
@@ -121,7 +138,7 @@ new class extends Component
         $this->publishMessage = null;
 
         $this->validate([
-            'prompt' => ['required', 'string', 'max:2000'],
+            'prompt' => $this->promptRules(),
             'referenceImageIds' => ['array', 'max:'.$this->maxReferencePhotos()],
             'referenceImageIds.*' => ['integer'],
             'photos' => ['array', 'max:'.max(0, $this->maxReferencePhotos() - count($this->referenceImageIds))],
@@ -160,7 +177,7 @@ new class extends Component
         }
 
         $this->validate([
-            'prompt' => ['required', 'string', 'max:2000'],
+            'prompt' => $this->promptRules(),
             'rewriteInstruction' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -168,6 +185,7 @@ new class extends Component
             $this->prompt = $editor->rewritePrompt($this->prompt, $this->rewriteInstruction);
             $this->rewriteInstruction = '';
             $this->errorMessage = null;
+            $this->dispatch('prompt-rewritten');
         } catch (InvalidArgumentException $e) {
             $this->errorMessage = $e->getMessage();
         } catch (Throwable $e) {
@@ -352,7 +370,8 @@ new class extends Component
 							<div class="mt-2 text-sm text-zinc-500" wire:loading wire:target="newPhotos">{{ __('Uploading image...') }}</div>
 						</flux:card>
 
-						<div x-data="{
+						<div
+							x-data="{
 							pickerOpen: false,
 							openPicker() {
 								this.pickerOpen = true
@@ -396,12 +415,13 @@ new class extends Component
 								requestAnimationFrame(restoreCursor)
 								setTimeout(restoreCursor, 350)
 							},
-						}">
+						}"
+							x-on:prompt-rewritten.window="$refs.rewriteDropdown?.lastElementChild?.hidePopover?.()">
 							<div class="space-y-2">
 								<div class="flex items-center justify-between gap-2">
 									<span class="text-sm font-medium text-zinc-800 dark:text-white">{{ __('Prompt') }}</span>
 									<flux:tooltip content="{{ __('Rewrite prompt') }}" position="top">
-										<flux:dropdown position="bottom" align="end">
+										<flux:dropdown x-ref="rewriteDropdown" position="bottom" align="end">
 											<flux:button type="button" size="sm" variant="filled" icon="sparkles">{{ __('Rewrite prompt') }}</flux:button>
 											<flux:popover class="w-80 space-y-3">
 												<div>

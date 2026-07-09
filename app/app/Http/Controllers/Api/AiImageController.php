@@ -36,7 +36,7 @@ class AiImageController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'prompt' => ['required', 'string', 'max:2000'],
+            'prompt' => $this->promptRules(),
             'images' => ['sometimes', 'array', 'max:'.min(3, max(1, AppSettings::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 1))))],
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::int('ai.image_upload_max_kb', (int) config('ai.image_upload_max_kb', 32768))],
         ]);
@@ -85,6 +85,23 @@ class AiImageController extends Controller
 
             return response()->json(['message' => 'Không tạo được ảnh lúc này. Vui lòng thử lại sau.'], 500);
         }
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function promptRules(): array
+    {
+        return [
+            'required',
+            'string',
+            'max:12000',
+            function (string $attribute, mixed $value, \Closure $fail): void {
+                if (preg_match_all('/[\p{L}\p{N}]+/u', (string) $value) > 1200) {
+                    $fail('Prompt không được vượt quá 1200 từ.');
+                }
+            },
+        ];
     }
 
     /**

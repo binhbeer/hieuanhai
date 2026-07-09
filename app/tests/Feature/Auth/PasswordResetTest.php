@@ -67,13 +67,37 @@ class PasswordResetTest extends TestCase
             $response = $this->post(route('password.update'), [
                 'token' => $notification->token,
                 'email' => $user->email,
-                'password' => 'password',
-                'password_confirmation' => 'password',
+                'password' => 'secret',
+                'password_confirmation' => 'secret',
             ]);
 
             $response
                 ->assertSessionHasNoErrors()
                 ->assertRedirect(route('login', absolute: false));
+
+            return true;
+        });
+    }
+
+    public function test_password_must_be_at_least_six_characters(): void
+    {
+        Notification::fake();
+
+        $user = User::factory()->create();
+
+        $this->post(route('password.request'), ['email' => $user->email]);
+
+        Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+            $response = $this->from(route('password.reset', $notification->token))->post(route('password.update'), [
+                'token' => $notification->token,
+                'email' => $user->email,
+                'password' => 'short',
+                'password_confirmation' => 'short',
+            ]);
+
+            $response
+                ->assertSessionHasErrors('password')
+                ->assertRedirect(route('password.reset', $notification->token));
 
             return true;
         });

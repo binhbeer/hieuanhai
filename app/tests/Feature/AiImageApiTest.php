@@ -118,6 +118,28 @@ class AiImageApiTest extends TestCase
         ]);
     }
 
+    public function test_api_rejects_prompt_over_1200_words_without_charging_quota(): void
+    {
+        [$plain, $key] = $this->apiKey(quotaLimit: 1);
+
+        $this
+            ->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images', [
+                'prompt' => str_repeat('mèo ', 1201),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('prompt');
+
+        $key->refresh();
+        $this->assertSame(0, $key->quota_used);
+        $this->assertDatabaseHas('ai_api_requests', [
+            'ai_api_key_id' => $key->id,
+            'status_code' => 422,
+            'status' => 'validation_failed',
+            'quota_charged' => false,
+        ]);
+    }
+
     public function test_api_rejected_prompt_does_not_charge_quota_or_call_image_api(): void
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
@@ -264,6 +286,9 @@ class AiImageApiTest extends TestCase
             ->set('emailVerificationRequired', false)
             ->set('aiReviewModel', 'gpt-5.5-mini')
             ->set('promptRewriteModel', 'gpt-5.5-rewrite')
+            ->set('imageSize', '1536x1024')
+            ->set('imageQuality', 'medium')
+            ->set('imageDetail', 'original')
             ->set('imageReferenceField', 'input_image')
             ->set('openaiApiKey', 'secret-key')
             ->call('save')
@@ -274,6 +299,9 @@ class AiImageApiTest extends TestCase
         $this->assertFalse((bool) Setting::getValue('auth.email_verification_required'));
         $this->assertSame('gpt-5.5-mini', Setting::getValue('ai.image_review_model'));
         $this->assertSame('gpt-5.5-rewrite', Setting::getValue('ai.prompt_rewrite_model'));
+        $this->assertSame('1536x1024', Setting::getValue('ai.image_size'));
+        $this->assertSame('medium', Setting::getValue('ai.image_quality'));
+        $this->assertSame('original', Setting::getValue('ai.image_detail'));
         $this->assertSame('input_image', Setting::getValue('ai.image_reference_field'));
         $this->assertSame('secret-key', Setting::getValue('ai.openai_api_key'));
     }

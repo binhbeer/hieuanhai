@@ -184,6 +184,9 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
         Setting::putValue('ai.image_reference_field', 'input_image');
+        Setting::putValue('ai.image_size', '1024x1024');
+        Setting::putValue('ai.image_quality', 'hd');
+        Setting::putValue('ai.image_detail', 'low');
         ImageReviewAgent::fake([$this->allowedReview()]);
 
         Http::fake([
@@ -211,8 +214,9 @@ class AiImageEditorTest extends TestCase
             && str_contains($request['prompt'], 'A cute cat wearing a hat')
             && str_starts_with($request['input_image'], 'data:image/jpeg;base64,')
             && $this->encodedImageSizeIs($request['input_image'], 1024, 512)
-            && $request['quality'] === 'auto'
-            && $request['image_detail'] === 'high'
+            && $request['size'] === '1024x1024'
+            && $request['quality'] === 'hd'
+            && $request['image_detail'] === 'low'
             && $request['output_format'] === 'png');
 
         Storage::disk('public')->assertExists($image->result_path);
@@ -406,6 +410,7 @@ class AiImageEditorTest extends TestCase
         $this->get(route('categories.show', $category))
             ->assertOk()
             ->assertSee('Meme nội bộ')
+            ->assertSee('/thumb_x720x/storage/ai-images/202607/08/result.png')
             ->assertSee('Tạo ads banner cho sản phẩm nước hoa');
 
         $this->get(route('home', ['search' => 'nước hoa']))

@@ -298,8 +298,8 @@ new class extends Component
         @php($progressStep = $this->progressStep($selected))
 
         <div class="fixed inset-0 z-60 bg-white/95 text-zinc-950 backdrop-blur dark:bg-zinc-950/95 dark:text-white" role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
-            <div class="grid h-full grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
-                <div class="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-zinc-100 dark:bg-black/30">
+            <div class="h-full overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1 lg:overflow-hidden">
+                <div class="bg-zinc-100 dark:bg-black/30 lg:grid lg:min-h-0 lg:grid-rows-[auto_minmax(0,1fr)]">
                     <header class="z-10 flex items-center justify-between bg-white/55 px-4 py-3 backdrop-blur dark:bg-zinc-950/35">
                         <flux:button type="button" variant="filled" icon="x-mark" wire:click="closeImage">{{ __('Close') }}</flux:button>
 
@@ -318,9 +318,9 @@ new class extends Component
                         </div>
                     </header>
 
-                    <div class="flex min-h-0 items-center justify-center p-4">
+                    <div class="flex items-start justify-center overflow-hidden sm:p-4 lg:min-h-0 lg:items-center">
                         @if ($selectedUrl)
-                            <img class="max-h-full max-w-full rounded-2xl object-contain shadow-2xl" src="{{ $selectedUrl }}" alt="{{ Str::limit($selected->prompt, 80) }}">
+                            <img class="h-auto w-full sm:rounded-2xl sm:shadow-2xl lg:h-full lg:w-full lg:object-contain" src="{{ $selectedUrl }}" alt="{{ Str::limit($selected->prompt, 80) }}" decoding="async">
                         @elseif ($selected->status === 'pending')
                             <div class="relative flex aspect-square w-full max-w-md items-center justify-center overflow-hidden rounded-4xl bg-zinc-100 text-zinc-700 shadow-inner dark:bg-white/10 dark:text-white/80">
                                 <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-zinc-50),var(--color-zinc-200))] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,.12),rgba(255,255,255,.04))]"></div>
@@ -350,7 +350,7 @@ new class extends Component
                     </div>
                 </div>
 
-                <aside class="min-h-0 overflow-y-auto border-l border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-950">
+                <aside class="min-h-0 border-l border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-950 lg:overflow-y-auto">
                     <div class="mb-5 flex items-center justify-between gap-3">
                         <div class="flex items-center gap-3">
                             <div class="flex size-10 items-center justify-center rounded-full bg-zinc-900 text-sm font-bold text-white dark:bg-white dark:text-zinc-950">

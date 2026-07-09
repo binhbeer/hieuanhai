@@ -175,6 +175,18 @@ class CreatedImagesTest extends TestCase
         Storage::disk('public')->assertExists($pendingPath);
     }
 
+    public function test_composer_rejects_prompt_over_1200_words(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test('pages::image-generator')
+            ->set('showComposer', true)
+            ->set('prompt', str_repeat('mèo ', 1201))
+            ->call('createImage')
+            ->assertHasErrors('prompt')
+            ->assertNoRedirect();
+    }
+
     public function test_user_can_rewrite_current_composer_prompt_with_instruction(): void
     {
         Setting::putValue('ai.openai_api_key', 'test-key');

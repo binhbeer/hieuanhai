@@ -35,8 +35,8 @@ class RegistrationTest extends TestCase
         $this->post(route('register.store'), [
             'name' => 'John Doe',
             'email' => 'test@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => 'secret',
+            'password_confirmation' => 'secret',
         ])->assertSessionHasErrors('email');
     }
 
@@ -45,8 +45,8 @@ class RegistrationTest extends TestCase
         $response = $this->post(route('register.store'), [
             'name' => 'John Doe',
             'email' => 'test@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => 'secret',
+            'password_confirmation' => 'secret',
         ]);
 
         $response->assertSessionHasNoErrors()
@@ -59,6 +59,22 @@ class RegistrationTest extends TestCase
         ]);
     }
 
+    public function test_registration_password_must_be_at_least_six_characters(): void
+    {
+        $response = $this->from(route('register'))->post(route('register.store'), [
+            'name' => 'John Doe',
+            'email' => 'short@example.com',
+            'password' => 'short',
+            'password_confirmation' => 'short',
+        ]);
+
+        $response
+            ->assertSessionHasErrors('password')
+            ->assertRedirect(route('register'));
+
+        $this->assertGuest();
+    }
+
     public function test_new_users_can_register_without_email_verification_when_disabled(): void
     {
         Setting::putValue('auth.email_verification_required', false);
@@ -66,8 +82,8 @@ class RegistrationTest extends TestCase
         $response = $this->post(route('register.store'), [
             'name' => 'John Doe',
             'email' => 'no-verify@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
+            'password' => 'secret',
+            'password_confirmation' => 'secret',
         ]);
 
         $response->assertSessionHasNoErrors()

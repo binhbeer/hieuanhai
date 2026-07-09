@@ -27,6 +27,12 @@ new #[Title('Settings')] class extends Component
 
     public int $aiTimeout = 600;
 
+    public string $imageSize = 'auto';
+
+    public string $imageQuality = 'auto';
+
+    public string $imageDetail = 'high';
+
     public string $imageReferenceField = 'image';
 
     public int $maxReferencePhotos = 1;
@@ -51,6 +57,9 @@ new #[Title('Settings')] class extends Component
         $this->aiReviewModel = (string) Setting::getValue('ai.image_review_model');
         $this->promptRewriteModel = (string) Setting::getValue('ai.prompt_rewrite_model');
         $this->aiTimeout = (int) Setting::getValue('ai.image_timeout');
+        $this->imageSize = (string) Setting::getValue('ai.image_size');
+        $this->imageQuality = (string) Setting::getValue('ai.image_quality');
+        $this->imageDetail = (string) Setting::getValue('ai.image_detail');
         $this->imageReferenceField = (string) Setting::getValue('ai.image_reference_field');
         $this->maxReferencePhotos = (int) Setting::getValue('ai.image_max_reference_photos');
         $this->uploadMaxKb = (int) Setting::getValue('ai.image_upload_max_kb');
@@ -71,6 +80,9 @@ new #[Title('Settings')] class extends Component
             'aiReviewModel' => ['required', 'string', 'max:120'],
             'promptRewriteModel' => ['required', 'string', 'max:120'],
             'aiTimeout' => ['required', 'integer', 'min:10', 'max:1200'],
+            'imageSize' => ['required', 'string', 'in:auto,1024x1024,1024x1536,1536x1024,1024x1792,1792x1024'],
+            'imageQuality' => ['required', 'string', 'in:auto,low,medium,high,standard,hd'],
+            'imageDetail' => ['required', 'string', 'in:auto,low,high,original'],
             'imageReferenceField' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z_][A-Za-z0-9_]*$/'],
             'maxReferencePhotos' => ['required', 'integer', 'min:1', 'max:3'],
             'uploadMaxKb' => ['required', 'integer', 'min:1', 'max:102400'],
@@ -89,6 +101,9 @@ new #[Title('Settings')] class extends Component
             'ai.image_review_model' => $validated['aiReviewModel'],
             'ai.prompt_rewrite_model' => $validated['promptRewriteModel'],
             'ai.image_timeout' => (int) $validated['aiTimeout'],
+            'ai.image_size' => $validated['imageSize'],
+            'ai.image_quality' => $validated['imageQuality'],
+            'ai.image_detail' => $validated['imageDetail'],
             'ai.image_reference_field' => $validated['imageReferenceField'],
             'ai.image_max_reference_photos' => (int) $validated['maxReferencePhotos'],
             'ai.image_upload_max_kb' => (int) $validated['uploadMaxKb'],
@@ -156,6 +171,28 @@ new #[Title('Settings')] class extends Component
 				<flux:input wire:model="aiReviewModel" :label="__('Review model')" required />
 				<flux:input wire:model="promptRewriteModel" :label="__('Prompt rewrite model')" required />
 				<flux:input wire:model="aiTimeout" type="number" min="10" max="1200" :label="__('Timeout seconds')" required />
+				<flux:select wire:model="imageSize" variant="listbox" :label="__('Size')" required>
+					<flux:select.option value="auto">auto</flux:select.option>
+					<flux:select.option value="1024x1024">1024x1024</flux:select.option>
+					<flux:select.option value="1024x1536">1024x1536</flux:select.option>
+					<flux:select.option value="1536x1024">1536x1024</flux:select.option>
+					<flux:select.option value="1024x1792">1024x1792</flux:select.option>
+					<flux:select.option value="1792x1024">1792x1024</flux:select.option>
+				</flux:select>
+				<flux:select wire:model="imageQuality" variant="listbox" :label="__('Quality')" required>
+					<flux:select.option value="auto">auto</flux:select.option>
+					<flux:select.option value="low">low</flux:select.option>
+					<flux:select.option value="medium">medium</flux:select.option>
+					<flux:select.option value="high">high</flux:select.option>
+					<flux:select.option value="standard">standard</flux:select.option>
+					<flux:select.option value="hd">hd</flux:select.option>
+				</flux:select>
+				<flux:select wire:model="imageDetail" variant="listbox" :label="__('Image detail')" required>
+					<flux:select.option value="auto">auto</flux:select.option>
+					<flux:select.option value="low">low</flux:select.option>
+					<flux:select.option value="high">high</flux:select.option>
+					<flux:select.option value="original">original</flux:select.option>
+				</flux:select>
 				<flux:input wire:model="imageReferenceField" :label="__('Reference image field')" required />
 				<flux:input wire:model="maxReferencePhotos" type="number" min="1" max="3"
 					:label="__('Maximum reference images')" required />
