@@ -173,11 +173,11 @@ new class extends Component {
 
     public function imageThumbUrl(AiImage $image): ?string
     {
-        if (! $image->result_path) {
+        if (!$image->result_path) {
             return null;
         }
 
-        return '/thumb_x1024x/storage/'.ltrim($image->result_path, '/');
+        return '/thumb_x1024x/storage/' . ltrim($image->result_path, '/');
     }
 
     public function detailUrl(AiImage $image): string
@@ -350,7 +350,7 @@ new class extends Component {
 
                 <div class="flex items-start justify-center overflow-hidden sm:p-4 lg:min-h-0 lg:items-center">
                     @if ($selectedThumbUrl)
-                        <img class="h-auto w-full max-h-[1024px] max-w-[1024px] sm:rounded-2xl sm:shadow-2xl lg:h-full lg:w-full lg:object-contain" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selected->prompt, 80) }}" decoding="async">
+                        <img class="h-auto w-full max-h-[1024px] max-w-[1024px] lg:h-full lg:w-full lg:object-contain" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selected->prompt, 80) }}" decoding="async">
                     @elseif ($selected->status === 'pending')
                         <div class="relative flex aspect-square w-full max-w-md items-center justify-center overflow-hidden rounded-4xl bg-zinc-100 text-zinc-700 shadow-inner dark:bg-white/10 dark:text-white/80">
                             <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-zinc-50),var(--color-zinc-200))] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,.12),rgba(255,255,255,.04))]"></div>
