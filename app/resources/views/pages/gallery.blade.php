@@ -208,11 +208,11 @@ new #[Title('Trang chủ')] class extends Component {
 					</div>
 				</div>
 			@else
-			<x-media-list :images="$this->visibleImages()" ordered>
+			<x-media-list :images="$this->visibleImages()">
 				@foreach ($this->visibleImages() as $image)
 				@php($thumbUrl = $this->imageThumbUrl($image))
 				@if ($thumbUrl)
-					<x-media-item class="mb-0!" :image="$image" :url="$thumbUrl" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" defer-reveal wire:key="published-image-{{ $image->id }}">
+					<x-media-item :image="$image" :url="$thumbUrl" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" wire:key="published-image-{{ $image->id }}">
 						<x-slot:badge>
 							<flux:button class="shadow" type="button" size="sm" :variant="$this->isFavorite($image) ? 'primary' : 'filled'" icon="heart" wire:click.stop="toggleFavorite({{ $image->id }})" aria-label="{{ $this->isFavorite($image) ? __('Remove favorite') : __('Favorite image') }}">{{ $this->favoriteCount($image) }}</flux:button>
 						</x-slot:badge>
