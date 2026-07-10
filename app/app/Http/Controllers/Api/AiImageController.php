@@ -156,6 +156,7 @@ class AiImageController extends Controller
 
         return [
             ...$payload,
+            'title' => $image->title,
             'public_url' => route('images.show', $image),
             'published' => $image->is_published,
             'category' => $image->category ? [
@@ -185,6 +186,7 @@ class AiImageController extends Controller
 
         return [
             ...$meta,
+            'title' => $image->title,
             'published' => $image->is_published,
             'public_url' => route('images.show', $image),
             'category' => $image->category?->slug,

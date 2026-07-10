@@ -354,10 +354,13 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.openai_api_key', 'test-key');
         Setting::putValue('ai.image_review_model', 'gpt-5.5-mini');
         $category = Category::create(['name' => 'Meme nội bộ', 'slug' => 'internal-meme', 'sort_order' => 5, 'status' => 'active']);
-        ImageReviewAgent::fake([$this->publishReview('internal-meme')]);
+        AiTag::create(['name' => 'Nước hoa', 'slug' => 'nuoc-hoa']);
+        ImageReviewAgent::fake([$this->publishReview('internal-meme', ['Nước hoa', 'banner ads', 'sản phẩm'])]);
 
         $agent = new ImageReviewAgent;
         $this->assertStringContainsString('- internal-meme: Meme nội bộ', $agent->instructions());
+        $this->assertStringContainsString('tạo title tiếng Việt ngắn', $agent->instructions());
+        $this->assertStringContainsString('- Nước hoa', $agent->instructions());
         $this->assertStringContainsString('tạo 0-5 tags ngắn', $agent->instructions());
         $this->assertStringContainsString('Mặc định allowed=true và blocked_policy=none', $agent->instructions());
         $this->assertStringContainsString('blocked_policy=sexual', $agent->instructions());
@@ -400,8 +403,10 @@ class AiImageEditorTest extends TestCase
         ]);
 
         $this->assertTrue($published->is_published);
+        $this->assertSame('Banner nước hoa cao cấp', $published->title);
         $this->assertTrue($published->category->is($category));
-        $this->assertSame(['banner ads', 'nước hoa', 'sản phẩm'], $published->tags->pluck('name')->sort()->values()->all());
+        $this->assertSame(['banner-ads', 'nuoc-hoa', 'san-pham'], $published->tags->pluck('slug')->sort()->values()->all());
+        $this->assertSame('Nước hoa', AiTag::query()->where('slug', 'nuoc-hoa')->value('name'));
         $this->assertSame(3, AiTag::query()->count());
         $this->assertTrue($editor->publishedGallery($category)->contains($published));
         $this->assertTrue($editor->publishedGallery(search: 'nước hoa')->contains($published));
@@ -411,24 +416,44 @@ class AiImageEditorTest extends TestCase
             ->assertOk()
             ->assertSee('Meme nội bộ')
             ->assertSee('/thumb_x720x/storage/ai-images/202607/08/result.png')
-            ->assertSee('Tạo ads banner cho sản phẩm nước hoa');
+            ->assertSee('Banner nước hoa cao cấp');
 
         $this->get(route('home', ['search' => 'nước hoa']))
             ->assertOk()
-            ->assertSee('Tạo ads banner cho sản phẩm nước hoa')
+            ->assertSee('Banner nước hoa cao cấp')
             ->assertDontSee('Vẽ chân dung cổ điển');
 
         $this->get(route('images.show', $published))
             ->assertOk()
-            ->assertSee('/anh/'.$published->id)
+            ->assertSee('/anh/'.$published->id.'-banner-nuoc-hoa-cao-cap')
             ->assertSee('/thumb_x1024x/storage/ai-images/202607/08/result.png')
-            ->assertSee('Tạo ads banner cho sản phẩm nước hoa')
+            ->assertSee('Banner nước hoa cao cấp')
             ->assertSee('Sao chép prompt')
             ->assertSee('Tạo ảnh tương tự')
             ->assertSee('Yêu thích')
             ->assertSee('0')
             ->assertSee('Đóng')
             ->assertSee('og:image');
+    }
+
+    public function test_guest_image_detail_truncates_prompt_and_login_sees_full_prompt(): void
+    {
+        $prompt = str_repeat('mô tả dài ', 30).'phần cuối bí mật';
+        $image = $this->publishedImage($prompt);
+        $image->update(['title' => 'Ảnh prompt dài']);
+
+        $this->get(route('images.show', $image))
+            ->assertOk()
+            ->assertSee('/anh/'.$image->id.'-anh-prompt-dai')
+            ->assertSee('Đăng nhập để xem đầy đủ prompt.')
+            ->assertDontSee('phần cuối bí mật');
+
+        $this->get('/anh/'.$image->id)->assertOk();
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('images.show', $image))
+            ->assertOk()
+            ->assertSee('phần cuối bí mật');
     }
 
     public function test_publish_allows_missing_review_tags(): void
@@ -626,11 +651,11 @@ class AiImageEditorTest extends TestCase
 
     /**
      * @param  list<string>  $tags
-     * @return array{allowed: bool, blocked_policy: string, category: string, tags: list<string>, reason: string}
+     * @return array{allowed: bool, blocked_policy: string, title: string, category: string, tags: list<string>, reason: string}
      */
-    private function publishReview(string $category, array $tags = ['nước hoa', 'banner ads', 'sản phẩm']): array
+    private function publishReview(string $category, array $tags = ['nước hoa', 'banner ads', 'sản phẩm'], string $title = 'Banner nước hoa cao cấp'): array
     {
-        return ['allowed' => true, 'blocked_policy' => 'none', 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
+        return ['allowed' => true, 'blocked_policy' => 'none', 'title' => $title, 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
     }
 
     private function encodedImageSizeIs(string $image, int $width, int $height): bool

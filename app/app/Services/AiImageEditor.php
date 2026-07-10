@@ -259,6 +259,7 @@ class AiImageEditor
         DB::transaction(function () use ($image, $review): void {
             $image->update([
                 'category_id' => $this->classifyCategory($review['category'])->id,
+                'title' => $review['title'],
                 'is_published' => true,
                 'published_at' => $image->published_at ?? now(),
             ]);
@@ -285,7 +286,8 @@ class AiImageEditor
             ->when($category, fn ($query) => $query->where('category_id', $category->id))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
-                    $query->where('prompt', 'like', '%'.$search.'%')
+                    $query->where('title', 'like', '%'.$search.'%')
+                        ->orWhere('prompt', 'like', '%'.$search.'%')
                         ->orWhereHas('category', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
                 });
             });
@@ -739,11 +741,12 @@ class AiImageEditor
     }
 
     /**
-     * @return array{allowed: bool, category: string, tags: list<string>, reason: string}
+     * @return array{allowed: bool, title: string, category: string, tags: list<string>, reason: string}
      */
     private function reviewForPublish(string $prompt): array
     {
         $review = $this->reviewPrompt($prompt, publish: true);
+        $title = $this->imageTitle($review['title'] ?? null, $prompt);
         $category = is_string($review['category'] ?? null) ? $review['category'] : 'other';
         $reason = is_string($review['reason'] ?? null) ? $review['reason'] : '';
         $tags = $this->tagNames($review['tags'] ?? []);
@@ -752,6 +755,7 @@ class AiImageEditor
 
         return [
             'allowed' => true,
+            'title' => $title,
             'category' => array_key_exists($category, $categoryNames) ? $category : $this->fallbackCategorySlug($categoryNames),
             'tags' => $tags,
             'reason' => Str::limit($reason, 500, ''),
@@ -770,7 +774,7 @@ class AiImageEditor
 
         try {
             $response = ImageReviewAgent::make(publish: $publish)->prompt(
-                ($publish ? "Duyệt prompt để publish ảnh, chọn danh mục và tags phù hợp.\n\nPrompt:\n" : "Duyệt prompt tạo ảnh sau.\n\nPrompt:\n").$prompt,
+                ($publish ? "Duyệt prompt để publish ảnh, tạo title, chọn danh mục và tags phù hợp.\n\nPrompt:\n" : "Duyệt prompt tạo ảnh sau.\n\nPrompt:\n").$prompt,
                 provider: $provider,
                 model: $model,
                 timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
@@ -820,6 +824,14 @@ class AiImageEditor
     private function datedPath(string $directory, string $filename): string
     {
         return $directory.'/'.now()->format('Ym/d').'/'.$filename;
+    }
+
+    private function imageTitle(mixed $title, string $prompt): string
+    {
+        $title = is_string($title) ? $title : $prompt;
+        $title = Str::of($title)->squish()->limit(80, '')->toString();
+
+        return $title !== '' ? $title : Str::limit($prompt, 80, '');
     }
 
     /**
@@ -875,15 +887,17 @@ class AiImageEditor
      */
     private function syncTags(AiImage $image, array $tags): void
     {
-        $ids = collect($tags)
-            ->map(function (string $name): int {
-                $slug = $this->tagSlug($name);
+        $tagNames = collect($tags)->mapWithKeys(fn (string $name): array => [$this->tagSlug($name) => $name]);
+        $existing = AiTag::query()
+            ->whereIn('slug', $tagNames->keys())
+            ->pluck('id', 'slug');
 
-                return (int) AiTag::query()->firstOrCreate(
-                    ['slug' => $slug],
-                    ['name' => $name],
-                )->id;
-            })
+        $ids = $tagNames
+            ->map(fn (string $name, string $slug): int => (int) ($existing[$slug] ?? AiTag::query()->firstOrCreate(
+                ['slug' => $slug],
+                ['name' => $name],
+            )->id))
+            ->values()
             ->all();
 
         $image->tags()->sync($ids);

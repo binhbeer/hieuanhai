@@ -99,6 +99,7 @@ class AiImageApiTest extends TestCase
             ->assertJsonPath('id', $image->id)
             ->assertJsonPath('status', 'succeeded')
             ->assertJsonPath('published', true)
+            ->assertJsonPath('title', 'Public avatar portrait')
             ->assertJsonPath('category.slug', 'portraits')
             ->assertJsonPath('tags.0', 'avatar')
             ->assertJsonPath('tags.1', 'studio')
@@ -106,6 +107,7 @@ class AiImageApiTest extends TestCase
             ->assertJsonPath('quota.remaining', 1)
             ->assertJson(fn ($json) => $json
                 ->where('public_url', route('images.show', $image))
+                ->where('public_url', fn (string $url): bool => str_contains($url, '/anh/'.$image->id.'-public-avatar-portrait'))
                 ->has('url')
                 ->has('download_name')
                 ->etc()
@@ -540,14 +542,15 @@ class AiImageApiTest extends TestCase
 
     /**
      * @param  list<string>  $tags
-     * @return array{allowed: bool, blocked_policy: string, reason: string, category: string, tags: list<string>}
+     * @return array{allowed: bool, blocked_policy: string, reason: string, title: string, category: string, tags: list<string>}
      */
-    private function publishReview(string $category = 'portraits', array $tags = []): array
+    private function publishReview(string $category = 'portraits', array $tags = [], string $title = 'Public avatar portrait'): array
     {
         return [
             'allowed' => true,
             'blocked_policy' => 'none',
             'reason' => 'An toàn.',
+            'title' => $title,
             'category' => $category,
             'tags' => $tags,
         ];

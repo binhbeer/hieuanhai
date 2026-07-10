@@ -122,7 +122,8 @@ new #[Title('Manage created images')] class extends Component
                 $like = '%'.$search.'%';
 
                 $query->where(function ($query) use ($search, $like): void {
-                    $query->where('prompt', 'like', $like)
+                    $query->where('title', 'like', $like)
+                        ->orWhere('prompt', 'like', $like)
                         ->orWhere('custom_prompt', 'like', $like)
                         ->orWhere('visitor_key', 'like', $like)
                         ->orWhereHas('user', function ($query) use ($like): void {
@@ -236,7 +237,7 @@ new #[Title('Manage created images')] class extends Component
 							<td class="px-3 py-3 align-top">
 								<button class="block text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
 									@if ($url)
-										<img class="size-20 rounded-xl bg-white/5 object-cover" src="{{ $url }}" alt="{{ __('Image #:id', ['id' => $image->id]) }}" loading="lazy" />
+										<img class="size-20 rounded-xl bg-white/5 object-cover" src="{{ $url }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" loading="lazy" />
 									@else
 										<div class="flex size-20 items-center justify-center rounded-xl bg-white/5 text-zinc-500">
 											<flux:icon name="photo" class="size-6" />
@@ -246,7 +247,7 @@ new #[Title('Manage created images')] class extends Component
 								<div class="mt-2 text-xs text-zinc-400">#{{ $image->id }}</div>
 							</td>
 							<td class="max-w-md px-3 py-3 align-top">
-								<div class="line-clamp-3 font-medium">{{ $image->prompt }}</div>
+								<div class="line-clamp-3 font-medium">{{ $image->title ?: $image->prompt }}</div>
 								@if ($image->custom_prompt)
 									<flux:text class="mt-1 line-clamp-2 text-xs" variant="subtle">{{ $image->custom_prompt }}</flux:text>
 								@endif

@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * @property int $id
  * @property int|null $user_id
  * @property int|null $category_id
+ * @property string|null $title
  * @property string $visitor_key
  * @property string|null $ip_address
  * @property string|null $preset
@@ -35,6 +37,7 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'user_id',
     'category_id',
+    'title',
     'visitor_key',
     'ip_address',
     'preset',
@@ -54,6 +57,25 @@ use Illuminate\Support\Carbon;
 ])]
 class AiImage extends BaseModel
 {
+    public function getRouteKey(): string
+    {
+        return $this->routeKeySlug();
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $key = is_string($value) ? Str::before($value, '-') : $value;
+
+        return parent::resolveRouteBinding($key, $field);
+    }
+
+    public function routeKeySlug(): string
+    {
+        $slug = Str::slug($this->title ?: $this->prompt, '-', 'vi') ?: 'image';
+
+        return $this->id.'-'.$slug;
+    }
+
     public function downloadName(): string
     {
         $extension = pathinfo($this->result_path ?? '', PATHINFO_EXTENSION) ?: 'png';

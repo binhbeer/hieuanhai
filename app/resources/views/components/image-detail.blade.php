@@ -327,6 +327,9 @@ new class extends Component {
     @php($selectedUrl = $this->imageUrl($selected))
     @php($selectedThumbUrl = $this->imageThumbUrl($selected))
     @php($progressStep = $this->progressStep($selected))
+    @php($selectedTitle = $selected->title ?: $selected->prompt)
+    @php($canViewFullPrompt = Auth::check())
+    @php($visiblePrompt = $canViewFullPrompt ? $selected->prompt : Str::limit($selected->prompt, 160))
 
     <div class="fixed inset-0 z-60 bg-white/95 text-zinc-950 backdrop-blur dark:bg-zinc-950/95 dark:text-white" role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
         <div class="h-full overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1 lg:overflow-hidden">
@@ -337,12 +340,13 @@ new class extends Component {
                     <div class="flex items-center gap-2">
                         @if ($this->canManageFeatured() && $this->isPublicImage($selected))
                             <flux:button type="button" :variant="$selected->is_featured ? 'primary' : 'filled'" icon="star" wire:click="toggleFeatured({{ $selected->id }})">
+                                <span class="sr-only">{{ $selected->is_featured ? __('Unfeature image') : __('Feature image') }}</span>
                             </flux:button>
                         @endif
 
                         @if ($this->canFavorite($selected))
                             <flux:button type="button" :variant="$this->isFavorite($selected) ? 'primary' : 'filled'" icon="heart" wire:click="toggleFavorite({{ $selected->id }})">
-                                {{ $this->favoriteCount($selected) }}
+                                <span class="sr-only">{{ $this->isFavorite($selected) ? __('Remove favorite') : __('Favorite image') }} · </span>{{ $this->favoriteCount($selected) }}
                             </flux:button>
                         @endif
                     </div>
@@ -350,7 +354,7 @@ new class extends Component {
 
                 <div class="flex items-start justify-center overflow-hidden sm:p-4 lg:min-h-0 lg:items-center">
                     @if ($selectedThumbUrl)
-                        <img class="h-auto w-full max-h-[1024px] max-w-[1024px] lg:h-full lg:w-full lg:object-contain" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selected->prompt, 80) }}" decoding="async">
+                        <img class="h-auto w-full max-h-[1024px] max-w-[1024px] lg:h-full lg:w-full lg:object-contain" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selectedTitle, 80) }}" decoding="async">
                     @elseif ($selected->status === 'pending')
                         <div class="relative flex aspect-square w-full max-w-md items-center justify-center overflow-hidden rounded-4xl bg-zinc-100 text-zinc-700 shadow-inner dark:bg-white/10 dark:text-white/80">
                             <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-zinc-50),var(--color-zinc-200))] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,.12),rgba(255,255,255,.04))]"></div>
@@ -394,6 +398,10 @@ new class extends Component {
                     <flux:button type="button" variant="ghost" icon="x-mark" x-on:click="closeImage">{{ __('Close') }}</flux:button>
                 </div>
 
+                @if (filled($selected->title))
+                    <h1 class="mb-4 text-xl font-semibold tracking-tight">{{ $selected->title }}</h1>
+                @endif
+
                 <div class="mb-5 flex flex-wrap gap-2">
                     <flux:badge size="sm" :color="$selected->status === 'failed' ? 'red' : null">{{ $this->statusLabel($selected) }}</flux:badge>
                     @if ($selected->is_featured)
@@ -407,16 +415,23 @@ new class extends Component {
                     @endforeach
                 </div>
 
-                <div class="space-y-3" x-data="{ copied: false, expanded: false, prompt: @js($selected->prompt) }">
+                <div class="space-y-3" x-data="{ copied: false, expanded: false, prompt: @js($canViewFullPrompt ? $selected->prompt : $visiblePrompt) }">
                     <div>
                         <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Prompt') }}</div>
                         <div class="relative max-h-[200px] overflow-hidden rounded-2xl bg-zinc-100 p-4 text-sm leading-6 dark:bg-white/10" :class="expanded ? 'max-h-none' : 'max-h-[200px]'">
-                            <p>{{ $selected->prompt }}</p>
-                            <div x-show="! expanded" x-cloak class="pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-2xl bg-linear-to-t from-zinc-100 to-transparent dark:from-zinc-900"></div>
+                            <p>{{ $visiblePrompt }}</p>
+                            @if (! $canViewFullPrompt && mb_strlen($selected->prompt) > 160)
+                                <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">{{ __('Log in to view full prompt.') }}</p>
+                            @endif
+                            @if ($canViewFullPrompt)
+                                <div x-show="! expanded" x-cloak class="pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-2xl bg-linear-to-t from-zinc-100 to-transparent dark:from-zinc-900"></div>
+                            @endif
                         </div>
-                        <flux:button class="mt-2 w-full" type="button" size="sm" variant="ghost" x-on:click="expanded = ! expanded" x-bind:aria-expanded="expanded ? 'true' : 'false'">
-                            <span x-text="expanded ? @js(__('Show less')) : @js(__('Show more'))"></span>
-                        </flux:button>
+                        @if ($canViewFullPrompt)
+                            <flux:button class="mt-2 w-full" type="button" size="sm" variant="ghost" x-on:click="expanded = ! expanded" x-bind:aria-expanded="expanded ? 'true' : 'false'">
+                                <span x-text="expanded ? @js(__('Show less')) : @js(__('Show more'))"></span>
+                            </flux:button>
+                        @endif
                     </div>
 
                     @if ($selected->status === 'failed' && filled($selected->error))
@@ -444,7 +459,7 @@ new class extends Component {
                         @php($relatedUrl = $this->imageThumbUrl($related))
                         @if ($relatedUrl)
                             <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $this->detailUrl($related) }}" x-data x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $related->id }}, url: @js($this->detailUrl($related)) })" wire:key="related-image-detail-{{ $related->id }}">
-                                <img class="aspect-3/4 w-full object-cover" src="{{ $relatedUrl }}" alt="{{ Str::limit($related->prompt, 50) }}" loading="lazy">
+                                <img class="aspect-3/4 w-full object-cover" src="{{ $relatedUrl }}" alt="{{ Str::limit($related->title ?: $related->prompt, 50) }}" loading="lazy">
                             </a>
                         @endif
                         @endforeach

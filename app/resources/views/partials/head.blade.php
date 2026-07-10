@@ -7,7 +7,7 @@
 @php($siteKeywords = \App\Support\AppSettings::string('site.keywords', ''))
 @php($routeImage = request()->route('image'))
 @php($metaImage = $routeImage instanceof \App\Models\AiImage && $routeImage->is_published && $routeImage->status === 'succeeded' && filled($routeImage->result_path) ? $routeImage : null)
-@php($metaTitle = $metaImage ? \Illuminate\Support\Str::limit($metaImage->prompt, 70, '') : ($title ?? null))
+@php($metaTitle = $metaImage ? \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 70, '') : ($title ?? null))
 @php($metaDescription = $metaImage ? \Illuminate\Support\Str::limit($metaImage->prompt, 160, '') : $siteDescription)
 @php($metaUrl = $metaImage ? route('images.show', $metaImage) : url()->current())
 @php($metaImageUrl = $metaImage ? app(\App\Services\AiImageEditor::class)->resultUrl($metaImage) : null)

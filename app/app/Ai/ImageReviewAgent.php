@@ -2,6 +2,7 @@
 
 namespace App\Ai;
 
+use App\Models\AiTag;
 use App\Models\Category;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -35,12 +36,16 @@ PROMPT;
         }
 
         $categories = $this->categoryOptions();
+        $tags = $this->tagOptions();
 
         return <<<PROMPT
 {$base}
+Nếu allowed=true, tạo title tiếng Việt ngắn, tự nhiên, mô tả ảnh, tối đa 80 ký tự, không thêm hashtag hoặc dấu ngoặc kép.
 Nếu allowed=true, chọn đúng một category phù hợp nhất trong danh sách hiện có:
 {$categories}
-Nếu allowed=true, tạo 0-5 tags ngắn bằng tiếng Việt không dấu hoặc tiếng Anh thường, mô tả chủ thể, phong cách, mục đích sử dụng, bối cảnh. Nếu không chắc tag phù hợp thì trả tags=[]. Tránh tag chính trị, sexual, hoặc tag quá chung như ai, image, ảnh.
+Nếu allowed=true, tạo 0-5 tags ngắn bằng tiếng Việt không dấu hoặc tiếng Anh thường, mô tả chủ thể, phong cách, mục đích sử dụng, bối cảnh. Ưu tiên dùng lại tags có sẵn nếu phù hợp:
+{$tags}
+Nếu không chắc tag phù hợp thì trả tags=[]. Tránh tag chính trị, sexual, hoặc tag quá chung như ai, image, ảnh.
 PROMPT;
     }
 
@@ -68,6 +73,9 @@ PROMPT;
 
         return [
             ...$properties,
+            'title' => $schema->string()
+                ->description('Short Vietnamese public image title, max 80 characters.')
+                ->required(),
             'category' => $schema->string()
                 ->enum($this->categorySlugs())
                 ->description('Best matching public gallery category slug.')
@@ -109,5 +117,19 @@ PROMPT;
             ->get(['slug', 'name'])
             ->map(fn (Category $category): string => "- {$category->slug}: {$category->name}")
             ->implode("\n");
+    }
+
+    private function tagOptions(): string
+    {
+        $tags = AiTag::query()
+            ->orderBy('name')
+            ->limit(80)
+            ->pluck('name')
+            ->map(fn (mixed $name): string => (string) $name)
+            ->filter()
+            ->values()
+            ->all();
+
+        return $tags === [] ? '- chưa có tag' : '- '.implode("\n- ", $tags);
     }
 }

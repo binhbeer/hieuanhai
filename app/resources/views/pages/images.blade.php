@@ -174,7 +174,7 @@ new #[Title('Created images')] class extends Component
 				<flux:card class="overflow-hidden p-0" wire:key="created-image-{{ $image->id }}">
 					<button class="block w-full text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
 						@if ($thumbUrl)
-							<img class="aspect-square w-full bg-zinc-100 object-cover dark:bg-white/10" src="{{ $thumbUrl }}" alt="{{ __('Image #:id', ['id' => $image->id]) }}" loading="lazy" />
+							<img class="aspect-square w-full bg-zinc-100 object-cover dark:bg-white/10" src="{{ $thumbUrl }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" loading="lazy" />
 						@elseif ($image->status === 'pending')
 							<div class="relative flex aspect-square items-center justify-center overflow-hidden bg-zinc-100 text-zinc-700 dark:bg-white/10 dark:text-white/80">
 								<div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-zinc-50),var(--color-zinc-200))] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,.12),rgba(255,255,255,.04))]"></div>
@@ -211,7 +211,7 @@ new #[Title('Created images')] class extends Component
 							<flux:text class="text-xs" variant="subtle">#{{ $image->id }} · {{ $image->created_at?->diffForHumans() }}</flux:text>
 						</div>
 
-						<p class="line-clamp-3 text-sm font-medium">{{ $image->prompt }}</p>
+						<p class="line-clamp-3 text-sm font-medium">{{ $image->title ?: $image->prompt }}</p>
 
 						@if ($image->status === 'failed')
 							<flux:text class="text-sm text-red-600 dark:text-red-300">{{ $image->error ?: __('Could not create this image.') }}</flux:text>

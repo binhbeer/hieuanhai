@@ -50,7 +50,11 @@ new #[Title('Create image')] class extends Component
 
     public function selectImage(int $id): void
     {
-        $this->redirectRoute('images.show', ['image' => $id], navigate: true);
+        $image = $this->publishedImage($id);
+
+        if ($image) {
+            $this->redirectRoute('images.show', ['image' => $image], navigate: true);
+        }
     }
 
     public function useAsPrompt(int $id): void
