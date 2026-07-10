@@ -73,7 +73,7 @@
         <div>
             <flux:button
                 variant="primary"
-                icon="plus"
+                :icon="svg('iconsax-two-add', 'size-5')"
                 x-on:click="showForm = true"
             >
                 {{ __('Add passkey') }}

@@ -49,7 +49,7 @@
             <div class="grid gap-2">
                 <flux:button
                     variant="outline"
-                    icon="finger-print"
+                    :icon="svg('iconsax-two-finger-scan', 'size-5')"
                     class="w-full"
                     x-on:click="verify()"
                     x-bind:disabled="loading"

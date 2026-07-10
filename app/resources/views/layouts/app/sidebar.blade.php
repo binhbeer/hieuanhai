@@ -22,13 +22,16 @@
 		<div class="min-h-0 flex-1 overflow-y-auto">
 			<flux:sidebar.nav>
 				<flux:sidebar.group class="grid">
-					<flux:sidebar.item icon="home" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+					<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+						<x-slot name="icon"><x-iconsax-bul-home class="size-5" /></x-slot>
 						{{ __('Home') }}
 					</flux:sidebar.item>
-					<flux:sidebar.item icon="magnifying-glass" :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
+					<flux:sidebar.item :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
+						<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
 						{{ __('Search') }}
 					</flux:sidebar.item>
-					<flux:sidebar.item icon="heart" :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
+					<flux:sidebar.item :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
+						<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
 						{{ __('Favorite images') }}
 					</flux:sidebar.item>
 					@auth
@@ -61,33 +64,39 @@
 	</flux:sidebar>
 
 	@if (!request()->routeIs('images.show'))
-	<flux:header class="sticky top-0 px-3! md:px-4!">
-		<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
+		<flux:header class="sticky top-0 px-3! md:px-4!">
+			<flux:sidebar.toggle class="lg:hidden" inset="left">
+				<x-slot name="icon"><x-iconsax-two-menu class="size-5" /></x-slot>
+			</flux:sidebar.toggle>
 
-		@if (request()->routeIs('home', 'categories.show') || (request()->routeIs('search.*') && $gallerySearch !== ''))
-			<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
-				<flux:tab :href="$galleryTabUrl('new')" :selected="$gallerySort === 'new'" wire:navigate>
-					{{ __('Mới') }}
-				</flux:tab>
-				<flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
-					{{ __('Phổ biến') }}
-				</flux:tab>
-				<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
-					{{ __('Nổi bật') }}
-				</flux:tab>
-			</flux:tabs>
-		@endif
+			@if (request()->routeIs('home', 'categories.show') || (request()->routeIs('search.*') && $gallerySearch !== ''))
+				<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
+					<flux:tab :href="$galleryTabUrl('new')" :selected="$gallerySort === 'new'" wire:navigate>
+						{{ __('Mới') }}
+					</flux:tab>
+					<flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
+						{{ __('Phổ biến') }}
+					</flux:tab>
+					<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
+						{{ __('Nổi bật') }}
+					</flux:tab>
+				</flux:tabs>
+			@endif
 
-		<flux:spacer />
+			<flux:spacer />
 
-		@auth
-			<flux:modal.trigger name="image-composer">
-				<flux:button size="sm" type="button" variant="primary" icon="sparkles" x-data x-on:click="$dispatch('open-image-composer')" />
-			</flux:modal.trigger>
-		@else
-			<flux:button size="sm" :href="route('login')" variant="primary" icon="sparkles" wire:navigate />
-		@endauth
-	</flux:header>
+			@auth
+				<flux:modal.trigger name="image-composer">
+					<flux:button size="sm" type="button" variant="primary" x-data x-on:click="$dispatch('open-image-composer')">
+						<x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+					</flux:button>
+				</flux:modal.trigger>
+			@else
+				<flux:button size="sm" :href="route('login')" variant="primary" wire:navigate>
+					<x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+				</flux:button>
+			@endauth
+		</flux:header>
 	@endif
 
 	{{ $slot }}

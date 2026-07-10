@@ -52,7 +52,7 @@ new class extends Component {
 >
     <div class="px-6 space-y-2">
         <div class="flex items-center gap-2">
-            <flux:icon.lock-closed variant="outline" class="size-4"/>
+            <x-iconsax-two-lock class="size-4" />
             <flux:heading size="lg" level="3">{{ __('2FA recovery codes') }}</flux:heading>
         </div>
         <flux:text variant="subtle">
@@ -64,7 +64,7 @@ new class extends Component {
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <flux:button
                 x-show="!showRecoveryCodes"
-                icon="eye"
+                :icon="svg('iconsax-two-eye', 'size-5')"
                 icon:variant="outline"
                 variant="primary"
                 @click="showRecoveryCodes = true;"
@@ -76,7 +76,7 @@ new class extends Component {
 
             <flux:button
                 x-show="showRecoveryCodes"
-                icon="eye-slash"
+                :icon="svg('iconsax-two-eye-slash', 'size-5')"
                 icon:variant="outline"
                 variant="primary"
                 @click="showRecoveryCodes = false"
@@ -89,7 +89,7 @@ new class extends Component {
             @if (filled($recoveryCodes))
                 <flux:button
                     x-show="showRecoveryCodes"
-                    icon="arrow-path"
+                    :icon="svg('iconsax-two-refresh', 'size-5')"
                     variant="filled"
                     wire:click="regenerateRecoveryCodes"
                 >
@@ -107,7 +107,7 @@ new class extends Component {
         >
             <div class="mt-3 space-y-3">
                 @error('recoveryCodes')
-                    <flux:callout variant="danger" icon="x-circle" heading="{{$message}}"/>
+                    <flux:callout variant="danger" :icon="svg('iconsax-two-close-circle', 'size-5')" heading="{{$message}}"/>
                 @enderror
 
                 @if (filled($recoveryCodes))

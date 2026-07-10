@@ -14,13 +14,13 @@
 
 	<a class="relative block" href="{{ $detailUrl }}" aria-label="{{ __('View image details') }}" x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $image->id }}, url: @js($detailUrl), title: @js($detailTitle) })">
 		<img class="h-auto w-full object-cover transition duration-500 group-hover:scale-[1.02]" src="{{ $url }}" alt="{{ Str::limit($image->title ?: $image->prompt, 80) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif loading="{{ $loading }}" decoding="async">
-	</a>
 
-	@if (isset($badge))
-		<div class="absolute right-3 bottom-3">
-			{{ $badge }}
-		</div>
-	@endif
+		@if (isset($badge))
+			<div class="absolute right-3 bottom-3">
+				{{ $badge }}
+			</div>
+		@endif
+	</a>
 
 	<div class="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/85 via-black/45 to-transparent p-3 opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
 		<div class="flex items-end justify-between gap-3">

@@ -188,7 +188,7 @@ new #[Title('Trang chủ')] class extends Component {
 				<div class="rounded-4xl flex min-h-[55svh] items-center justify-center border border-dashed border-zinc-300 bg-white text-center dark:border-white/10 dark:bg-white/5">
 					<div class="max-w-sm p-8">
 						<div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-white/10">
-							<flux:icon class="size-7 text-zinc-500" name="photo" />
+							<x-iconsax-two-gallery class="size-7 text-zinc-500" />
 						</div>
 						<h2 class="text-lg font-semibold">{{ trim($search) === '' ? __('No published images yet') : __('No images found') }}</h2>
 						<p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
@@ -203,9 +203,13 @@ new #[Title('Trang chủ')] class extends Component {
 				@php($imageSize = $this->imageSize($image, 'sm'))
 				@if ($thumbUrl)
 					<x-gallery.item :image="$image" :url="$thumbUrl" :image-size="$imageSize" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" :loading="$loop->iteration <= 5 ? 'eager' : 'lazy'" wire:key="published-image-{{ $image->id }}">
-						<x-slot:badge>
-							<flux:button class="shadow" type="button" size="sm" :variant="$this->isFavorite($image) ? 'primary' : 'filled'" icon="heart" wire:click.stop="toggleFavorite({{ $image->id }})" aria-label="{{ $this->isFavorite($image) ? __('Remove favorite') : __('Favorite image') }}">{{ $this->favoriteCount($image) }}</flux:button>
-						</x-slot:badge>
+						@if ($this->favoriteCount($image) > 0)
+							<x-slot:badge>
+								<flux:badge class="shadow" size="sm" variant="solid" color="primary" rounded icon="heart">
+									{{ $this->favoriteCount($image) }}
+								</flux:badge>
+							</x-slot:badge>
+						@endif
 						<x-slot:actions>
 							<flux:button type="button" size="sm" variant="filled" wire:click.stop="useAsPrompt({{ $image->id }})">{{ __('Create similar image') }}</flux:button>
 						</x-slot:actions>

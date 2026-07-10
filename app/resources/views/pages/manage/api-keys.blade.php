@@ -263,7 +263,9 @@ new #[Title('Manage API keys')] class extends Component
 								<div class="flex items-center gap-2">
 									<div class="tabular-nums">{{ number_format($apiKey->quota_used) }} / {{ number_format($apiKey->quota_limit) }}</div>
 									<flux:dropdown position="bottom" align="end">
-										<flux:button type="button" size="xs" variant="subtle" icon="pencil" aria-label="{{ __('Edit quota') }}" />
+										<flux:button type="button" size="xs" variant="subtle" aria-label="{{ __('Edit quota') }}">
+                                            <x-slot name="icon"><x-iconsax-two-edit-2 class="size-5" /></x-slot>
+                                        </flux:button>
 										<flux:popover class="w-56 space-y-3">
 											<flux:input wire:model="quotaLimits.{{ $apiKey->id }}" type="number" min="0" label="Quota lifetime" />
 											<div class="flex justify-end">

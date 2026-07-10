@@ -14,7 +14,7 @@
     $metaImage = $routeImage instanceof \App\Models\AiImage && $routeImage->is_published && $routeImage->status === 'succeeded' && filled($routeImage->result_path) ? $routeImage : null;
     $metaCategory = $routeCategory instanceof \App\Models\Category ? $routeCategory : null;
     $metaTag = $routeTag instanceof \App\Models\AiTag ? $routeTag : null;
-    $isIndexable = request()->routeIs('home', 'categories.show', 'tags.show', 'images.show', 'quota-check.index');
+    $isIndexable = request()->routeIs('home', 'categories.show', 'tags.show', 'images.show');
 
     $metaTitle = match (true) {
         $metaImage !== null => \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 70, ''),
@@ -36,7 +36,6 @@
         $metaCategory !== null => route('categories.show', $metaCategory),
         $metaTag !== null => route('tags.show', $metaTag),
         request()->routeIs('home') => route('home'),
-        request()->routeIs('quota-check.index') => route('quota-check.index'),
         default => url()->current(),
     };
 

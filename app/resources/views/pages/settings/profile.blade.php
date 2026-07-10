@@ -5,16 +5,20 @@ use Flux\Flux;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new #[Title('Profile settings')] class extends Component {
-    use ProfileValidationRules;
+    use ProfileValidationRules, WithFileUploads;
 
     public string $name = '';
 
     public string $email = '';
+
+    public $avatar;
 
     public function mount(): void
     {
@@ -37,6 +41,25 @@ new #[Title('Profile settings')] class extends Component {
         $user->save();
 
         Flux::toast(variant: 'success', text: __('Profile updated.'));
+    }
+
+    public function updateAvatar(): void
+    {
+        $this->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        $user = Auth::user();
+        $oldAvatar = $user->avatar_path;
+        $user->avatar_path = $this->avatar->store('avatars', 'public');
+        $user->save();
+
+        if ($oldAvatar) {
+            Storage::disk('public')->delete($oldAvatar);
+        }
+
+        $this->reset('avatar');
+        Flux::toast(variant: 'success', text: __('Avatar updated.'));
     }
 
     public function resendVerificationNotification(): void
@@ -74,6 +97,35 @@ new #[Title('Profile settings')] class extends Component {
     <flux:heading class="sr-only">{{ __('Profile settings') }}</flux:heading>
 
     <x-pages::settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
+        <form wire:submit="updateAvatar" class="my-6 flex items-center gap-4">
+            <flux:file-upload wire:model="avatar" accept="image/jpeg,image/png,image/webp" aria-label="{{ __('Avatar') }}">
+                <div class="relative flex size-20 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-100 transition-colors hover:border-zinc-300 hover:bg-zinc-200 in-data-dragging:bg-zinc-200 in-data-loading:opacity-60 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15 dark:in-data-dragging:bg-white/15">
+                    @if ($avatar)
+                        <img src="{{ $avatar->temporaryUrl() }}" class="size-full object-cover" alt="{{ __('Avatar preview') }}" />
+                    @elseif (auth()->user()->avatar_path)
+                        <img src="{{ Storage::url(auth()->user()->avatar_path) }}" class="size-full object-cover" alt="{{ auth()->user()->name }}" />
+                    @else
+                        <flux:icon name="user" variant="solid" class="size-8 text-zinc-500 dark:text-zinc-400" />
+                    @endif
+
+                    <div class="absolute bottom-0 right-0 rounded-full bg-white dark:bg-zinc-800">
+                        <flux:icon name="arrow-up-circle" variant="solid" class="size-6 text-zinc-500 dark:text-zinc-400" />
+                    </div>
+                </div>
+            </flux:file-upload>
+
+            <div class="flex-1 space-y-2">
+                <flux:heading size="sm">{{ __('Avatar') }}</flux:heading>
+                <flux:text size="sm">{{ __('Choose a JPG, PNG, or WebP image up to 2 MB.') }}</flux:text>
+                <flux:error name="avatar" />
+                <flux:button type="submit" size="sm" variant="primary" wire:loading.attr="disabled" wire:target="avatar,updateAvatar" :disabled="! $avatar">
+                    {{ __('Save') }}
+                </flux:button>
+            </div>
+        </form>
+
+        <flux:separator />
+
         <form wire:submit="updateProfileInformation" class="my-6 w-full space-y-6">
             <flux:input wire:model="name" :label="__('Name')" type="text" required autofocus autocomplete="name" />
 

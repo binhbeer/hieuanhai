@@ -195,7 +195,7 @@ new #[Title('Manage categories')] class extends Component
 						<tr class="border-b border-white/10" wire:key="manage-category-{{ $category->id }}" wire:sort:item="{{ $category->id }}">
 							<td class="w-24 px-3 py-3 align-top">
 								<button class="inline-flex cursor-grab items-center gap-2 rounded-lg px-2 py-1 text-zinc-400 hover:bg-white/10 hover:text-white" type="button" wire:sort:handle aria-label="{{ __('Drag to reorder') }}">
-									<flux:icon name="bars-3" class="size-4" />
+									<x-iconsax-two-menu class="size-4" />
 									<span class="tabular-nums">{{ $category->sort_order }}</span>
 								</button>
 							</td>

@@ -53,8 +53,7 @@ Artisan::command('sitemap:generate', function (): void {
     $latestImageUpdate = $date($publicImages()->max('updated_at')) ?? now();
 
     $pages = SitemapFile::create()
-        ->add($url(route('home'), $latestImageUpdate))
-        ->add($url(route('quota-check.index'), now()));
+        ->add($url(route('home'), $latestImageUpdate));
     $pagesLastModified = $write('sitemap-pages.xml', $pages, now());
     $index->add(SitemapEntry::create(url('/sitemap-pages.xml'))->setLastModificationDate($pagesLastModified));
 

@@ -159,7 +159,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
         <div class="flex min-h-[55svh] items-center justify-center rounded-4xl border border-dashed border-zinc-300 bg-white text-center dark:border-white/10 dark:bg-white/5">
             <div class="max-w-sm p-8">
                 <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-white/10">
-                    <flux:icon class="size-7 text-zinc-500" name="photo" />
+                    <x-iconsax-two-gallery class="size-7 text-zinc-500" />
                 </div>
                 <flux:heading size="lg">{{ __('No images yet') }}</flux:heading>
                 <flux:text class="mt-2" variant="subtle">{{ __('Images will appear here after you create them.') }}</flux:text>
@@ -182,7 +182,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
                         <div class="relative flex w-4/5 max-w-56 flex-col items-center gap-4 rounded-3xl border border-white/80 bg-white/85 p-5 text-center shadow-lg backdrop-blur dark:border-white/10 dark:bg-zinc-900/80">
                             <div class="relative flex size-16 items-center justify-center">
                                 <div class="absolute inset-0 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900 dark:border-white/15 dark:border-t-white"></div>
-                                <flux:icon class="size-7" name="sparkles" />
+                                <x-iconsax-two-magic-star class="size-7" />
                             </div>
                             <div>
                                 <div class="text-sm font-semibold">{{ __('Creating image') }}</div>
@@ -195,7 +195,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
                     </div>
                 @else
                     <div class="flex aspect-square items-center justify-center bg-red-50 text-red-500 dark:bg-red-400/10 dark:text-red-200">
-                        <flux:icon class="size-8" name="exclamation-triangle" />
+                        <x-iconsax-two-danger class="size-8" />
                     </div>
                 @endif
             </button>

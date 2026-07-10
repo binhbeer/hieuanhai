@@ -6,6 +6,8 @@ use App\Models\AiApiKey;
 use App\Models\AiApiRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -38,6 +40,23 @@ class ProfileUpdateTest extends TestCase
         $this->assertEquals('Test User', $user->name);
         $this->assertEquals('test@example.com', $user->email);
         $this->assertNull($user->email_verified_at);
+    }
+
+    public function test_avatar_can_be_updated(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+
+        $this->actingAs($user);
+
+        Livewire::test('pages::settings.profile')
+            ->set('avatar', UploadedFile::fake()->image('avatar.jpg'))
+            ->call('updateAvatar')
+            ->assertHasNoErrors();
+
+        $path = $user->refresh()->avatar_path;
+        $this->assertNotNull($path);
+        Storage::disk('public')->assertExists($path);
     }
 
     public function test_email_verification_status_is_unchanged_when_email_address_is_unchanged(): void

@@ -17,7 +17,8 @@
 			<div class="flex flex-col gap-6">
 				{{ $slot }}
 			</div>
-			<a class="self-center text-sm font-medium text-zinc-600 underline-offset-4 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-white" href="{{ route('home') }}" wire:navigate>
+
+			<a class="mt-6 self-center text-sm font-medium text-zinc-600 underline-offset-4 hover:text-zinc-900 hover:underline dark:text-zinc-400 dark:hover:text-white" href="{{ route('home') }}" wire:navigate>
 				{{ __('Back to home') }}
 			</a>
 		</div>

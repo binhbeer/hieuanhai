@@ -30,6 +30,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $email
  * @property Carbon|null $email_verified_at
  * @property string $password
+ * @property string|null $avatar_path
  * @property UserRole $role
  * @property Carbon|null $banned_at
  * @property string|null $two_factor_secret

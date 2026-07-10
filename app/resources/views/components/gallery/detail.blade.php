@@ -364,7 +364,7 @@ new class extends Component {
 
         $wire.closeImage();
     },
-}" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title)" @endif>
+}" x-on:keydown.escape.window="{{ $standalone ? "window.location.href = '" . route('home') . "'" : 'closeImage()' }}" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title)" @endif>
     @php($selected = $this->selectedImage())
 
     @if ($show && $selected)
@@ -387,19 +387,28 @@ new class extends Component {
 
                 <div class="flex shrink-0 items-center gap-2">
                     @if ($this->canManageFeatured() && $this->isPublicImage($selected))
-                        <flux:button type="button" :variant="'primary'" :color="$selected->is_featured ? 'amber' : 'zinc'" icon="star" wire:click="toggleFeatured({{ $selected->id }})" :aria-label="$selected->is_featured ? __('Featured') : __('Feature image')" />
+                        <flux:button type="button" :variant="'primary'" :color="$selected->is_featured ? 'amber' : 'zinc'" wire:click="toggleFeatured({{ $selected->id }})" :aria-label="$selected->is_featured ? __('Featured') : __('Feature image')">
+                            <x-slot name="icon"><x-iconsax-bul-star class="size-5" /></x-slot>
+                        </flux:button>
                     @endif
 
                     @if ($this->canFavorite($selected))
-                        <flux:button type="button" :variant="'primary'" :color="$this->isFavorite($selected) ? 'amber' : 'zinc'" icon="heart" wire:click="toggleFavorite({{ $selected->id }})" :aria-label="$this->isFavorite($selected) ? __('Remove favorite') : __('Favorite image')">
+                        <flux:button type="button" :variant="'primary'" :color="$this->isFavorite($selected) ? 'amber' : 'zinc'" wire:click="toggleFavorite({{ $selected->id }})" :aria-label="$this->isFavorite($selected) ? __('Remove favorite') : __('Favorite image')">
+                            <x-slot name="icon"><x-iconsax-two-heart class="size-5" /></x-slot>
                             {{ $this->favoriteCount($selected) }}
                         </flux:button>
                     @endif
 
                     @if ($standalone)
-                        <flux:button :href="route('home')" wire:navigate variant="ghost" icon="x-mark" :aria-label="__('Close')" />
+                        <flux:button :href="route('home')" wire:navigate variant="filled">
+                            <x-slot name="icon"><x-iconsax-bul-close-circle class="size-5" /></x-slot>
+                            Esc
+                        </flux:button>
                     @else
-                        <flux:button type="button" variant="ghost" icon="x-mark" x-on:click="closeImage" :aria-label="__('Close')" />
+                        <flux:button type="button" variant="filled" x-on:click="closeImage">
+                            <x-slot name="icon"><x-iconsax-bul-close-circle class="size-5" /></x-slot>
+                            Esc
+                        </flux:button>
                     @endif
                 </div>
             </div>
@@ -418,7 +427,7 @@ new class extends Component {
                             <div class="relative flex w-4/5 max-w-64 flex-col items-center gap-4 rounded-3xl border border-white/80 bg-white/85 p-5 text-center shadow-lg backdrop-blur dark:border-white/10 dark:bg-zinc-900/80">
                                 <div class="relative flex size-16 items-center justify-center">
                                     <div class="absolute inset-0 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900 dark:border-white/15 dark:border-t-white"></div>
-                                    <flux:icon class="size-7" name="sparkles" />
+                                    <x-iconsax-two-magic-star class="size-7" />
                                 </div>
                                 <div>
                                     <div class="text-sm font-semibold">{{ __('Creating image...') }}</div>
@@ -432,7 +441,7 @@ new class extends Component {
                     @else
                         <div class="flex aspect-square w-full max-w-md items-center justify-center rounded-4xl bg-red-50 text-center text-red-600 shadow-inner dark:bg-red-400/10 dark:text-red-200">
                             <div class="max-w-xs p-8">
-                                <flux:icon class="mx-auto mb-4 size-12" name="exclamation-triangle" />
+                                <x-iconsax-two-danger class="mx-auto mb-4 size-12" />
                                 <div class="text-lg font-semibold">{{ __('Failed') }}</div>
                                 <div class="mt-2 text-sm">{{ $selected->error ?: __('Could not create this image.') }}</div>
                             </div>
@@ -445,9 +454,13 @@ new class extends Component {
         <aside class="flex min-h-0 overflow-hidden flex-col border-l border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950">
             <header class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 p-3 dark:border-white/10">
                 <div class="flex items-center gap-3">
-                    <div class="flex size-10 items-center justify-center rounded-full bg-zinc-900 text-sm font-bold text-white dark:bg-white dark:text-zinc-950">
-                        {{ Str::upper(Str::substr($this->creatorName($selected), 0, 1)) }}
-                    </div>
+                    <flux:avatar
+                        size="lg"
+                        circle
+                        :name="$this->creatorName($selected)"
+                        :initials="$selected->user?->initials() ?? Str::upper(Str::substr($this->creatorName($selected), 0, 1))"
+                        :src="$selected->user?->avatar_path ? Storage::url($selected->user->avatar_path) : null"
+                    />
                     <div class="text-sm font-semibold">{{ $this->creatorName($selected) }}</div>
                 </div>
                 <div class="text-right">
@@ -476,7 +489,8 @@ new class extends Component {
                         <div class="mb-2 flex items-center justify-between gap-2">
                             <div class="text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Prompt') }}</div>
                             @if ($canViewFullPrompt)
-                                <flux:button type="button" size="xs" variant="ghost" icon="clipboard" x-on:click="navigator.clipboard.writeText(prompt); copied = true; setTimeout(() => copied = false, 1400)">
+                                <flux:button type="button" size="xs" variant="ghost" x-on:click="navigator.clipboard.writeText(prompt); copied = true; setTimeout(() => copied = false, 1400)">
+                                    <x-slot name="icon"><x-iconsax-two-clipboard class="size-5" /></x-slot>
                                     <span x-text="copied ? @js(__('Copied')) : @js(__('Copy prompt'))"></span>
                                 </flux:button>
                             @endif
@@ -521,10 +535,16 @@ new class extends Component {
             <footer class="shrink-0 border-t border-zinc-200 p-2 dark:border-white/10">
                 <div class="grid gap-2 {{ $this->canEdit($selected) && $selectedUrl ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-2' }}">
                     @if ($selectedUrl)
-                        <flux:button :href="$selectedUrl" icon="arrow-down-tray" download="{{ $selected->downloadName() }}">{{ __('Download') }}</flux:button>
+                        <flux:button :href="$selectedUrl" download="{{ $selected->downloadName() }}">
+                            <x-slot name="icon"><x-iconsax-two-document-download class="size-5" /></x-slot>
+                            {{ __('Download') }}
+                        </flux:button>
                     @endif
 
-                    <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">{{ __('Create similar image') }}</flux:button>
+                    <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">
+                        <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+                        {{ __('Create similar image') }}
+                    </flux:button>
 
                     @if ($this->canEdit($selected))
                         <flux:button type="button" variant="filled" wire:click="editImage({{ $selected->id }})">{{ __('Edit image') }}</flux:button>

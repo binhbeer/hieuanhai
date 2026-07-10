@@ -68,7 +68,7 @@ new #[Title('Manage')] class extends Component
 
 		<div class="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-2xl space-y-3">
-				<flux:badge color="violet" icon="wrench-screwdriver" rounded>{{ __('Admin workspace') }}</flux:badge>
+				<flux:badge color="violet" :icon="svg('iconsax-two-setting-2', 'size-5')" rounded>{{ __('Admin workspace') }}</flux:badge>
 				<div class="space-y-2">
 					<flux:heading class="text-3xl! font-bold tracking-tight sm:text-4xl!" level="1">{{ __('Control center') }}</flux:heading>
 					<flux:text class="max-w-xl text-base!" variant="subtle">{{ __('Monitor activity and jump straight to common admin tasks.') }}</flux:text>
@@ -76,18 +76,18 @@ new #[Title('Manage')] class extends Component
 			</div>
 
 			<div class="flex flex-wrap gap-3">
-				<flux:button :href="route('home')" icon="arrow-up-right" variant="filled" wire:navigate>{{ __('Open gallery') }}</flux:button>
-				<flux:button :href="route('manage.images.index')" icon="photo" variant="primary" wire:navigate>{{ __('Review images') }}</flux:button>
+				<flux:button :href="route('home')" :icon="svg('iconsax-two-export-1', 'size-5')" variant="filled" wire:navigate>{{ __('Open gallery') }}</flux:button>
+				<flux:button :href="route('manage.images.index')" :icon="svg('iconsax-two-gallery', 'size-5')" variant="primary" wire:navigate>{{ __('Review images') }}</flux:button>
 			</div>
 		</div>
 
 		<flux:tabs class="relative mt-6" scrollable scrollable:fade size="sm" variant="pills">
-			<flux:tab :href="route('manage.index')" :selected="true" icon="chart-bar" wire:navigate>{{ __('Overview') }}</flux:tab>
-			<flux:tab :href="route('manage.users.index')" icon="users" wire:navigate>{{ __('Users') }}</flux:tab>
-			<flux:tab :href="route('manage.api-keys.index')" icon="key" wire:navigate>{{ __('API keys') }}</flux:tab>
-			<flux:tab :href="route('manage.images.index')" icon="photo" wire:navigate>{{ __('Images') }}</flux:tab>
-			<flux:tab :href="route('manage.categories.index')" icon="squares-2x2" wire:navigate>{{ __('Categories') }}</flux:tab>
-			<flux:tab :href="route('manage.settings.index')" icon="cog-6-tooth" wire:navigate>{{ __('Settings') }}</flux:tab>
+			<flux:tab :href="route('manage.index')" :selected="true" :icon="svg('iconsax-bul-chart', 'size-5')" wire:navigate>{{ __('Overview') }}</flux:tab>
+			<flux:tab :href="route('manage.users.index')" :icon="svg('iconsax-bul-people', 'size-5')" wire:navigate>{{ __('Users') }}</flux:tab>
+			<flux:tab :href="route('manage.api-keys.index')" :icon="svg('iconsax-bul-key', 'size-5')" wire:navigate>{{ __('API keys') }}</flux:tab>
+			<flux:tab :href="route('manage.images.index')" :icon="svg('iconsax-bul-gallery', 'size-5')" wire:navigate>{{ __('Images') }}</flux:tab>
+			<flux:tab :href="route('manage.categories.index')" :icon="svg('iconsax-bul-category', 'size-5')" wire:navigate>{{ __('Categories') }}</flux:tab>
+			<flux:tab :href="route('manage.settings.index')" :icon="svg('iconsax-bul-setting-2', 'size-5')" wire:navigate>{{ __('Settings') }}</flux:tab>
 		</flux:tabs>
 	</header>
 
@@ -97,7 +97,7 @@ new #[Title('Manage')] class extends Component
 				<flux:heading size="lg">{{ __('Overall stats') }}</flux:heading>
 				<flux:text variant="subtle">{{ __('Current system snapshot.') }}</flux:text>
 			</div>
-			<flux:badge color="zinc" icon="lock-closed" rounded>{{ __('Admin access') }}</flux:badge>
+			<flux:badge color="zinc" :icon="svg('iconsax-two-lock', 'size-5')" rounded>{{ __('Admin access') }}</flux:badge>
 		</div>
 
 		<div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -106,14 +106,14 @@ new #[Title('Manage')] class extends Component
 					<div class="flex items-start justify-between gap-4">
 						<div class="space-y-3">
 							<div class="flex size-9 items-center justify-center rounded-xl sm:size-11 sm:rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-300">
-								<flux:icon class="size-5" name="users" />
+								<x-iconsax-two-people class="size-5" />
 							</div>
 							<div>
 								<flux:text variant="subtle">{{ __('Users') }}</flux:text>
 								<div class="mt-1 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{{ number_format($this->stats['users']) }}</div>
 							</div>
 						</div>
-						<flux:icon class="size-4 text-zinc-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-violet-500" name="arrow-up-right" />
+						<x-iconsax-two-export-1 class="size-4 text-zinc-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-violet-500" />
 					</div>
 					<flux:badge class="mt-3 max-w-full sm:mt-5" :color="$this->stats['banned_users'] > 0 ? 'red' : 'zinc'" size="sm">
 						{{ __(':count banned accounts', ['count' => number_format($this->stats['banned_users'])]) }}
@@ -126,14 +126,14 @@ new #[Title('Manage')] class extends Component
 					<div class="flex items-start justify-between gap-4">
 						<div class="space-y-3">
 							<div class="flex size-9 items-center justify-center rounded-xl sm:size-11 sm:rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-								<flux:icon class="size-5" name="key" />
+								<x-iconsax-two-key class="size-5" />
 							</div>
 							<div>
 								<flux:text variant="subtle">{{ __('API keys') }}</flux:text>
 								<div class="mt-1 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{{ number_format($this->stats['api_keys']) }}</div>
 							</div>
 						</div>
-						<flux:icon class="size-4 text-zinc-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-blue-500" name="arrow-up-right" />
+						<x-iconsax-two-export-1 class="size-4 text-zinc-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-blue-500" />
 					</div>
 					<flux:text class="mt-3 hidden text-sm! sm:mt-5 sm:block" variant="subtle">{{ __('Manage quotas and access tokens.') }}</flux:text>
 				</flux:card>
@@ -144,14 +144,14 @@ new #[Title('Manage')] class extends Component
 					<div class="flex items-start justify-between gap-4">
 						<div class="space-y-3">
 							<div class="flex size-9 items-center justify-center rounded-xl sm:size-11 sm:rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-								<flux:icon class="size-5" name="photo" />
+								<x-iconsax-two-gallery class="size-5" />
 							</div>
 							<div>
 								<flux:text variant="subtle">{{ __('Published images') }}</flux:text>
 								<div class="mt-1 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{{ number_format($this->stats['published_images']) }}</div>
 							</div>
 						</div>
-						<flux:icon class="size-4 text-zinc-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-emerald-500" name="arrow-up-right" />
+						<x-iconsax-two-export-1 class="size-4 text-zinc-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-emerald-500" />
 					</div>
 					<flux:badge class="mt-3 max-w-full sm:mt-5" :color="$this->stats['unpublished_images'] > 0 ? 'amber' : 'zinc'" size="sm">
 						{{ __(':count awaiting publication', ['count' => number_format($this->stats['unpublished_images'])]) }}
@@ -164,14 +164,14 @@ new #[Title('Manage')] class extends Component
 					<div class="flex items-start justify-between gap-4">
 						<div class="space-y-3">
 							<div class="flex size-9 items-center justify-center rounded-xl sm:size-11 sm:rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-300">
-								<flux:icon class="size-5" name="squares-2x2" />
+								<x-iconsax-two-category class="size-5" />
 							</div>
 							<div>
 								<flux:text variant="subtle">{{ __('Categories') }}</flux:text>
 								<div class="mt-1 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{{ number_format($this->stats['categories']) }}</div>
 							</div>
 						</div>
-						<flux:icon class="size-4 text-zinc-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-amber-500" name="arrow-up-right" />
+						<x-iconsax-two-export-1 class="size-4 text-zinc-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-amber-500" />
 					</div>
 					<flux:text class="mt-3 hidden text-sm! sm:mt-5 sm:block" variant="subtle">{{ __('Organize the public gallery.') }}</flux:text>
 				</flux:card>
@@ -196,7 +196,7 @@ new #[Title('Manage')] class extends Component
 					<flux:text class="mt-1 text-xs!" variant="subtle">{{ __('Last 30 days') }}</flux:text>
 				</div>
 				<div class="flex size-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-300">
-					<flux:icon class="size-5" name="users" />
+					<x-iconsax-two-people class="size-5" />
 				</div>
 			</div>
 
@@ -234,7 +234,7 @@ new #[Title('Manage')] class extends Component
 					<flux:text class="mt-1 text-xs!" variant="subtle">{{ __('Last 30 days') }}</flux:text>
 				</div>
 				<div class="flex size-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-					<flux:icon class="size-5" name="photo" />
+					<x-iconsax-two-gallery class="size-5" />
 				</div>
 			</div>
 

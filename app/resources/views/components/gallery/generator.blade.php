@@ -421,8 +421,7 @@ new class extends Component
 									@foreach ($parentReferenceImages as $index => $url)
 										<div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
 											<img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" />
-											<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled" icon="x-mark"
-												wire:click="removeParentReference({{ $index }})" wire:loading.remove wire:target="createImage"
+											<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled"												wire:click="removeParentReference({{ $index }})" wire:loading.remove wire:target="createImage"
 												aria-label="{{ __('Remove reference image :number', ['number' => $loop->iteration]) }}" />
 										</div>
 									@endforeach
@@ -432,8 +431,7 @@ new class extends Component
 										@if ($url)
 											<div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
 												<img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif />
-												<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled" icon="x-mark"
-													wire:click="removeReferenceImage({{ $image->id }})" wire:loading.remove wire:target="createImage"
+												<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled"													wire:click="removeReferenceImage({{ $image->id }})" wire:loading.remove wire:target="createImage"
 													aria-label="{{ __('Remove reference image :number', ['number' => $loop->iteration]) }}" />
 											</div>
 										@endif
@@ -442,12 +440,11 @@ new class extends Component
 										<div class="overflow-hidden rounded-2xl bg-zinc-100 text-xs text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
 											<div class="group relative bg-zinc-200 dark:bg-white/10">
 												<img class="aspect-square size-full object-cover" src="{{ $item->temporaryUrl() }}" alt="{{ __('Reference image :number', ['number' => $referenceImages->count() + $index + 1]) }}" />
-												<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled" icon="x-mark"
-													wire:click="removePhoto({{ $index }})" wire:loading.remove wire:target="createImage"
+												<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled"													wire:click="removePhoto({{ $index }})" wire:loading.remove wire:target="createImage"
 													aria-label="{{ __('Remove reference image :number', ['number' => $referenceImages->count() + $index + 1]) }}" />
 											</div>
 											<div class="flex items-center gap-1.5 px-2 py-1.5">
-												<flux:icon class="size-3.5 text-emerald-500" name="check-circle" />
+												<x-iconsax-two-tick-circle class="size-3.5 text-emerald-500" />
 												<span class="truncate">{{ $item->getClientOriginalName() }}</span>
 											</div>
 										</div>
@@ -526,7 +523,10 @@ new class extends Component
 									<span class="text-sm font-medium text-zinc-800 dark:text-white">{{ __('Prompt') }}</span>
 									<flux:tooltip content="{{ __('Rewrite prompt') }}" position="top">
 										<flux:dropdown x-ref="rewriteDropdown" position="bottom" align="end">
-											<flux:button type="button" size="sm" variant="filled" icon="sparkles">{{ __('Rewrite prompt') }}</flux:button>
+											<flux:button type="button" size="sm" variant="filled">
+                                            <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+                                            {{ __('Rewrite prompt') }}
+                                        </flux:button>
 											<flux:popover class="w-80 space-y-3">
 												<div>
 													<flux:heading size="sm">{{ __('Rewrite prompt') }}</flux:heading>

@@ -245,7 +245,7 @@ new #[Title('Manage created images')] class extends Component {
 									<img class="size-20 rounded-xl bg-white/5 object-cover" src="{{ $url }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif loading="lazy" />
 								@else
 									<div class="flex size-20 items-center justify-center rounded-xl bg-white/5 text-zinc-500">
-										<flux:icon name="photo" class="size-6" />
+										<x-iconsax-two-gallery class="size-6" />
 									</div>
 								@endif
 							</button>

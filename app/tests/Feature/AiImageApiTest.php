@@ -659,7 +659,7 @@ class AiImageApiTest extends TestCase
         ]);
     }
 
-    public function test_quota_check_shows_safe_summary_for_valid_key(): void
+    public function test_api_key_settings_shows_safe_summary_and_usage_guide(): void
     {
         [$plain, $key] = $this->apiKey(quotaLimit: 5, quotaUsed: 2);
         AiApiRequest::create([
@@ -673,9 +673,8 @@ class AiImageApiTest extends TestCase
             'response_meta' => ['secret' => 'hidden meta'],
         ]);
 
-        Livewire::test('pages::quota-check')
-            ->set('token', $plain)
-            ->call('check')
+        Livewire::actingAs($key->user)
+            ->test('pages::settings.api-key')
             ->assertSee('Hướng dẫn sử dụng API')
             ->assertSee('POST')
             ->assertSee('/api/ai/images')
@@ -685,6 +684,8 @@ class AiImageApiTest extends TestCase
             ->assertSee('HTTP 201')
             ->assertDontSee('hidden prompt')
             ->assertDontSee('hidden meta');
+
+        $this->get('/quota-check')->assertNotFound();
     }
 
     /**

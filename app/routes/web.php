@@ -18,7 +18,6 @@ Route::livewire('search', 'pages::search')->middleware('auth')->name('search.ind
 Route::livewire('c/{category:slug}', 'pages::gallery')->name('categories.show');
 Route::livewire('t/{tag:slug}', 'pages::gallery')->name('tags.show');
 Route::livewire('anh/{image}', 'gallery.detail')->name('images.show');
-Route::livewire('quota-check', 'pages::quota-check')->name('quota-check.index');
 Route::livewire('favorites', 'pages::favorites')->middleware('auth')->name('favorites.index');
 Route::livewire('images', 'pages::images')->middleware('auth')->name('images.index');
 

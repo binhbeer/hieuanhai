@@ -3,6 +3,7 @@
 use App\Models\AiApiKey;
 use App\Models\AiApiRequest;
 use App\Models\User;
+use App\Support\AppSettings;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -98,6 +99,12 @@ new #[Title('API key settings')] class extends Component {
     <flux:heading class="sr-only">{{ __('API key settings') }}</flux:heading>
 
     <x-pages::settings.layout :heading="__('API key')" :subheading="__('Generate one API key for image API requests and track quota usage.')">
+        <div class="mb-6">
+            <flux:modal.trigger name="api-usage-guide">
+                <flux:button type="button" variant="filled">{{ __('Guide') }}</flux:button>
+            </flux:modal.trigger>
+        </div>
+
         <div class="space-y-6">
             @if ($newApiToken)
                 <flux:card class="space-y-3 border-emerald-400/30 bg-emerald-400/10" wire:key="settings-api-token-{{ $newApiTokenKeyId }}">
@@ -107,7 +114,9 @@ new #[Title('API key settings')] class extends Component {
             @endif
 
             @if ($this->apiKey)
-                @php($visibleApiToken = $newApiToken ?: $this->apiKey->token)
+                @php
+                    $visibleApiToken = $newApiToken ?: $this->apiKey->token;
+                @endphp
 
                 <flux:card class="space-y-4">
                     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -194,4 +203,63 @@ new #[Title('API key settings')] class extends Component {
             @endif
         </div>
     </x-pages::settings.layout>
+
+    @php
+        $maxImages = AppSettings::maxReferencePhotos();
+        $maxUploadMb = (int) ceil(AppSettings::imageUploadMaxKb() / 1024);
+    @endphp
+
+    <flux:modal name="api-usage-guide" class="md:w-2xl">
+        <div class="space-y-5">
+            <div class="space-y-1">
+                <flux:heading size="lg">{{ __('API usage guide') }}</flux:heading>
+                <flux:text variant="subtle">{{ __('Send JSON to create an image from a prompt, or multipart when reference images are included. Each successful request costs 1 quota.') }}</flux:text>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div class="rounded-xl bg-white/5 p-4 text-sm">
+                    <div class="mb-2 font-medium">Endpoint</div>
+                    <div class="break-all font-mono text-xs">POST {{ url('/api/ai/images') }}</div>
+                </div>
+                <div class="rounded-xl bg-white/5 p-4 text-sm">
+                    <div class="mb-2 font-medium">{{ __('Authentication') }}</div>
+                    <div class="break-all font-mono text-xs">Authorization: Bearer hai_xxx</div>
+                </div>
+            </div>
+
+            <div class="space-y-2 text-sm">
+                <div class="font-medium">Body</div>
+                <ul class="list-disc space-y-1 ps-5 text-zinc-300">
+                    <li>{!! __('<span class="font-mono">prompt</span>: required image generation request, maximum 1200 words.') !!}</li>
+                    <li>{!! __('<span class="font-mono">images[]</span>: optional, up to :count reference images, jpg, jpeg, png, webp, or avif, up to :mbMB each.', ['count' => $maxImages, 'mb' => $maxUploadMb]) !!}</li>
+                </ul>
+            </div>
+
+            <pre class="overflow-x-auto rounded-xl bg-zinc-950 p-4 text-xs text-zinc-100"><code>curl -X POST '{{ url('/api/ai/images') }}' \
+  -H 'Authorization: Bearer hai_xxx' \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Create a comic-style portrait"}'</code></pre>
+
+            <pre class="overflow-x-auto rounded-xl bg-zinc-950 p-4 text-xs text-zinc-100"><code>curl -X POST '{{ url('/api/ai/images') }}' \
+  -H 'Authorization: Bearer hai_xxx' \
+  -F 'prompt=Turn this image into a comic-style portrait' \
+  -F 'images[]=@/path/to/source.jpg'</code></pre>
+
+            <div class="space-y-2 text-sm">
+                <div class="font-medium">{{ __('Successful response') }}</div>
+                <pre class="overflow-x-auto rounded-xl bg-zinc-950 p-4 text-xs text-zinc-100"><code>{
+  "id": 123,
+  "url": "https://example.com/storage/ai-images/result.png",
+  "download_name": "ai-image-123.png",
+  "status": "succeeded",
+  "created_at": "2026-07-08T08:00:00.000000Z",
+  "quota": {
+    "limit": 100,
+    "used": 1,
+    "remaining": 99
+  }
+}</code></pre>
+            </div>
+        </div>
+    </flux:modal>
 </section>

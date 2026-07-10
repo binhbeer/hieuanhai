@@ -84,7 +84,7 @@ new #[Title('Ảnh yêu thích')] class extends Component
 				<div class="rounded-4xl flex min-h-[55svh] items-center justify-center border border-dashed border-zinc-300 bg-white text-center dark:border-white/10 dark:bg-white/5">
 					<div class="max-w-sm p-8">
 						<div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-white/10">
-							<flux:icon class="size-7 text-zinc-500" name="heart" />
+							<x-iconsax-two-heart class="size-7 text-zinc-500" />
 						</div>
 						<h2 class="text-lg font-semibold">{{ __('Chưa có ảnh yêu thích') }}</h2>
 						<p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Bấm trái tim trong gallery để lưu ảnh vào đây.') }}</p>
@@ -97,9 +97,13 @@ new #[Title('Ảnh yêu thích')] class extends Component
 						@php($imageSize = $this->imageSize($image, 'sm'))
 						@if ($url)
 							<x-gallery.item :image="$image" :url="$url" :image-size="$imageSize" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" :loading="$loop->iteration <= 5 ? 'eager' : 'lazy'" wire:key="favorite-image-{{ $image->id }}">
-								<x-slot:badge>
-									<flux:button class="shadow" type="button" size="sm" variant="primary" icon="heart" wire:click.stop="removeFavorite({{ $image->id }})" aria-label="{{ __('Remove favorite') }}">{{ (int) ($image->favorites_count ?? 0) }}</flux:button>
-								</x-slot:badge>
+								@if (($image->favorites_count ?? 0) > 0)
+									<x-slot:badge>
+										<flux:badge class="shadow" size="sm" variant="solid" color="primary" rounded icon="heart">
+											{{ (int) $image->favorites_count }}
+										</flux:badge>
+									</x-slot:badge>
+								@endif
 								<x-slot:actions>
 									<flux:button type="button" size="sm" variant="filled" wire:click.stop="useAsPrompt({{ $image->id }})">{{ __('Create similar image') }}</flux:button>
 								</x-slot:actions>

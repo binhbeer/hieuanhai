@@ -173,7 +173,7 @@ new class extends Component {
                             @endfor
                         </div>
 
-                        <flux:icon.qr-code class="relative z-20 dark:text-accent-foreground"/>
+                        <x-iconsax-two-scan-barcode class="relative z-20 size-5 dark:text-accent-foreground" />
                     </div>
                 </div>
 
@@ -221,7 +221,7 @@ new class extends Component {
                 </div>
             @else
                 @error('setupData')
-                    <flux:callout variant="danger" icon="x-circle" heading="{{ $message }}"/>
+                    <flux:callout variant="danger" :icon="svg('iconsax-two-close-circle', 'size-5')" heading="{{ $message }}"/>
                 @enderror
 
                 <div class="flex justify-center">
@@ -294,8 +294,8 @@ new class extends Component {
                                     @click="copy()"
                                     class="px-3 transition-colors border-l cursor-pointer border-stone-200 dark:border-stone-600"
                                 >
-                                    <flux:icon.document-duplicate x-show="!copied" variant="outline"></flux:icon>
-                                    <flux:icon.check
+                                    <x-iconsax-two-copy class="size-5" x-show="!copied" />
+                                    <x-iconsax-two-tick-circle
                                         x-show="copied"
                                         variant="solid"
                                         class="text-green-500"
