@@ -9,7 +9,7 @@
 @php($detailTitle = Str::limit($image->title ?: $image->prompt, 70, ''))
 @php($imageSize = $image->result_path ? @getimagesize(Illuminate\Support\Facades\Storage::disk('public')->path($image->result_path)) : false)
 
-<div {{ $attributes->class('group relative mb-3 break-inside-avoid overflow-hidden rounded-2xl bg-zinc-200 text-left shadow-sm transition duration-500 hover:-translate-y-0.5 hover:shadow-xl focus-within:-translate-y-0.5 focus-within:shadow-xl dark:bg-white/10') }}>
+<div wire:ignore.self {{ $attributes->class('group relative mb-3 break-inside-avoid overflow-hidden rounded-2xl bg-zinc-200 text-left shadow-sm transition duration-500 hover:-translate-y-0.5 hover:shadow-xl focus-within:-translate-y-0.5 focus-within:shadow-xl dark:bg-white/10') }}>
 	<flux:skeleton class="pointer-events-none absolute inset-0 size-full rounded-2xl" animate="shimmer" />
 
 	<a class="relative block" href="{{ $detailUrl }}" aria-label="{{ __('View image details') }}" x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $image->id }}, url: @js($detailUrl), title: @js($detailTitle) })">

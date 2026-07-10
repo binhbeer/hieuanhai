@@ -19,7 +19,7 @@ new #[Title('Trang chủ')] class extends Component {
 
 	public string $search = '';
 
-	public string $sort = 'featured';
+	public string $sort = 'new';
 
 	public int $perPage = 36;
 
@@ -31,7 +31,7 @@ new #[Title('Trang chủ')] class extends Component {
 		$this->category = $category;
 		$this->tag = $tag;
 		$this->search = is_string($search) ? trim($search) : '';
-		$this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'featured';
+		$this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'new';
 
 		if ($image) {
 			abort_unless($this->isPublicImage($image), 404);

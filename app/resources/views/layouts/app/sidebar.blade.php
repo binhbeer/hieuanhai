@@ -15,9 +15,9 @@
 		@php($sidebarCategories = \App\Models\Category::query()->where('status', 'active')->orderBy('sort_order')->orderBy('name')->get())
 		@php($selectedSidebarCategory = request()->route('category'))
 		@php($gallerySearch = request()->routeIs('search.*') && is_string(request('q')) ? request('q') : '')
-		@php($gallerySort = is_string(request('sort')) && in_array(request('sort'), ['featured', 'new', 'popular'], true) ? request('sort') : 'featured')
+		@php($gallerySort = is_string(request('sort')) && in_array(request('sort'), ['featured', 'new', 'popular'], true) ? request('sort') : 'new')
 		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : (request()->routeIs('search.*') ? route('search.index') : route('home')))
-		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch, 'sort' => $sort === 'featured' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
+		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch, 'sort' => $sort === 'new' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
 
 		<flux:sidebar.nav>
 			<flux:sidebar.group class="grid">
@@ -63,14 +63,14 @@
 
 		@if (request()->routeIs('home', 'categories.show', 'images.show') || (request()->routeIs('search.*') && $gallerySearch !== ''))
 			<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
-				<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
-					{{ __('Nổi bật') }}
-				</flux:tab>
 				<flux:tab :href="$galleryTabUrl('new')" :selected="$gallerySort === 'new'" wire:navigate>
 					{{ __('Mới') }}
 				</flux:tab>
 				<flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
 					{{ __('Phổ biến') }}
+				</flux:tab>
+				<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
+					{{ __('Nổi bật') }}
 				</flux:tab>
 			</flux:tabs>
 		@endif
