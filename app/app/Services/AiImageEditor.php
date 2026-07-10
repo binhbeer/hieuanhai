@@ -919,10 +919,73 @@ class AiImageEditor
 
     private function imageTitle(mixed $title, string $prompt): string
     {
-        $title = is_string($title) ? $title : $prompt;
+        $title = is_string($title) ? $title : '';
+        $title = $this->readableTitle($title) ?? $this->readableTitle($prompt) ?? '';
         $title = Str::of($title)->squish()->limit(80, '')->toString();
 
-        return $title !== '' ? $title : Str::limit($prompt, 80, '');
+        return $title !== '' ? $title : 'Ảnh AI';
+    }
+
+    private function readableTitle(string $text): ?string
+    {
+        $text = trim($text);
+
+        if ($text === '') {
+            return null;
+        }
+
+        $decoded = json_decode($text, true);
+
+        if (is_array($decoded)) {
+            return $this->readableTitleFromArray($decoded);
+        }
+
+        if (preg_match('/["\']?(?:title|render_goal|goal|description|prompt)["\']?\s*[:=]\s*["\']([^"\']{3,160})/u', $text, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        return $this->looksLikeStructuredPrompt($text) ? null : $text;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $data
+     */
+    private function readableTitleFromArray(array $data): ?string
+    {
+        foreach (['title', 'render_goal', 'goal', 'description', 'prompt'] as $key) {
+            $value = $data[$key] ?? null;
+
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        foreach ($data as $value) {
+            if (is_array($value)) {
+                $title = $this->readableTitleFromArray($value);
+
+                if ($title !== null) {
+                    return $title;
+                }
+            }
+
+            if (is_string($value) && trim($value) !== '' && ! $this->looksLikeStructuredPrompt($value)) {
+                return trim($value);
+            }
+        }
+
+        return null;
+    }
+
+    private function looksLikeStructuredPrompt(string $text): bool
+    {
+        $text = trim($text);
+
+        return $text !== '' && (
+            Str::startsWith($text, ['{', '[', '```', '<?', '<script'])
+            || preg_match('/(?:^|\n)\s*(?:function|class|const|let|var|def)\s/u', $text) === 1
+            || preg_match('/["\']?[A-Za-z_][\w-]*["\']?\s*[:=]\s*[\[{"\']/u', $text) === 1
+        );
     }
 
     /**

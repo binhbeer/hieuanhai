@@ -531,6 +531,34 @@ class AiImageEditorTest extends TestCase
         $this->assertSame([], $published->tags->pluck('slug')->sort()->values()->all());
     }
 
+    public function test_publish_turns_structured_prompt_titles_into_readable_text(): void
+    {
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        $prompt = '{"render_goal":"Narrative điện ảnh fashion chân dung","subject":{"pose":"female seated in the back seat"}}';
+        ImageReviewAgent::fake([$this->publishReview('other', [], $prompt)]);
+
+        $editor = app(AiImageEditor::class);
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+
+        $image = AiImage::create([
+            'visitor_key' => $editor->visitorKey($request),
+            'prompt' => $prompt,
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/202607/08/result.png',
+        ]);
+
+        $published = $editor->publish($image, $request);
+
+        $this->assertSame('Narrative điện ảnh fashion chân dung', $published->title);
+        $this->assertStringNotContainsString('{', $published->title);
+    }
+
     public function test_publish_reviews_settings_provider_via_chat_completions_sdk_driver(): void
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');

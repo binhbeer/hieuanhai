@@ -4,8 +4,10 @@
 
 @php
     $siteName = \App\Support\AppSettings::string('site.name', config('app.name', 'GenAnh'));
+    $homeTitle = \App\Support\AppSettings::string('site.home_title', '');
     $siteDescription = \App\Support\AppSettings::string('site.description', '');
     $siteKeywords = \App\Support\AppSettings::string('site.keywords', '');
+    $googleMeasurementId = trim(\App\Support\AppSettings::string('analytics.google_measurement_id', ''));
     $routeImage = request()->route('image');
     $routeCategory = request()->route('category');
     $routeTag = request()->route('tag');
@@ -18,6 +20,7 @@
         $metaImage !== null => \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 70, ''),
         $metaCategory !== null => $metaCategory->name,
         $metaTag !== null => '#'.$metaTag->name,
+        request()->routeIs('home') => $homeTitle,
         default => $title ?? null,
     };
 
@@ -140,6 +143,15 @@
 @endif
 @if ($schema !== [])
     <script type="application/ld+json">{!! json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+@endif
+@if (filled($googleMeasurementId))
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ $googleMeasurementId }}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', @js($googleMeasurementId));
+    </script>
 @endif
 <meta name="theme-color" content="#7c3aed">
 <meta name="mobile-web-app-capable" content="yes">

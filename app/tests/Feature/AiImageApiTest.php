@@ -556,6 +556,8 @@ class AiImageApiTest extends TestCase
         Livewire::actingAs($admin)
             ->test('pages::manage.settings')
             ->set('siteName', 'GenAnh Pro')
+            ->set('homeTitle', 'Chỉnh ảnh AI miễn phí')
+            ->set('googleMeasurementId', 'G-SZ9BZEKLZ1')
             ->set('registrationEnabled', false)
             ->set('emailVerificationRequired', false)
             ->set('aiReviewModel', 'gpt-5.5-mini')
@@ -569,6 +571,8 @@ class AiImageApiTest extends TestCase
             ->assertHasNoErrors();
 
         $this->assertSame('GenAnh Pro', Setting::getValue('site.name'));
+        $this->assertSame('Chỉnh ảnh AI miễn phí', Setting::getValue('site.home_title'));
+        $this->assertSame('G-SZ9BZEKLZ1', Setting::getValue('analytics.google_measurement_id'));
         $this->assertFalse((bool) Setting::getValue('auth.registration_enabled'));
         $this->assertFalse((bool) Setting::getValue('auth.email_verification_required'));
         $this->assertSame('gpt-5.5-mini', Setting::getValue('ai.image_review_model'));

@@ -9,9 +9,13 @@ new #[Title('Settings')] class extends Component
 {
     public string $siteName = '';
 
+    public string $homeTitle = '';
+
     public string $siteDescription = '';
 
     public string $siteKeywords = '';
+
+    public string $googleMeasurementId = '';
 
     public bool $registrationEnabled = true;
 
@@ -48,8 +52,10 @@ new #[Title('Settings')] class extends Component
         abort_unless(auth()->user()?->isAdmin(), 403);
 
         $this->siteName = (string) Setting::getValue('site.name');
+        $this->homeTitle = (string) Setting::getValue('site.home_title');
         $this->siteDescription = (string) Setting::getValue('site.description');
         $this->siteKeywords = (string) Setting::getValue('site.keywords');
+        $this->googleMeasurementId = (string) Setting::getValue('analytics.google_measurement_id');
         $this->registrationEnabled = (bool) Setting::getValue('auth.registration_enabled');
         $this->emailVerificationRequired = (bool) Setting::getValue('auth.email_verification_required');
         $this->aiProvider = (string) Setting::getValue('ai.image_provider');
@@ -71,8 +77,10 @@ new #[Title('Settings')] class extends Component
     {
         $validated = $this->validate([
             'siteName' => ['required', 'string', 'max:120'],
+            'homeTitle' => ['nullable', 'string', 'max:120'],
             'siteDescription' => ['nullable', 'string', 'max:500'],
             'siteKeywords' => ['nullable', 'string', 'max:500'],
+            'googleMeasurementId' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9-]+$/'],
             'registrationEnabled' => ['boolean'],
             'emailVerificationRequired' => ['boolean'],
             'aiProvider' => ['required', 'string', 'in:openai'],
@@ -92,8 +100,10 @@ new #[Title('Settings')] class extends Component
 
         $pairs = [
             'site.name' => $validated['siteName'],
+            'site.home_title' => $validated['homeTitle'] ?? '',
             'site.description' => $validated['siteDescription'] ?? '',
             'site.keywords' => $validated['siteKeywords'] ?? '',
+            'analytics.google_measurement_id' => $validated['googleMeasurementId'] ?? '',
             'auth.registration_enabled' => (bool) $validated['registrationEnabled'],
             'auth.email_verification_required' => (bool) $validated['emailVerificationRequired'],
             'ai.image_provider' => $validated['aiProvider'],
@@ -144,8 +154,10 @@ new #[Title('Settings')] class extends Component
 				<flux:text variant="subtle">{{ __('Used for basic title/meta tags.') }}</flux:text>
 			</div>
 			<flux:input wire:model="siteName" :label="__('Site name')" required />
+			<flux:input wire:model="homeTitle" :label="__('Home title')" />
 			<flux:textarea wire:model="siteDescription" rows="3" label="Description" />
 			<flux:textarea wire:model="siteKeywords" rows="2" label="Keywords" />
+			<flux:input wire:model="googleMeasurementId" :label="__('Google Analytics measurement ID')" placeholder="G-SZ9BZEKLZ1" />
 		</flux:card>
 
 		<flux:card class="space-y-4">

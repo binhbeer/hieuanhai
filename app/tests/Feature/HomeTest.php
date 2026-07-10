@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -26,6 +27,30 @@ class HomeTest extends TestCase
         $response = $this->actingAs($user)->get(route('home'));
 
         $response->assertOk();
+    }
+
+    public function test_home_uses_home_title_setting(): void
+    {
+        Setting::putValue('site.home_title', 'Chỉnh ảnh AI miễn phí');
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('<title>', false)
+            ->assertSee('Chỉnh ảnh AI miễn phí - GenAnh');
+    }
+
+    public function test_home_loads_google_analytics_when_configured(): void
+    {
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertDontSee('googletagmanager.com', false);
+
+        Setting::putValue('analytics.google_measurement_id', 'G-SZ9BZEKLZ1');
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('https://www.googletagmanager.com/gtag/js?id=G-SZ9BZEKLZ1', false)
+            ->assertSee("gtag('config', 'G-SZ9BZEKLZ1');", false);
     }
 
     public function test_guests_must_login_to_visit_search(): void

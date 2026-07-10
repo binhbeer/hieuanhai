@@ -16,8 +16,10 @@ class Setting extends BaseModel
 {
     public const DEFAULTS = [
         'site.name' => 'GenAnh',
+        'site.home_title' => null,
         'site.description' => 'Chỉnh ảnh AI chất lượng cao miễn phí không cần đăng ký.',
         'site.keywords' => 'chỉnh ảnh AI, tạo ảnh AI',
+        'analytics.google_measurement_id' => null,
         'auth.registration_enabled' => true,
         'auth.email_verification_required' => true,
         'ai.image_provider' => 'openai',
