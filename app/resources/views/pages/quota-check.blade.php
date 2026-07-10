@@ -148,8 +148,8 @@ new #[Title('Quota Check')] class extends Component {
 	@endif
 
 	@php
-		$maxImages = min(3, max(1, AppSettings::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 1))));
-		$maxUploadMb = (int) ceil(AppSettings::int('ai.image_upload_max_kb', (int) config('ai.image_upload_max_kb', 32768)) / 1024);
+		$maxImages = AppSettings::maxReferencePhotos();
+		$maxUploadMb = (int) ceil(AppSettings::imageUploadMaxKb() / 1024);
 	@endphp
 
 	<flux:card class="space-y-4">

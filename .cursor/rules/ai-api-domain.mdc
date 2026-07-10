@@ -9,8 +9,10 @@ globs: "app/app/Http/**/*.php,app/app/Models/Ai*.php,app/app/Services/**/*.php,a
 - Public app domain is `https://genanh.com`; API endpoint base is `https://genanh.com/api`.
 - API route is `POST /api/ai/images` with `throttle:ai-api` and `ai.api.key` middleware.
 - API key object lives on request attribute `ai_api_key`; verify type before use.
-- Charge quota only after successful image creation; log every API attempt to `AiApiRequest`.
+- Charge quota only after successful image creation; never charge validation, quota, or provider/internal failures.
+- Every controller-handled attempt writes `AiApiRequest`.
+- Validation failures return 422; quota failures return 429 and include quota payload.
+- Provider/internal failures return safe Vietnamese 500 responses without provider stack traces, filesystem paths, tokens, or raw prompts beyond intended fields.
 - Keep upload limits tied to `config('ai.image_max_reference_photos')` and `config('ai.image_upload_max_kb')`.
 - Accept only image MIME types already allowed by controller unless user requests expansion.
-- Response errors must not expose provider stack traces, filesystem paths, tokens, or raw prompts beyond intended fields.
-- Add/update feature tests for quota, auth, validation, or image generation behavior changes.
+- Prefer updating `tests/Feature/AiImageApiTest.php` for auth, quota, validation, request logging, or image generation behavior changes.

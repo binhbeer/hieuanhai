@@ -40,9 +40,11 @@
         default => url()->current(),
     };
 
-    $metaImageOriginalUrl = $metaImage ? app(\App\Services\AiImageEditor::class)->resultUrl($metaImage) : null;
+    $imageEditor = app(\App\Services\AiImageEditor::class);
+    $metaImageOriginalUrl = $metaImage ? $imageEditor->imageUrl($metaImage) : null;
     $metaImageOriginalUrl = $metaImageOriginalUrl && ! \Illuminate\Support\Str::startsWith($metaImageOriginalUrl, ['http://', 'https://']) ? url($metaImageOriginalUrl) : $metaImageOriginalUrl;
-    $metaImageUrl = $metaImage?->result_path ? url('/thumb_x1200x630/storage/'.ltrim($metaImage->result_path, '/')) : null;
+    $metaImageUrl = $metaImage ? $imageEditor->imageUrl($metaImage, 'og') : null;
+    $metaImageUrl = $metaImageUrl && ! \Illuminate\Support\Str::startsWith($metaImageUrl, ['http://', 'https://']) ? url($metaImageUrl) : $metaImageUrl;
     $metaImageAlt = $metaImage ? \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 120, '') : null;
     $metaRobots = $isIndexable ? 'index,follow,max-image-preview:large' : 'noindex,nofollow';
     $metaLocale = str_replace('-', '_', str_replace('_', '-', app()->getLocale()));
@@ -144,7 +146,7 @@
 @if ($schema !== [])
     <script type="application/ld+json">{!! json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
 @endif
-@if (filled($googleMeasurementId))
+@if (! app()->isLocal() && filled($googleMeasurementId))
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ $googleMeasurementId }}"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
@@ -159,6 +161,8 @@
 <meta name="apple-mobile-web-app-title" content="{{ $siteName }}">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/icons/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png">
 <link rel="preload" as="image" href="{{ asset('logo.png') }}" fetchpriority="high">
 
 @fonts

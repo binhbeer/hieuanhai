@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -18,6 +19,24 @@ use Illuminate\Support\Carbon;
 #[Fillable(['name', 'slug', 'sort_order', 'status'])]
 class Category extends BaseModel
 {
+    /**
+     * @param  Builder<Category>  $query
+     * @return Builder<Category>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('status', 'active');
+    }
+
+    /**
+     * @param  Builder<Category>  $query
+     * @return Builder<Category>
+     */
+    public function scopeOrdered(Builder $query): Builder
+    {
+        return $query->orderBy('sort_order')->orderBy('name');
+    }
+
     /**
      * @return HasMany<AiImage, $this>
      */

@@ -1,0 +1,10 @@
+---
+description: Luôn giao tiếp với người dùng bằng tiếng Việt
+alwaysApply: true
+---
+
+# Ngôn ngữ phản hồi
+
+- Luôn trả lời người dùng bằng tiếng Việt, kể cả khi câu hỏi được viết bằng ngôn ngữ khác.
+- Giữ nguyên mã nguồn, lệnh, đường dẫn, tên API, thông báo lỗi và thuật ngữ kỹ thuật khi dịch có thể làm sai nghĩa.
+- Chỉ dùng ngôn ngữ khác khi người dùng yêu cầu rõ ràng trong lời nhắn hiện tại.

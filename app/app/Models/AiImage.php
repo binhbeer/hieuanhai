@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -75,7 +76,7 @@ class AiImage extends BaseModel
 
     public function routeKeySlug(): string
     {
-        $slug = Str::slug($this->title ?: $this->prompt, '-', 'vi') ?: 'image';
+        $slug = Str::limit(Str::slug($this->title ?: $this->prompt, '-', 'vi'), 100, '') ?: 'image';
 
         return $this->id.'-'.$slug;
     }
@@ -86,7 +87,19 @@ class AiImage extends BaseModel
 
         $timestamp = $this->created_at instanceof Carbon ? $this->created_at->timestamp : time();
 
-        return 'HieuAnhAI.COM-'.$timestamp.'.'.$extension;
+        return 'GenAnh.com-'.$timestamp.'.'.$extension;
+    }
+
+    /**
+     * @param  Builder<AiImage>  $query
+     * @return Builder<AiImage>
+     */
+    public function scopePubliclyVisible(Builder $query): Builder
+    {
+        return $query
+            ->where('is_published', true)
+            ->where('status', 'succeeded')
+            ->whereNotNull('result_path');
     }
 
     /**

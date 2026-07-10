@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\AiImageEditor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -48,6 +49,28 @@ class CreatedImagesTest extends TestCase
             ->assertSee('Pending portrait image')
             ->assertSee(__('Creating'))
             ->assertSee('wire:poll.2s', false);
+    }
+
+    public function test_stale_pending_image_shows_interrupted_instead_of_queued(): void
+    {
+        $user = User::factory()->create();
+        $image = AiImage::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Interrupted portrait image',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'pending',
+            'request_meta' => ['progress' => 'queued'],
+        ]);
+        DB::table('ai_images')->where('id', $image->id)->update([
+            'updated_at' => now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES + 1),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('images.index', ['image' => $image->id]))
+            ->assertOk()
+            ->assertSee(__('Task interrupted. Please try again.'));
     }
 
     public function test_pending_progress_broadcast_refreshes_without_failure_toast(): void
@@ -339,6 +362,60 @@ class CreatedImagesTest extends TestCase
         $this->get(route('verification.notice'))->assertSee(__('Please verify your email to continue receiving daily image generations after your registration day.'));
         $this->assertSame(0, AiImage::query()->count());
         Bus::assertNotDispatched(CreateAiImage::class);
+    }
+
+    public function test_stale_pending_images_are_failed_and_release_quota(): void
+    {
+        Storage::fake('public');
+        Event::fake([AiImageCompleted::class]);
+
+        $user = User::factory()->create();
+        $pendingPath = 'ai-image-pending/stale.jpg';
+        Storage::disk('public')->put($pendingPath, 'pending');
+        $image = AiImage::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Stale portrait image',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'pending',
+            'request_meta' => [
+                'progress' => 'generating',
+                'pending_uploads' => [['path' => $pendingPath]],
+            ],
+        ]);
+        DB::table('ai_images')->where('id', $image->id)->update([
+            'updated_at' => now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES + 1),
+        ]);
+
+        $this->artisan('ai-images:recover-stale')->assertSuccessful();
+
+        $image->refresh();
+        $this->assertSame('failed', $image->status);
+        $this->assertSame('failed', data_get($image->request_meta, 'progress'));
+        $this->assertSame('Tác vụ tạo ảnh bị gián đoạn. Vui lòng thử lại.', $image->error);
+        $this->actingAs($user);
+        $this->assertSame(0, app(AiImageEditor::class)->countToday(request()));
+        Storage::disk('public')->assertMissing($pendingPath);
+        Event::assertDispatched(AiImageCompleted::class);
+    }
+
+    public function test_recovery_leaves_recent_pending_images_queued(): void
+    {
+        $user = User::factory()->create();
+        $image = AiImage::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Recent portrait image',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'pending',
+            'request_meta' => ['progress' => 'queued'],
+        ]);
+
+        $this->artisan('ai-images:recover-stale')->assertSuccessful();
+
+        $this->assertSame('pending', $image->fresh()->status);
     }
 
     public function test_create_image_job_broadcasts_completion_to_user(): void

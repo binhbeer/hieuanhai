@@ -12,3 +12,6 @@ alwaysApply: true
 - Do not run host `php`, `composer`, `artisan`, `npm`, or `pnpm` unless user explicitly asks or container is unavailable.
 - Project domain is `https://chinhanh.local`; use it for browser/manual checks and generated absolute app URLs.
 - If HTTPS certificate blocks automation, use `curl -k https://chinhanh.local/...` for smoke checks; avoid falling back to `localhost` unless the user asks.
+- Use shortest command that proves the change.
+- Common checks inside app container: `php artisan test tests/Feature/<file>.php`, `composer test`, `composer lint:check`, `composer types:check`, `npm run build`, `php artisan migrate --pretend`.
+- When reporting validation, include commands run, pass/fail result, failing excerpt only, and next smallest fix if obvious.

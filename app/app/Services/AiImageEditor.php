@@ -34,6 +34,18 @@ class AiImageEditor
     private const REGISTERED_DAILY_LIMIT = 5;
 
     /**
+     * @var array<string, int|array{0: int, 1: int}|null>
+     */
+    private const IMAGE_SIZES = [
+        'original' => null,
+        'xs' => 320,
+        'sm' => 720,
+        'md' => 1024,
+        'lg' => 1200,
+        'og' => [1200, 630],
+    ];
+
+    /**
      * @param  array<int, mixed>  $photos
      */
     public function create(Request $request, array $photos, string $prompt): AiImage
@@ -304,9 +316,7 @@ class AiImageEditor
 
         $query = AiImage::query()
             ->with(['category', 'user'])
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->when($category, fn ($query) => $query->where('category_id', $category->id))
             ->when($tag, fn ($query) => $query->whereHas('tags', fn ($query) => $query->whereKey($tag->id)))
             ->when($search !== '', function ($query) use ($search): void {
@@ -336,9 +346,7 @@ class AiImageEditor
 
         $query = AiImage::query()
             ->with(['category', 'user', 'tags'])
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->whereKeyNot($image->id);
 
         if ($tagIds !== []) {
@@ -489,16 +497,88 @@ class AiImageEditor
         $image->delete();
     }
 
-    public function resultUrl(AiImage $image): ?string
+    public function imageUrl(AiImage $image, string $size = 'original', ?int $width = null, ?int $height = null): ?string
     {
         if (! $image->result_path) {
             return null;
         }
 
+        if ($width !== null) {
+            return $this->thumbUrl($image, $width, $height);
+        }
+
+        $configuredSize = self::IMAGE_SIZES[$size] ?? null;
+
+        if ($configuredSize === null) {
+            /** @var FilesystemAdapter $disk */
+            $disk = Storage::disk('public');
+
+            return $disk->url($image->result_path);
+        }
+
+        if (is_int($configuredSize)) {
+            return $this->thumbUrl($image, $configuredSize);
+        }
+
+        return $this->thumbUrl($image, $configuredSize[0], $configuredSize[1]);
+    }
+
+    /**
+     * @return array{width: int, height: int}|null
+     */
+    public function imageSize(AiImage $image, string $size = 'original', ?int $width = null, ?int $height = null): ?array
+    {
+        if (! $image->result_path) {
+            return null;
+        }
+
+        if ($width !== null && $height !== null) {
+            return ['width' => $width, 'height' => $height];
+        }
+
+        $configuredSize = self::IMAGE_SIZES[$size] ?? null;
+
+        if (is_array($configuredSize)) {
+            return ['width' => $configuredSize[0], 'height' => $configuredSize[1]];
+        }
+
+        $originalSize = $this->originalImageSize($image);
+
+        if (! $originalSize) {
+            return null;
+        }
+
+        $targetWidth = $width ?? (is_int($configuredSize) ? $configuredSize : $originalSize['width']);
+
+        return [
+            'width' => $targetWidth,
+            'height' => max(1, (int) round($originalSize['height'] * ($targetWidth / $originalSize['width']))),
+        ];
+    }
+
+    public function resultUrl(AiImage $image): ?string
+    {
+        return $this->imageUrl($image);
+    }
+
+    private function thumbUrl(AiImage $image, int $width, ?int $height = null): string
+    {
+        $size = $height === null ? "{$width}x" : "{$width}x{$height}";
+
+        return '/thumb_x'.$size.'/storage/'.ltrim($image->result_path ?? '', '/');
+    }
+
+    /**
+     * @return array{width: int, height: int}|null
+     */
+    private function originalImageSize(AiImage $image): ?array
+    {
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk('public');
+        $path = $disk->path($image->result_path ?? '');
+        $size = @getimagesize($path);
 
-        return $disk->url($image->result_path);
+        return $size ? ['width' => $size[0], 'height' => $size[1]] : null;
     }
 
     /**
@@ -567,9 +647,7 @@ class AiImageEditor
 
         $images = AiImage::query()
             ->whereIn('id', $imageIds)
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->get()
             ->keyBy('id');
 
@@ -994,9 +1072,8 @@ class AiImageEditor
     private function categoryNames(): array
     {
         return Category::query()
-            ->where('status', 'active')
-            ->orderBy('sort_order')
-            ->orderBy('name')
+            ->active()
+            ->ordered()
             ->pluck('name', 'slug')
             ->all();
     }

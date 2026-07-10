@@ -97,9 +97,8 @@ PROMPT;
     {
         /** @var list<string> $slugs */
         $slugs = Category::query()
-            ->where('status', 'active')
-            ->orderBy('sort_order')
-            ->orderBy('name')
+            ->active()
+            ->ordered()
             ->pluck('slug')
             ->map(fn (mixed $slug): string => (string) $slug)
             ->values()
@@ -111,9 +110,8 @@ PROMPT;
     private function categoryOptions(): string
     {
         return Category::query()
-            ->where('status', 'active')
-            ->orderBy('sort_order')
-            ->orderBy('name')
+            ->active()
+            ->ordered()
             ->get(['slug', 'name'])
             ->map(fn (Category $category): string => "- {$category->slug}: {$category->name}")
             ->implode("\n");

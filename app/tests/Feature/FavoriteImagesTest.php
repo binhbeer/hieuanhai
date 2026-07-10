@@ -30,7 +30,8 @@ class FavoriteImagesTest extends TestCase
             ->get(route('images.show', $image))
             ->assertOk()
             ->assertSee('Yêu thích')
-            ->assertSee('0');
+            ->assertSee('0')
+            ->assertSee('href="'.route('home').'"', false);
 
         Livewire::actingAs($user)
             ->test('pages::gallery')

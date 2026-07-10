@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\CreateAiImage;
 use App\Models\AiImage;
 use App\Models\AiImageFavorite;
 use App\Models\User;
@@ -14,12 +15,28 @@ new class extends Component {
 
     public bool $show = false;
 
-    public function mount(): void
-    {
-        $routeImage = request()->route('image');
+    public bool $standalone = false;
 
-        if ($routeImage instanceof AiImage) {
-            $this->openImage($routeImage->id);
+    public function mount(?AiImage $image = null, ?int $selectedImageId = null, bool $standalone = false): void
+    {
+        $this->selectedImageId = $selectedImageId;
+        $this->standalone = $standalone;
+
+        if ($image) {
+            abort_unless($this->isPublicImage($image), 404);
+
+            $this->standalone = true;
+            $this->openImage($image->id);
+
+            return;
+        }
+
+        if ($this->standalone) {
+            $image = $this->selectedImageId ? $this->publicImage($this->selectedImageId) : null;
+
+            abort_unless($image instanceof AiImage, 404);
+
+            $this->openImage($image->id);
 
             return;
         }
@@ -112,7 +129,10 @@ new class extends Component {
         }
 
         $this->dispatch('use-prompt', prompt: $image->prompt);
-        $this->closeImage();
+
+        if (!$this->standalone) {
+            $this->closeImage();
+        }
     }
 
     public function editImage(int $id): void
@@ -133,7 +153,10 @@ new class extends Component {
         }
 
         $this->dispatch('edit-image', imageId: $image->id);
-        $this->closeImage();
+
+        if (!$this->standalone) {
+            $this->closeImage();
+        }
     }
 
     public function toggleFeatured(int $id): void
@@ -143,9 +166,7 @@ new class extends Component {
         }
 
         $image = AiImage::query()
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->whereKey($id)
             ->first();
 
@@ -188,18 +209,14 @@ new class extends Component {
             ->all();
     }
 
-    public function imageUrl(AiImage $image): ?string
+    public function imageUrl(AiImage $image, string $size = 'original'): ?string
     {
-        return app(AiImageEditor::class)->resultUrl($image);
+        return app(AiImageEditor::class)->imageUrl($image, $size);
     }
 
-    public function imageThumbUrl(AiImage $image): ?string
+    public function imageSize(AiImage $image, string $size = 'original'): ?array
     {
-        if (!$image->result_path) {
-            return null;
-        }
-
-        return '/thumb_x1024x/storage/' . ltrim($image->result_path, '/');
+        return app(AiImageEditor::class)->imageSize($image, $size);
     }
 
     public function detailUrl(AiImage $image): string
@@ -250,6 +267,10 @@ new class extends Component {
 
     public function progressLabel(AiImage $image): string
     {
+        if ($image->updated_at?->lt(now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES))) {
+            return __('Task interrupted. Please try again.');
+        }
+
         return match (data_get($image->request_meta, 'progress', 'queued')) {
             'reviewing' => __('Reviewing prompt...'),
             'generating' => __('Waiting for image API response...'),
@@ -291,11 +312,7 @@ new class extends Component {
 
         return $query
             ->where(function ($query) use ($user): void {
-                $query->where(function ($query): void {
-                    $query->where('is_published', true)
-                        ->where('status', 'succeeded')
-                        ->whereNotNull('result_path');
-                });
+                $query->where(fn($query) => $query->publiclyVisible());
 
                 if ($user instanceof User) {
                     $query->orWhere('user_id', $user->id);
@@ -307,9 +324,7 @@ new class extends Component {
     private function publicImage(int $id): ?AiImage
     {
         return AiImage::query()
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->whereKey($id)
             ->first();
     }
@@ -349,41 +364,54 @@ new class extends Component {
 
         $wire.closeImage();
     },
-}" x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title)">
-    @php($selected = $this->selectedImage)
+}" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title)" @endif>
+    @php($selected = $this->selectedImage())
 
     @if ($show && $selected)
     @php($selectedUrl = $this->imageUrl($selected))
-    @php($selectedThumbUrl = $this->imageThumbUrl($selected))
+    @php($selectedThumbUrl = $this->imageUrl($selected, 'md'))
+    @php($selectedImageSize = $this->imageSize($selected, 'md'))
     @php($progressStep = $this->progressStep($selected))
     @php($selectedTitle = $selected->title ?: $selected->prompt)
     @php($canViewFullPrompt = Auth::check())
     @php($visiblePrompt = $canViewFullPrompt ? $selected->prompt : Str::limit($selected->prompt, 160))
 
-    <div class="fixed inset-0 z-60 bg-white/95 text-zinc-950 backdrop-blur dark:bg-zinc-950/95 dark:text-white" role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
-        <div class="h-full overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1 lg:overflow-hidden">
-            <div class="bg-zinc-100 dark:bg-black/30 lg:grid lg:min-h-0 lg:grid-rows-[auto_minmax(0,1fr)]">
-                <header class="z-10 flex items-center justify-between bg-white/55 px-4 py-3 backdrop-blur dark:bg-zinc-950/35">
-                    <flux:button type="button" variant="filled" icon="x-mark" x-on:click="closeImage">{{ __('Close') }}</flux:button>
+    <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-hidden bg-zinc-100/90 text-zinc-950 backdrop-blur dark:bg-zinc-950/80 dark:text-white md:grid md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)]" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
+        <div class="relative flex flex-col shrink-0 md:shrink md:flex-1">
+            <div class="absolute inset-x-4 top-4 z-20 flex min-w-0 items-center gap-3">
+                @if (filled($selected->title))
+                    <h1 class="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight" title="{{ $selected->title }}">{{ $selected->title }}</h1>
+                @else
+                    <div class="flex-1"></div>
+                @endif
 
-                    <div class="flex items-center gap-2">
-                        @if ($this->canManageFeatured() && $this->isPublicImage($selected))
-                            <flux:button type="button" :variant="$selected->is_featured ? 'primary' : 'filled'" icon="star" wire:click="toggleFeatured({{ $selected->id }})">
-                                <span class="sr-only">{{ $selected->is_featured ? __('Unfeature image') : __('Feature image') }}</span>
-                            </flux:button>
-                        @endif
+                <div class="flex shrink-0 items-center gap-2">
+                    @if ($this->canManageFeatured() && $this->isPublicImage($selected))
+                        <flux:button type="button" :variant="'primary'" :color="$selected->is_featured ? 'amber' : 'zinc'" icon="star" wire:click="toggleFeatured({{ $selected->id }})" :aria-label="$selected->is_featured ? __('Featured') : __('Feature image')" />
+                    @endif
 
-                        @if ($this->canFavorite($selected))
-                            <flux:button type="button" :variant="$this->isFavorite($selected) ? 'primary' : 'filled'" icon="heart" wire:click="toggleFavorite({{ $selected->id }})">
-                                <span class="sr-only">{{ $this->isFavorite($selected) ? __('Remove favorite') : __('Favorite image') }} · </span>{{ $this->favoriteCount($selected) }}
-                            </flux:button>
-                        @endif
-                    </div>
-                </header>
+                    @if ($this->canFavorite($selected))
+                        <flux:button type="button" :variant="'primary'" :color="$this->isFavorite($selected) ? 'amber' : 'zinc'" icon="heart" wire:click="toggleFavorite({{ $selected->id }})" :aria-label="$this->isFavorite($selected) ? __('Remove favorite') : __('Favorite image')">
+                            {{ $this->favoriteCount($selected) }}
+                        </flux:button>
+                    @endif
 
-                <div class="flex items-start justify-center overflow-hidden sm:p-4 lg:min-h-0 lg:items-center">
+                    @if ($standalone)
+                        <flux:button :href="route('home')" wire:navigate variant="ghost" icon="x-mark" :aria-label="__('Close')" />
+                    @else
+                        <flux:button type="button" variant="ghost" icon="x-mark" x-on:click="closeImage" :aria-label="__('Close')" />
+                    @endif
+                </div>
+            </div>
+
+            <div class="flex flex-1 items-start justify-center overflow-hidden sm:p-4 md:min-h-0 md:items-center">
+                <div class="flex flex-1 items-center justify-center gap-4 p-2 md:px-16 md:py-16">
                     @if ($selectedThumbUrl)
-                        <img class="h-auto w-full max-h-[1024px] max-w-[1024px] lg:h-full lg:w-full lg:object-contain" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selectedTitle, 80) }}" decoding="async">
+                        <div class="relative flex flex-col min-w-0 flex-1 gap-2 items-center justify-center overflow-hidden">
+                            <div class="relative flex max-h-[62svh] max-w-full items-center justify-center overflow-hidden rounded-xl md:max-h-[calc(100svh-10rem)] md:rounded-2xl">
+                                <img class="block h-auto max-h-[62svh] max-w-full object-contain opacity-100 md:max-h-[calc(100svh-10rem)]" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selectedTitle, 80) }}" @if ($selectedImageSize) width="{{ $selectedImageSize['width'] }}" height="{{ $selectedImageSize['height'] }}" @endif decoding="async" />
+                            </div>
+                        </div>
                     @elseif ($selected->status === 'pending')
                         <div class="relative flex aspect-square w-full max-w-md items-center justify-center overflow-hidden rounded-4xl bg-zinc-100 text-zinc-700 shadow-inner dark:bg-white/10 dark:text-white/80">
                             <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-zinc-50),var(--color-zinc-200))] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,.12),rgba(255,255,255,.04))]"></div>
@@ -412,35 +440,34 @@ new class extends Component {
                     @endif
                 </div>
             </div>
+        </div>
 
-            <aside class="min-h-0 border-l border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-950 lg:overflow-y-auto">
-                <div class="mb-5 flex items-center justify-between gap-3">
-                    <div class="flex items-center gap-3">
-                        <div class="flex size-10 items-center justify-center rounded-full bg-zinc-900 text-sm font-bold text-white dark:bg-white dark:text-zinc-950">
-                            {{ Str::upper(Str::substr($this->creatorName($selected), 0, 1)) }}
-                        </div>
-                        <div>
-                            <div class="text-sm font-semibold">{{ $this->creatorName($selected) }}</div>
-                            <div class="text-xs text-zinc-500">{{ $selected->published_at?->diffForHumans() ?? $selected->created_at?->diffForHumans() }}</div>
-                        </div>
+        <aside class="flex min-h-0 overflow-hidden flex-col border-l border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950">
+            <header class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 p-3 dark:border-white/10">
+                <div class="flex items-center gap-3">
+                    <div class="flex size-10 items-center justify-center rounded-full bg-zinc-900 text-sm font-bold text-white dark:bg-white dark:text-zinc-950">
+                        {{ Str::upper(Str::substr($this->creatorName($selected), 0, 1)) }}
                     </div>
-                    <flux:button type="button" variant="ghost" icon="x-mark" x-on:click="closeImage">{{ __('Close') }}</flux:button>
+                    <div class="text-sm font-semibold">{{ $this->creatorName($selected) }}</div>
                 </div>
-
-                @if (filled($selected->title))
-                    <h1 class="mb-4 text-xl font-semibold tracking-tight">{{ $selected->title }}</h1>
-                @endif
-
-                <div class="mb-5 flex flex-wrap gap-2">
+                <div class="text-right">
                     <flux:badge size="sm" :color="$selected->status === 'failed' ? 'red' : null">{{ $this->statusLabel($selected) }}</flux:badge>
+                    <div class="mt-1 text-xs text-zinc-500">{{ $selected->published_at?->diffForHumans() ?? $selected->created_at?->diffForHumans() }}</div>
+                </div>
+            </header>
+
+            <div class="min-h-0 flex-1 overflow-y-auto p-4">
+                <div class="mb-5 flex flex-wrap gap-1">
                     @if ($selected->is_featured)
                         <flux:badge size="sm" color="amber">{{ __('Featured') }}</flux:badge>
                     @endif
                     @if ($selected->category)
-                        <span class="inline-flex rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">{{ $selected->category->name }}</span>
+                        <flux:button :href="route('categories.show', $selected->category)" size="xs" variant="ghost" wire:navigate>{{ $selected->category->name }}</flux:button>
                     @endif
                     @foreach ($selected->tags as $tag)
-                        <span class="inline-flex rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">#{{ $tag->name }}</span>
+                        <flux:button :href="route('tags.show', $tag)" size="xs" variant="ghost" wire:navigate wire:key="image-detail-tag-{{ $tag->id }}">
+                            #{{ $tag->name }}
+                        </flux:button>
                     @endforeach
                 </div>
 
@@ -448,21 +475,20 @@ new class extends Component {
                     <div>
                         <div class="mb-2 flex items-center justify-between gap-2">
                             <div class="text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Prompt') }}</div>
-                            <flux:button type="button" size="xs" variant="ghost" x-on:click="navigator.clipboard.writeText(prompt); copied = true; setTimeout(() => copied = false, 1400)">
-                                <span x-text="copied ? @js(__('Copied')) : @js(__('Copy prompt'))"></span>
-                            </flux:button>
-                        </div>
-                        <div class="relative max-h-[200px] overflow-hidden rounded-2xl bg-zinc-100 p-4 text-sm leading-6 dark:bg-white/10" :class="expanded ? 'max-h-none' : 'max-h-[200px]'">
-                            <p>{{ $visiblePrompt }}</p>
-                            @if (! $canViewFullPrompt && mb_strlen($selected->prompt) > 160)
-                                <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">{{ __('Log in to view full prompt.') }}</p>
-                            @endif
                             @if ($canViewFullPrompt)
-                                <div x-show="! expanded" x-cloak class="pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-2xl bg-linear-to-t from-zinc-100 to-transparent dark:from-zinc-900"></div>
+                                <flux:button type="button" size="xs" variant="ghost" icon="clipboard" x-on:click="navigator.clipboard.writeText(prompt); copied = true; setTimeout(() => copied = false, 1400)">
+                                    <span x-text="copied ? @js(__('Copied')) : @js(__('Copy prompt'))"></span>
+                                </flux:button>
+                            @endif
+                        </div>
+                        <div class="text-sm leading-5.5">
+                            <p :class="expanded ? '' : 'line-clamp-7'">{{ $visiblePrompt }}</p>
+                            @if (!$canViewFullPrompt && mb_strlen($selected->prompt) > 160)
+                                <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">{{ __('Log in to view full prompt.') }}</p>
                             @endif
                         </div>
                         @if ($canViewFullPrompt)
-                            <flux:button class="mt-2 w-full" type="button" size="sm" variant="ghost" x-on:click="expanded = ! expanded" x-bind:aria-expanded="expanded ? 'true' : 'false'">
+                            <flux:button class="mt-2" type="button" size="xs" variant="ghost" icon:trailing="chevron-down" x-on:click="expanded = ! expanded" x-bind:aria-expanded="expanded ? 'true' : 'false'">
                                 <span x-text="expanded ? @js(__('Show less')) : @js(__('Show more'))"></span>
                             </flux:button>
                         @endif
@@ -471,38 +497,41 @@ new class extends Component {
                     @if ($selected->status === 'failed' && filled($selected->error))
                         <div class="rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-100">{{ $selected->error }}</div>
                     @endif
-
-                    <div class="grid gap-2 {{ $this->canEdit($selected) && $selectedUrl ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-2' }}">
-                        @if ($selectedUrl)
-                            <flux:button :href="$selectedUrl" download="{{ $selected->downloadName() }}">{{ __('Download') }}</flux:button>
-                        @endif
-
-                        <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">{{ __('Create similar image') }}</flux:button>
-
-                        @if ($this->canEdit($selected))
-                            <flux:button type="button" variant="filled" wire:click="editImage({{ $selected->id }})">{{ __('Edit image') }}</flux:button>
-                        @endif
-                    </div>
                 </div>
 
                 @if ($this->relatedImages->isNotEmpty())
                 <div class="mt-7">
-                    <div class="mb-3 text-sm font-semibold">{{ __('Similar images') }}</div>
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="mb-3 text-lg font-semibold">{{ __('Similar images') }}</div>
+                    <x-gallery.list :images="$this->relatedImages" class="gap-x-3 gap-y-2" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
                         @foreach ($this->relatedImages as $related)
-                        @php($relatedUrl = $this->imageThumbUrl($related))
+                        @php($relatedUrl = $this->imageUrl($related, 'xs'))
+                        @php($relatedSize = $this->imageSize($related, 'xs'))
                         @php($relatedTitle = Str::limit($related->title ?: $related->prompt, 70, ''))
                         @if ($relatedUrl)
-                            <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $this->detailUrl($related) }}" x-data x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $related->id }}, url: @js($this->detailUrl($related)), title: @js($relatedTitle) })" wire:key="related-image-detail-{{ $related->id }}">
-                                <img class="aspect-3/4 w-full object-cover" src="{{ $relatedUrl }}" alt="{{ Str::limit($related->title ?: $related->prompt, 50) }}" loading="lazy">
+                            <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $this->detailUrl($related) }}" @if ($standalone) wire:navigate @else x-data x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $related->id }}, url: @js($this->detailUrl($related)), title: @js($relatedTitle) })" @endif wire:key="related-image-detail-{{ $related->id }}">
+                                <img class="block h-auto w-full" src="{{ $relatedUrl }}" alt="{{ Str::limit($related->title ?: $related->prompt, 50) }}" @if ($relatedSize) width="{{ $relatedSize['width'] }}" height="{{ $relatedSize['height'] }}" @endif loading="lazy">
                             </a>
                         @endif
                         @endforeach
-                    </div>
+                    </x-gallery.list>
                 </div>
                 @endif
-            </aside>
-        </div>
+            </div>
+
+            <footer class="shrink-0 border-t border-zinc-200 p-2 dark:border-white/10">
+                <div class="grid gap-2 {{ $this->canEdit($selected) && $selectedUrl ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-2' }}">
+                    @if ($selectedUrl)
+                        <flux:button :href="$selectedUrl" icon="arrow-down-tray" download="{{ $selected->downloadName() }}">{{ __('Download') }}</flux:button>
+                    @endif
+
+                    <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">{{ __('Create similar image') }}</flux:button>
+
+                    @if ($this->canEdit($selected))
+                        <flux:button type="button" variant="filled" wire:click="editImage({{ $selected->id }})">{{ __('Edit image') }}</flux:button>
+                    @endif
+                </div>
+            </footer>
+        </aside>
     </div>
     @endif
 </div>

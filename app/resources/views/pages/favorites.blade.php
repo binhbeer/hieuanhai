@@ -18,9 +18,7 @@ new #[Title('Ảnh yêu thích')] class extends Component
             ->with(['category', 'user'])
             ->join('ai_image_favorites', 'ai_image_favorites.ai_image_id', '=', 'ai_images.id')
             ->where('ai_image_favorites.user_id', (int) Auth::id())
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->latest('ai_image_favorites.created_at')
             ->limit(120)
             ->get();
@@ -40,9 +38,7 @@ new #[Title('Ảnh yêu thích')] class extends Component
     public function useAsPrompt(int $id): void
     {
         $image = AiImage::query()
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->whereKey($id)
             ->first();
 
@@ -53,9 +49,14 @@ new #[Title('Ảnh yêu thích')] class extends Component
         $this->dispatch('use-prompt', prompt: $image->prompt);
     }
 
-    public function imageUrl(AiImage $image): ?string
+    public function imageUrl(AiImage $image, string $size = 'original'): ?string
     {
-        return app(AiImageEditor::class)->resultUrl($image);
+        return app(AiImageEditor::class)->imageUrl($image, $size);
+    }
+
+    public function imageSize(AiImage $image, string $size = 'original'): ?array
+    {
+        return app(AiImageEditor::class)->imageSize($image, $size);
     }
 
     public function detailUrl(AiImage $image): string
@@ -90,21 +91,22 @@ new #[Title('Ảnh yêu thích')] class extends Component
 					</div>
 				</div>
 			@else
-				<x-media-list :images="$this->images">
+				<x-gallery.list :images="$this->images">
 					@foreach ($this->images as $image)
-						@php($url = $this->imageUrl($image))
+						@php($url = $this->imageUrl($image, 'sm'))
+						@php($imageSize = $this->imageSize($image, 'sm'))
 						@if ($url)
-							<x-media-item :image="$image" :url="$url" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" :loading="$loop->iteration <= 5 ? 'eager' : 'lazy'" wire:key="favorite-image-{{ $image->id }}">
+							<x-gallery.item :image="$image" :url="$url" :image-size="$imageSize" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" :loading="$loop->iteration <= 5 ? 'eager' : 'lazy'" wire:key="favorite-image-{{ $image->id }}">
 								<x-slot:badge>
 									<flux:button class="shadow" type="button" size="sm" variant="primary" icon="heart" wire:click.stop="removeFavorite({{ $image->id }})" aria-label="{{ __('Remove favorite') }}">{{ (int) ($image->favorites_count ?? 0) }}</flux:button>
 								</x-slot:badge>
 								<x-slot:actions>
 									<flux:button type="button" size="sm" variant="filled" wire:click.stop="useAsPrompt({{ $image->id }})">{{ __('Create similar image') }}</flux:button>
 								</x-slot:actions>
-							</x-media-item>
+							</x-gallery.item>
 						@endif
 					@endforeach
-				</x-media-list>
+				</x-gallery.list>
 			@endif
 		</main>
 	</div>

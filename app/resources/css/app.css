@@ -1,6 +1,6 @@
-@import 'tailwindcss';
-@import 'lightbox3/style.css';
-@import '../../vendor/livewire/flux/dist/flux.css';
+@import "tailwindcss";
+@import "lightbox3/style.css";
+@import "../../vendor/livewire/flux/dist/flux.css";
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -10,7 +10,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans:
+        "Instrument Sans", ui-sans-serif, system-ui, sans-serif,
+        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+        "Noto Color Emoji";
 
     --color-zinc-50: #fafafa;
     --color-zinc-100: #f5f5f5;
@@ -38,7 +41,6 @@
 }
 
 @layer base {
-
     *,
     ::after,
     ::before,
@@ -46,6 +48,10 @@
     ::file-selector-button {
         border-color: var(--color-gray-200, currentColor);
     }
+}
+
+[data-flux-button]:not(:disabled) {
+    @apply cursor-pointer;
 }
 
 [data-flux-field]:not(ui-radio, ui-checkbox) {
@@ -65,3 +71,40 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* Scrollbar default thin */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-zinc-300) transparent !important;
+}
+
+.dark * {
+    scrollbar-color: var(--color-zinc-700) transparent !important;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--color-primary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+    --tw-bg-opacity: 1;
+    background-color: transparent;
+    margin-top: 20px !important;
+    margin-bottom: 20px !important;
+    margin-right: 20px !important;
+}
+
+/* Dark‐mode scrollbar */
+.dark::-webkit-scrollbar-thumb {
+    background-color: var(--color-neutral-800);
+}
+
+.dark::-webkit-scrollbar-track {
+    background: var(--color-neutral-800);
+}

@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\CreateAiImage;
 use App\Models\AiImage;
 use App\Services\AiImageEditor;
 use Flux\Flux;
@@ -84,22 +85,22 @@ new #[Title('Ảnh của bạn')] class extends Component {
         return app(AiImageEditor::class)->guestHistory(request(), 120);
     }
 
-    public function imageUrl(AiImage $image): ?string
+    public function imageUrl(AiImage $image, string $size = 'original'): ?string
     {
-        return app(AiImageEditor::class)->resultUrl($image);
+        return app(AiImageEditor::class)->imageUrl($image, $size);
     }
 
-    public function imageThumbUrl(AiImage $image): ?string
+    public function imageSize(AiImage $image, string $size = 'original'): ?array
     {
-        if (!$image->result_path) {
-            return null;
-        }
-
-        return '/thumb_x720x/storage/' . ltrim($image->result_path, '/');
+        return app(AiImageEditor::class)->imageSize($image, $size);
     }
 
     public function progressLabel(AiImage $image): string
     {
+        if ($image->updated_at?->lt(now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES))) {
+            return __('Task interrupted. Please try again.');
+        }
+
         return match (data_get($image->request_meta, 'progress', 'queued')) {
             'reviewing' => __('Reviewing prompt...'),
             'generating' => __('Waiting for image API response...'),
@@ -168,12 +169,13 @@ new #[Title('Ảnh của bạn')] class extends Component {
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         @foreach ($this->images as $image)
         @php($url = $this->imageUrl($image))
-        @php($thumbUrl = $this->imageThumbUrl($image))
+        @php($thumbUrl = $this->imageUrl($image, 'sm'))
+        @php($imageSize = $this->imageSize($image, 'sm'))
         @php($progressStep = $this->progressStep($image))
         <flux:card class="overflow-hidden p-0" wire:key="created-image-{{ $image->id }}">
             <button class="block w-full text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
                 @if ($thumbUrl)
-                    <img class="aspect-square w-full bg-zinc-100 object-cover dark:bg-white/10" src="{{ $thumbUrl }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" loading="lazy" />
+                    <img class="aspect-square w-full bg-zinc-100 object-cover dark:bg-white/10" src="{{ $thumbUrl }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif loading="lazy" />
                 @elseif ($image->status === 'pending')
                     <div class="relative flex aspect-square items-center justify-center overflow-hidden bg-zinc-100 text-zinc-700 dark:bg-white/10 dark:text-white/80">
                         <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-zinc-50),var(--color-zinc-200))] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,.12),rgba(255,255,255,.04))]"></div>

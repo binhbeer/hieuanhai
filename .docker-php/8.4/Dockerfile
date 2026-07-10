@@ -59,7 +59,7 @@ RUN addgroup -g ${WWWGROUP} app \
     && adduser -D -u ${WWWUSER} -G app -s /bin/sh app \
     && mkdir -p /var/www/html /var/cache/nginx/imgproxy /run/nginx /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp \
     && chown -R app:app /var/www/html /run /var/lib/nginx /var/log/nginx /var/cache/nginx /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp \
-    && chmod +x /sbin/boot.sh /etc/service/nginx/run /etc/service/php/run
+    && chmod +x /sbin/boot.sh /etc/service/nginx/run /etc/service/php/run /etc/service/horizon/run
 
 EXPOSE 80 443
 CMD ["sh", "/sbin/boot.sh"]

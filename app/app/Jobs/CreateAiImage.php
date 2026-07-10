@@ -9,12 +9,15 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
 class CreateAiImage implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, Queueable;
+
+    public const STALE_AFTER_MINUTES = 10;
 
     public int $timeout = 360;
 
@@ -28,9 +31,7 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        $userId = $this->userId ?? AiImage::query()->whereKey($this->imageId)->value('user_id');
-
-        return $userId ? 'user:'.$userId : 'image:'.$this->imageId;
+        return 'image:'.$this->imageId;
     }
 
     public function handle(AiImageEditor $editor): void
@@ -46,7 +47,7 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
         AiImageCompleted::dispatch($image);
     }
 
-    public function failed(?Throwable $exception): void
+    public function failed(?Throwable $exception): bool
     {
         $image = AiImage::query()
             ->whereKey($this->imageId)
@@ -54,18 +55,41 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
             ->first();
 
         if (! $image) {
-            return;
+            return false;
         }
 
         $requestMeta = is_array($image->request_meta) ? $image->request_meta : [];
+        $pendingUploads = $requestMeta['pending_uploads'] ?? [];
+        unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads']);
         $requestMeta['progress'] = 'failed';
 
-        $image->update([
-            'status' => 'failed',
-            'error' => Str::limit($exception?->getMessage() ?: 'Không tạo được ảnh.', 2000, ''),
-            'request_meta' => $requestMeta,
-        ]);
+        $updated = AiImage::query()
+            ->whereKey($image->id)
+            ->where('status', 'pending')
+            ->where('updated_at', $image->updated_at)
+            ->update([
+                'status' => 'failed',
+                'error' => Str::limit($exception?->getMessage() ?: 'Không tạo được ảnh.', 2000, ''),
+                'request_meta' => $requestMeta,
+            ]);
+
+        if ($updated === 0) {
+            return false;
+        }
+
+        try {
+            if (is_array($pendingUploads)) {
+                Storage::disk('public')->delete(array_values(array_filter(array_map(
+                    fn ($upload) => is_array($upload) && is_string($upload['path'] ?? null) ? $upload['path'] : null,
+                    $pendingUploads,
+                ))));
+            }
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         AiImageCompleted::dispatch($image->refresh());
+
+        return true;
     }
 }

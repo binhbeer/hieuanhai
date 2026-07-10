@@ -6,4 +6,4 @@ Disallow: /images
 Disallow: /dashboard
 Disallow: /api
 
-Sitemap: https://hieuanhai.com/sitemap.xml
+Sitemap: https://genanh.com/sitemap.xml

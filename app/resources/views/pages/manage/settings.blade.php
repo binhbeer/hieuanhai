@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Setting;
+use App\Support\AppSettings;
 use Flux\Flux;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -51,25 +52,27 @@ new #[Title('Settings')] class extends Component
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
 
-        $this->siteName = (string) Setting::getValue('site.name');
-        $this->homeTitle = (string) Setting::getValue('site.home_title');
-        $this->siteDescription = (string) Setting::getValue('site.description');
-        $this->siteKeywords = (string) Setting::getValue('site.keywords');
-        $this->googleMeasurementId = (string) Setting::getValue('analytics.google_measurement_id');
-        $this->registrationEnabled = (bool) Setting::getValue('auth.registration_enabled');
-        $this->emailVerificationRequired = (bool) Setting::getValue('auth.email_verification_required');
-        $this->aiProvider = (string) Setting::getValue('ai.image_provider');
-        $this->aiModel = (string) Setting::getValue('ai.image_model');
-        $this->aiReviewModel = (string) Setting::getValue('ai.image_review_model');
-        $this->promptRewriteModel = (string) Setting::getValue('ai.prompt_rewrite_model');
-        $this->aiTimeout = (int) Setting::getValue('ai.image_timeout');
-        $this->imageSize = (string) Setting::getValue('ai.image_size');
-        $this->imageQuality = (string) Setting::getValue('ai.image_quality');
-        $this->imageDetail = (string) Setting::getValue('ai.image_detail');
-        $this->imageReferenceField = (string) Setting::getValue('ai.image_reference_field');
-        $this->maxReferencePhotos = (int) Setting::getValue('ai.image_max_reference_photos');
-        $this->uploadMaxKb = (int) Setting::getValue('ai.image_upload_max_kb');
-        $this->openaiUrl = (string) Setting::getValue('ai.openai_url');
+        $settings = Setting::allValues();
+
+        $this->siteName = (string) $settings['site.name'];
+        $this->homeTitle = (string) $settings['site.home_title'];
+        $this->siteDescription = (string) $settings['site.description'];
+        $this->siteKeywords = (string) $settings['site.keywords'];
+        $this->googleMeasurementId = (string) $settings['analytics.google_measurement_id'];
+        $this->registrationEnabled = (bool) $settings['auth.registration_enabled'];
+        $this->emailVerificationRequired = (bool) $settings['auth.email_verification_required'];
+        $this->aiProvider = (string) $settings['ai.image_provider'];
+        $this->aiModel = (string) $settings['ai.image_model'];
+        $this->aiReviewModel = (string) $settings['ai.image_review_model'];
+        $this->promptRewriteModel = (string) $settings['ai.prompt_rewrite_model'];
+        $this->aiTimeout = (int) $settings['ai.image_timeout'];
+        $this->imageSize = (string) $settings['ai.image_size'];
+        $this->imageQuality = (string) $settings['ai.image_quality'];
+        $this->imageDetail = (string) $settings['ai.image_detail'];
+        $this->imageReferenceField = (string) $settings['ai.image_reference_field'];
+        $this->maxReferencePhotos = (int) $settings['ai.image_max_reference_photos'];
+        $this->uploadMaxKb = (int) $settings['ai.image_upload_max_kb'];
+        $this->openaiUrl = (string) $settings['ai.openai_url'];
         $this->openaiApiKey = '';
     }
 
@@ -134,7 +137,7 @@ new #[Title('Settings')] class extends Component
 
     public function hasOpenAiKey(): bool
     {
-        return filled(Setting::getValue('ai.openai_api_key'));
+        return filled(AppSettings::string('ai.openai_api_key'));
     }
 }; ?>
 

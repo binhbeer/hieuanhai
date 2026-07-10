@@ -144,9 +144,14 @@ new #[Title('Manage created images')] class extends Component {
 			->paginate(20);
 	}
 
-	public function imageUrl(AiImage $image): ?string
+	public function imageUrl(AiImage $image, string $size = 'original'): ?string
 	{
-		return app(AiImageEditor::class)->resultUrl($image);
+		return app(AiImageEditor::class)->imageUrl($image, $size);
+	}
+
+	public function imageSize(AiImage $image, string $size = 'original'): ?array
+	{
+		return app(AiImageEditor::class)->imageSize($image, $size);
 	}
 
 	private function refreshData(): void
@@ -231,12 +236,13 @@ new #[Title('Manage created images')] class extends Component {
 				</thead>
 				<tbody>
 					@forelse ($this->images as $image)
-					@php($url = $this->imageUrl($image))
+					@php($url = $this->imageUrl($image, 'xs'))
+					@php($imageSize = $this->imageSize($image, 'xs'))
 					<tr class="border-b border-white/10" wire:key="manage-image-{{ $image->id }}">
 						<td class="px-3 py-3 align-top">
 							<button class="block text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
 								@if ($url)
-									<img class="size-20 rounded-xl bg-white/5 object-cover" src="{{ '/thumb_x320x/storage/' . ltrim($image->result_path, '/') }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" loading="lazy" />
+									<img class="size-20 rounded-xl bg-white/5 object-cover" src="{{ $url }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif loading="lazy" />
 								@else
 									<div class="flex size-20 items-center justify-center rounded-xl bg-white/5 text-zinc-500">
 										<flux:icon name="photo" class="size-6" />

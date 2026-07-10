@@ -23,7 +23,7 @@ new #[Title('Trang chủ')] class extends Component {
 
 	public int $perPage = 36;
 
-	public function mount(?Category $category = null, ?AiTag $tag = null, ?AiImage $image = null): void
+	public function mount(?Category $category = null, ?AiTag $tag = null): void
 	{
 		$search = request()->routeIs('search.*') ? request()->query('q') : null;
 		$sort = request()->query('sort');
@@ -32,10 +32,6 @@ new #[Title('Trang chủ')] class extends Component {
 		$this->tag = $tag;
 		$this->search = is_string($search) ? trim($search) : '';
 		$this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'new';
-
-		if ($image) {
-			abort_unless($this->isPublicImage($image), 404);
-		}
 	}
 
 	#[On('gallery-updated')]
@@ -125,9 +121,7 @@ new #[Title('Trang chủ')] class extends Component {
 		}
 
 		$image = AiImage::query()
-			->where('is_published', true)
-			->where('status', 'succeeded')
-			->whereNotNull('result_path')
+			->publiclyVisible()
 			->find($id);
 
 		if (!$image) {
@@ -148,13 +142,14 @@ new #[Title('Trang chủ')] class extends Component {
 		Flux::toast(variant: 'success', text: $wasFavorite ? __('Remove favorite') : __('Favorite image'));
 	}
 
-	public function imageThumbUrl(AiImage $image): ?string
+	public function imageUrl(AiImage $image, string $size = 'original'): ?string
 	{
-		if (!$image->result_path) {
-			return null;
-		}
+		return app(AiImageEditor::class)->imageUrl($image, $size);
+	}
 
-		return '/thumb_x720x/storage/' . ltrim($image->result_path, '/');
+	public function imageSize(AiImage $image, string $size = 'original'): ?array
+	{
+		return app(AiImageEditor::class)->imageSize($image, $size);
 	}
 
 	public function detailUrl(AiImage $image): string
@@ -167,17 +162,10 @@ new #[Title('Trang chủ')] class extends Component {
 		return $image->user?->name ?: __('Guest');
 	}
 
-	private function isPublicImage(AiImage $image): bool
-	{
-		return $image->is_published && $image->status === 'succeeded' && filled($image->result_path);
-	}
-
 	private function publishedImage(int $id): ?AiImage
 	{
 		return AiImage::query()
-			->where('is_published', true)
-			->where('status', 'succeeded')
-			->whereNotNull('result_path')
+			->publiclyVisible()
 			->whereKey($id)
 			->first();
 	}
@@ -187,13 +175,14 @@ new #[Title('Trang chủ')] class extends Component {
 	<div class="">
 		<main class="min-w-0">
 			@if($category?->name || $tag?->name || $search)
-				<div class="mb-5 flex flex-wrap items-end justify-between gap-3 pr-28">
+				<div class="mb-2 flex flex-wrap items-end justify-between gap-3 pl-2">
 					<div>
 						<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ request()->routeIs('search.*') ? __('Search results') : ($category?->name ?? ($tag?->name ? '#' . $tag->name : 'AI Gallery')) }}</h1>
-						<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Published community images. Click an image to view details.') }}</p>
 					</div>
 				</div>
 			@endif
+
+			<livewire:gallery.tags mode="popular" :category="$category" lazy />
 
 			@if ($this->visibleImages()->isEmpty())
 				<div class="rounded-4xl flex min-h-[55svh] items-center justify-center border border-dashed border-zinc-300 bg-white text-center dark:border-white/10 dark:bg-white/5">
@@ -208,21 +197,22 @@ new #[Title('Trang chủ')] class extends Component {
 					</div>
 				</div>
 			@else
-			<x-media-list :images="$this->visibleImages()">
+			<x-gallery.list :images="$this->visibleImages()">
 				@foreach ($this->visibleImages() as $image)
-				@php($thumbUrl = $this->imageThumbUrl($image))
+				@php($thumbUrl = $this->imageUrl($image, 'sm'))
+				@php($imageSize = $this->imageSize($image, 'sm'))
 				@if ($thumbUrl)
-					<x-media-item :image="$image" :url="$thumbUrl" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" :loading="$loop->iteration <= 5 ? 'eager' : 'lazy'" wire:key="published-image-{{ $image->id }}">
+					<x-gallery.item :image="$image" :url="$thumbUrl" :image-size="$imageSize" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" :loading="$loop->iteration <= 5 ? 'eager' : 'lazy'" wire:key="published-image-{{ $image->id }}">
 						<x-slot:badge>
 							<flux:button class="shadow" type="button" size="sm" :variant="$this->isFavorite($image) ? 'primary' : 'filled'" icon="heart" wire:click.stop="toggleFavorite({{ $image->id }})" aria-label="{{ $this->isFavorite($image) ? __('Remove favorite') : __('Favorite image') }}">{{ $this->favoriteCount($image) }}</flux:button>
 						</x-slot:badge>
 						<x-slot:actions>
 							<flux:button type="button" size="sm" variant="filled" wire:click.stop="useAsPrompt({{ $image->id }})">{{ __('Create similar image') }}</flux:button>
 						</x-slot:actions>
-					</x-media-item>
+					</x-gallery.item>
 				@endif
 				@endforeach
-			</x-media-list>
+			</x-gallery.list>
 
 			@if ($this->hasMoreImages())
 				<div class="flex justify-center py-8" wire:intersect.margin.600px="loadMore">

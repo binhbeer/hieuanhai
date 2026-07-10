@@ -138,7 +138,7 @@ new class extends Component
 
     public function maxReferencePhotos(): int
     {
-        return min(3, max(1, AppSettings::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 1))));
+        return AppSettings::maxReferencePhotos();
     }
 
     /**
@@ -146,16 +146,7 @@ new class extends Component
      */
     private function promptRules(): array
     {
-        return [
-            'required',
-            'string',
-            'max:12000',
-            function (string $attribute, mixed $value, \Closure $fail): void {
-                if (preg_match_all('/[\p{L}\p{N}]+/u', (string) $value) > 1200) {
-                    $fail(__('Prompt must not exceed 1200 words.'));
-                }
-            },
-        ];
+        return AppSettings::promptRules(__('Prompt must not exceed 1200 words.'));
     }
 
     public function createImage(AiImageEditor $editor): void
@@ -184,7 +175,7 @@ new class extends Component
             'parentReferenceIndexes' => ['array', 'max:'.$this->maxReferencePhotos()],
             'parentReferenceIndexes.*' => ['integer', 'min:0', 'max:2'],
             'photos' => ['array', 'max:'.max(0, $this->maxReferencePhotos() - count($this->referenceImageIds) - count($this->parentReferenceIndexes))],
-            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::int('ai.image_upload_max_kb', (int) config('ai.image_upload_max_kb', 32768))],
+            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::imageUploadMaxKb()],
         ]);
 
         if ($editor->isLimitExceeded(request())) {
@@ -202,20 +193,34 @@ new class extends Component
                 $this->parentId,
                 $this->parentReferenceIndexes,
             );
-
-            CreateAiImage::dispatch($image->id, $image->user_id);
-            $this->showComposer = false;
-            $this->resultId = null;
-            unset($this->remainingToday, $this->resultImage);
-            $this->dispatch('image-usage-updated');
-            $this->redirectRoute('images.index', ['image' => $image->id], navigate: true);
         } catch (InvalidArgumentException $e) {
             $this->errorMessage = $e->getMessage();
+
+            return;
         } catch (Throwable $e) {
             report($e);
-
             $this->errorMessage = __('Could not create an image right now. Please try again later.');
+
+            return;
         }
+
+        try {
+            CreateAiImage::dispatch($image->id, $image->user_id)->afterCommit();
+        } catch (Throwable $e) {
+            report($e);
+            (new CreateAiImage($image->id, $image->user_id))->failed(
+                new RuntimeException('Không thể đưa tác vụ tạo ảnh vào hàng đợi.'),
+            );
+            $this->errorMessage = __('Could not create an image right now. Please try again later.');
+
+            return;
+        }
+
+        $this->showComposer = false;
+        $this->resultId = null;
+        unset($this->remainingToday, $this->resultImage);
+        $this->dispatch('image-usage-updated');
+        $this->redirectRoute('images.index', ['image' => $image->id], navigate: true);
     }
 
     public function rewritePrompt(AiImageEditor $editor): void
@@ -302,9 +307,7 @@ new class extends Component
 
         return AiImage::query()
             ->whereIn('id', $this->referenceImageIds)
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->get()
             ->sortBy(fn (AiImage $image) => array_search($image->id, $this->referenceImageIds, true));
     }
@@ -341,15 +344,22 @@ new class extends Component
         return $this->resultId ? AiImage::with('category')->find($this->resultId) : null;
     }
 
-    public function imageUrl(AiImage $image): ?string
+    public function imageUrl(AiImage $image, string $size = 'original'): ?string
     {
-        return app(AiImageEditor::class)->resultUrl($image);
+        return app(AiImageEditor::class)->imageUrl($image, $size);
+    }
+
+    public function imageSize(AiImage $image, string $size = 'original'): ?array
+    {
+        return app(AiImageEditor::class)->imageSize($image, $size);
     }
 }; ?>
 
 @php
 	$resultImage = $this->resultImage;
 	$resultUrl = $resultImage ? $this->imageUrl($resultImage) : null;
+	$resultThumbUrl = $resultImage ? $this->imageUrl($resultImage, 'md') : null;
+	$resultImageSize = $resultImage ? $this->imageSize($resultImage, 'md') : null;
 	$resultDownloadName = $resultImage?->downloadName();
 	$maxReferencePhotos = $this->maxReferencePhotos();
 	$referenceImages = $this->referenceImages;
@@ -377,7 +387,7 @@ new class extends Component
 					<div class="space-y-4">
 						<button class="block w-full" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $resultImage->id }} })" aria-label="{{ __('View image details') }}">
 							<img class="max-h-[58svh] w-full rounded-[1.75rem] bg-zinc-100 object-contain shadow-inner"
-								src="{{ $resultUrl }}" alt="{{ __('AI-generated image') }}" />
+								src="{{ $resultThumbUrl }}" alt="{{ __('AI-generated image') }}" @if ($resultImageSize) width="{{ $resultImageSize['width'] }}" height="{{ $resultImageSize['height'] }}" @endif />
 						</button>
 
 						<div class="rounded-3xl bg-zinc-50 p-4">
@@ -417,10 +427,11 @@ new class extends Component
 										</div>
 									@endforeach
 									@foreach ($referenceImages as $image)
-										@php($url = $this->imageUrl($image))
+										@php($url = $this->imageUrl($image, 'xs'))
+										@php($imageSize = $this->imageSize($image, 'xs'))
 										@if ($url)
 											<div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
-												<img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" />
+												<img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif />
 												<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled" icon="x-mark"
 													wire:click="removeReferenceImage({{ $image->id }})" wire:loading.remove wire:target="createImage"
 													aria-label="{{ __('Remove reference image :number', ['number' => $loop->iteration]) }}" />

@@ -5,11 +5,15 @@ namespace App\Providers;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Events\QueueBusy;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Horizon\Events\LongWaitDetected;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureRateLimiting();
+        $this->configureQueueMonitoring();
     }
 
     /**
@@ -51,5 +56,20 @@ class AppServiceProvider extends ServiceProvider
         ));
 
         RateLimiter::for('public-api', fn (Request $request) => Limit::perMinute(60)->by($request->ip() ?: 'guest'));
+    }
+
+    private function configureQueueMonitoring(): void
+    {
+        Event::listen(QueueBusy::class, fn (QueueBusy $event) => Log::warning('Queue backlog threshold exceeded.', [
+            'connection' => $event->connectionName,
+            'queue' => $event->queue,
+            'size' => $event->size,
+        ]));
+
+        Event::listen(LongWaitDetected::class, fn (LongWaitDetected $event) => Log::warning('Horizon queue wait threshold exceeded.', [
+            'connection' => $event->connection,
+            'queue' => $event->queue,
+            'seconds' => $event->seconds,
+        ]));
     }
 }

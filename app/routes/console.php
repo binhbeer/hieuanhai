@@ -14,19 +14,14 @@ use Spatie\Sitemap\Tags\Sitemap as SitemapEntry;
 use Spatie\Sitemap\Tags\Url;
 
 Schedule::command('horizon:snapshot')->everyFiveMinutes();
+Schedule::command('ai-images:recover-stale')->everyMinute()->withoutOverlapping();
+Schedule::command('queue:monitor redis:default --max=10')->everyMinute()->withoutOverlapping();
 Schedule::command('sitemap:generate')->everyTenMinutes();
 
 Artisan::command('sitemap:generate', function (): void {
-    $publicImages = fn () => AiImage::query()
-        ->where('is_published', true)
-        ->where('status', 'succeeded')
-        ->whereNotNull('result_path');
+    $publicImages = fn () => AiImage::query()->publiclyVisible();
 
-    $publicImageFilter = function ($query): void {
-        $query->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path');
-    };
+    $publicImageFilter = fn ($query) => $query->publiclyVisible();
 
     $date = fn (mixed $value): ?CarbonInterface => $value ? Carbon::parse($value) : null;
     $maxDate = function (?CarbonInterface $current, mixed $candidate) use ($date): CarbonInterface {
@@ -67,9 +62,8 @@ Artisan::command('sitemap:generate', function (): void {
     $categoriesLastModified = null;
 
     Category::query()
-        ->where('status', 'active')
-        ->orderBy('sort_order')
-        ->orderBy('name')
+        ->active()
+        ->ordered()
         ->get()
         ->each(function (Category $category) use ($categories, $maxDate, $publicImages, $url, &$categoriesLastModified): void {
             $lastModified = $publicImages()
@@ -92,9 +86,7 @@ Artisan::command('sitemap:generate', function (): void {
         ->get()
         ->each(function (AiTag $tag) use ($maxDate, $tags, $url, &$tagsLastModified): void {
             $lastModified = $tag->images()
-                ->where('is_published', true)
-                ->where('status', 'succeeded')
-                ->whereNotNull('result_path')
+                ->publiclyVisible()
                 ->max('ai_images.updated_at') ?? $tag->updated_at;
 
             $tags->add($url(route('tags.show', $tag), $lastModified));

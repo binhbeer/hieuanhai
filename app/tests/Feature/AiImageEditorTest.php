@@ -494,9 +494,11 @@ class AiImageEditorTest extends TestCase
             ->assertOk()
             ->assertSee('/anh/'.$image->id.'-anh-prompt-dai')
             ->assertSee('Đăng nhập để xem đầy đủ prompt.')
+            ->assertDontSee('Tải thêm ảnh')
             ->assertDontSee('phần cuối bí mật');
 
         $this->get('/anh/'.$image->id)->assertOk();
+        $this->assertLessThanOrEqual(100, strlen(Str::after($image->getRouteKey(), '-')));
 
         $this->actingAs(User::factory()->create())
             ->get(route('images.show', $image))
@@ -673,19 +675,18 @@ class AiImageEditorTest extends TestCase
         $newer = $this->publishedImage('Ảnh mới hơn', now());
 
         Livewire::actingAs($admin)
-            ->test('image-detail')
-            ->call('openImage', $featured->id)
+            ->test('gallery.detail', ['selectedImageId' => $featured->id, 'standalone' => true])
             ->assertSee(__('Feature image'))
             ->call('toggleFeatured', $featured->id)
-            ->assertSee(__('Unfeature image'));
+            ->assertSee(__('Featured'));
 
         $this->assertTrue($featured->fresh()->is_featured);
         $this->assertSame([$featured->id, $newer->id], app(AiImageEditor::class)->publishedGallery(sort: 'featured')->pluck('id')->take(2)->all());
 
         Livewire::actingAs(User::factory()->create())
-            ->test('image-detail')
-            ->call('openImage', $featured->id)
-            ->assertDontSee(__('Unfeature image'))
+            ->test('gallery.detail', ['selectedImageId' => $featured->id, 'show' => true, 'standalone' => true])
+            ->assertSet('selectedImageId', $featured->id)
+            ->assertDontSee(__('Feature image'))
             ->call('toggleFeatured', $featured->id);
 
         $this->assertTrue($featured->fresh()->is_featured);

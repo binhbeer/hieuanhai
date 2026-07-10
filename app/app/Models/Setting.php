@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\AppSettings;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\DB;
 
 /**
  * @property string $key
@@ -45,21 +45,43 @@ class Setting extends BaseModel
 
     protected $keyType = 'string';
 
+    /**
+     * @return array<string, mixed>
+     */
+    public static function allValues(): array
+    {
+        $values = static::DEFAULTS;
+
+        foreach (static::query()->get(['key', 'value']) as $setting) {
+            if ($setting->value === null) {
+                continue;
+            }
+
+            $values[$setting->key] = self::decodeValue($setting->key, $setting->value);
+        }
+
+        return $values;
+    }
+
     public static function getValue(string $key, mixed $default = null): mixed
     {
-        $value = DB::table('settings')->where('key', $key)->value('value');
+        $setting = static::query()->whereKey($key)->first(['key', 'value']);
 
-        return $value !== null ? self::decodeValue($key, (string) $value) : ($default !== null ? $default : static::DEFAULTS[$key] ?? null);
+        if ($setting?->value !== null) {
+            return self::decodeValue($key, $setting->value);
+        }
+
+        return $default !== null ? $default : static::DEFAULTS[$key] ?? null;
     }
 
     public static function putValue(string $key, mixed $value): void
     {
-        DB::table('settings')->upsert([
-            'key' => $key,
-            'value' => self::encodeValue($key, $value),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ], ['key'], ['value', 'updated_at']);
+        static::query()->updateOrCreate(
+            ['key' => $key],
+            ['value' => self::encodeValue($key, $value)],
+        );
+
+        AppSettings::flush();
     }
 
     private static function encodeValue(string $key, mixed $value): ?string

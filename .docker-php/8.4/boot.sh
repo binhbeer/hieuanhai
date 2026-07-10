@@ -20,7 +20,6 @@ exec env - PATH="$PATH" runsvdir -P /etc/service &
 PID=$!
 
 su app -c "cd /var/www/html && php artisan schedule:work" &
-su app -c "cd /var/www/html && php artisan horizon" &
 su app -c "cd /var/www/html && php artisan reverb:start" &
 
 trap shutdown SIGTERM SIGHUP SIGQUIT SIGINT

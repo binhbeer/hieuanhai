@@ -5,63 +5,66 @@
 	@include('partials.head')
 </head>
 
-<body class="h-dvh overflow-hidden bg-white dark:bg-zinc-800">
+<body class="min-h-dvh bg-white dark:bg-zinc-800 lg:h-dvh lg:overflow-hidden">
 	<flux:sidebar class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" sticky collapsible="mobile">
 		<flux:sidebar.header>
 			<x-app-logo :sidebar="true" href="{{ route('home') }}" wire:navigate />
 			<flux:sidebar.collapse class="lg:hidden" />
 		</flux:sidebar.header>
 
-		@php($sidebarCategories = \App\Models\Category::query()->where('status', 'active')->orderBy('sort_order')->orderBy('name')->get())
+		@php($sidebarCategories = \App\Models\Category::query()->active()->ordered()->get())
 		@php($selectedSidebarCategory = request()->route('category'))
 		@php($gallerySearch = request()->routeIs('search.*') && is_string(request('q')) ? request('q') : '')
 		@php($gallerySort = is_string(request('sort')) && in_array(request('sort'), ['featured', 'new', 'popular'], true) ? request('sort') : 'new')
 		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : (request()->routeIs('search.*') ? route('search.index') : route('home')))
 		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch, 'sort' => $sort === 'new' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
 
-		<flux:sidebar.nav>
-			<flux:sidebar.group class="grid">
-				<flux:sidebar.item icon="home" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
-					{{ __('Home') }}
-				</flux:sidebar.item>
-				<flux:sidebar.item icon="magnifying-glass" :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
-					{{ __('Search') }}
-				</flux:sidebar.item>
-				<flux:sidebar.item icon="heart" :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
-					{{ __('Favorite images') }}
-				</flux:sidebar.item>
-				@auth
-					<livewire:image-usage :button-only="true" />
-				@endauth
-			</flux:sidebar.group>
-		</flux:sidebar.nav>
-
-		<flux:sidebar.nav>
-			<flux:sidebar.group class="grid" expandable heading="{{ __('Categories') }}">
-				<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
-					{{ __('All') }}
-				</flux:sidebar.item>
-				@foreach ($sidebarCategories as $category)
-					<flux:sidebar.item :href="route('categories.show', $category)" :current="$selectedSidebarCategory instanceof \App\Models\Category && $selectedSidebarCategory->is($category)" wire:navigate>
-						{{ $category->name }}
+		<div class="min-h-0 flex-1 overflow-y-auto">
+			<flux:sidebar.nav>
+				<flux:sidebar.group class="grid">
+					<flux:sidebar.item icon="home" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+						{{ __('Home') }}
 					</flux:sidebar.item>
-				@endforeach
-			</flux:sidebar.group>
-		</flux:sidebar.nav>
+					<flux:sidebar.item icon="magnifying-glass" :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
+						{{ __('Search') }}
+					</flux:sidebar.item>
+					<flux:sidebar.item icon="heart" :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
+						{{ __('Favorite images') }}
+					</flux:sidebar.item>
+					@auth
+						<livewire:gallery.usage :button-only="true" />
+					@endauth
+				</flux:sidebar.group>
+			</flux:sidebar.nav>
 
-		<flux:spacer />
+			<flux:sidebar.nav>
+				<flux:sidebar.group class="grid" expandable heading="{{ __('Categories') }}">
+					<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+						{{ __('All') }}
+					</flux:sidebar.item>
+					@foreach ($sidebarCategories as $category)
+						<flux:sidebar.item :href="route('categories.show', $category)" :current="$selectedSidebarCategory instanceof \App\Models\Category && $selectedSidebarCategory->is($category)" wire:navigate>
+							{{ $category->name }}
+						</flux:sidebar.item>
+					@endforeach
+				</flux:sidebar.group>
+			</flux:sidebar.nav>
+		</div>
 
-		@auth
-			<livewire:image-usage />
-		@endauth
+		<div class="shrink-0 space-y-3">
+			@auth
+				<livewire:gallery.usage />
+			@endauth
 
-		<x-user-menu />
+			<x-user-menu />
+		</div>
 	</flux:sidebar>
 
+	@if (!request()->routeIs('images.show'))
 	<flux:header class="sticky top-0 px-3! md:px-4!">
 		<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
-		@if (request()->routeIs('home', 'categories.show', 'images.show') || (request()->routeIs('search.*') && $gallerySearch !== ''))
+		@if (request()->routeIs('home', 'categories.show') || (request()->routeIs('search.*') && $gallerySearch !== ''))
 			<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
 				<flux:tab :href="$galleryTabUrl('new')" :selected="$gallerySort === 'new'" wire:navigate>
 					{{ __('Mới') }}
@@ -79,25 +82,22 @@
 
 		@auth
 			<flux:modal.trigger name="image-composer">
-				<flux:button size="sm" type="button" variant="primary" icon="sparkles" x-data x-on:click="$dispatch('open-image-composer')">
-					{{ __('Create image') }}
-				</flux:button>
+				<flux:button size="sm" type="button" variant="primary" icon="sparkles" x-data x-on:click="$dispatch('open-image-composer')" />
 			</flux:modal.trigger>
 		@else
-			<flux:button size="sm" :href="route('login')" variant="primary" icon="sparkles" wire:navigate>
-				{{ __('Create image') }}
-			</flux:button>
+			<flux:button size="sm" :href="route('login')" variant="primary" icon="sparkles" wire:navigate />
 		@endauth
 	</flux:header>
+	@endif
 
 	{{ $slot }}
 
-	@if (!request()->routeIs('profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit', 'manage.settings.*'))
-		<livewire:image-detail />
+	@if (!request()->routeIs('images.show', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit', 'manage.settings.*'))
+		<livewire:gallery.detail />
 	@endif
 
-	@persist('image-generator')
-	<livewire:pages::image-generator />
+	@persist('gallery-generator')
+	<livewire:gallery.generator />
 	@endpersist
 
 	@persist('toast')

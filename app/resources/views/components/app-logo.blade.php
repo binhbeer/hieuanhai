@@ -7,7 +7,7 @@
 @if ($sidebar)
 	<a {{ $attributes->merge(['class' => 'flex items-center gap-2']) }} style="height: 3rem;">
 		<x-app-logo-icon style="display: block; height: 2rem; max-height: none; max-width: none; object-fit: contain; width: auto;" />
-		<span class="truncate text-sm font-semibold in-data-flux-sidebar-collapsed-desktop:hidden">
+		<span class="truncate text-lg font-semibold in-data-flux-sidebar-collapsed-desktop:hidden">
 			{{ $siteName }}
 		</span>
 	</a>

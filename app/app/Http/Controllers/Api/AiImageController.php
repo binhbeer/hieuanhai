@@ -32,9 +32,8 @@ class AiImageController extends Controller
     {
         return response()->json([
             'data' => Category::query()
-                ->where('status', 'active')
-                ->orderBy('sort_order')
-                ->orderBy('name')
+                ->active()
+                ->ordered()
                 ->get(['id', 'name', 'slug']),
         ]);
     }
@@ -67,9 +66,7 @@ class AiImageController extends Controller
 
         $images = AiImage::query()
             ->with(['category', 'tags', 'user'])
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
+            ->publiclyVisible()
             ->when($keyword !== '', function ($query) use ($keyword): void {
                 $query->where(function ($query) use ($keyword): void {
                     $query->where('title', 'like', '%'.$keyword.'%')
@@ -120,8 +117,8 @@ class AiImageController extends Controller
         $validator = Validator::make($request->all(), [
             'prompt' => $this->promptRules(),
             'source' => ['sometimes', 'nullable', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:-]+$/'],
-            'images' => ['sometimes', 'array', 'max:'.min(3, max(1, AppSettings::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 1))))],
-            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::int('ai.image_upload_max_kb', (int) config('ai.image_upload_max_kb', 32768))],
+            'images' => ['sometimes', 'array', 'max:'.AppSettings::maxReferencePhotos()],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::imageUploadMaxKb()],
         ]);
 
         if ($validator->fails()) {
@@ -201,16 +198,7 @@ class AiImageController extends Controller
      */
     private function promptRules(): array
     {
-        return [
-            'required',
-            'string',
-            'max:12000',
-            function (string $attribute, mixed $value, \Closure $fail): void {
-                if (preg_match_all('/[\p{L}\p{N}]+/u', (string) $value) > 1200) {
-                    $fail('Prompt không được vượt quá 1200 từ.');
-                }
-            },
-        ];
+        return AppSettings::promptRules('Prompt không được vượt quá 1200 từ.');
     }
 
     /**
