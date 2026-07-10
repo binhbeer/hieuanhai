@@ -49,8 +49,7 @@ new class extends Component {
                 <flux:label>
                     {{ __('Remaining today') }}
                     <x-slot name="trailing">
-                        <span class="tabular-nums">{{ $remainingToday === null ? __('Unlimited') : $remainingToday . '/' . $dailyLimit }}</span>
-
+                        <span class="tabular-nums">{{ $remainingToday === null ? '∞' : $remainingToday . '/' . $dailyLimit }}</span>
                     </x-slot>
                 </flux:label>
                 <flux:progress max="{{ $dailyLimit }}" value="{{ $remainingToday ?? $dailyLimit }}" color="yellow" />

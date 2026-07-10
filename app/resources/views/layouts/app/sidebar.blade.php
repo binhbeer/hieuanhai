@@ -14,14 +14,27 @@
 
 		@php($sidebarCategories = \App\Models\Category::query()->where('status', 'active')->orderBy('sort_order')->orderBy('name')->get())
 		@php($selectedSidebarCategory = request()->route('category'))
-		@php($gallerySearch = is_string(request('search')) ? request('search') : '')
+		@php($gallerySearch = request()->routeIs('search.*') && is_string(request('q')) ? request('q') : '')
 		@php($gallerySort = is_string(request('sort')) && in_array(request('sort'), ['featured', 'new', 'popular'], true) ? request('sort') : 'featured')
-		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : route('home'))
-		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['search' => $gallerySearch, 'sort' => $sort === 'featured' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
+		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : (request()->routeIs('search.*') ? route('search.index') : route('home')))
+		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch, 'sort' => $sort === 'featured' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
 
-		<form action="{{ route('home') }}" method="GET">
-			<flux:input name="search" value="{{ $gallerySearch }}" icon="magnifying-glass" placeholder="{{ __('Search images...') }}" aria-label="{{ __('Search images') }}" />
-		</form>
+		<flux:sidebar.nav>
+			<flux:sidebar.group class="grid">
+				<flux:sidebar.item icon="home" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+					{{ __('Home') }}
+				</flux:sidebar.item>
+				<flux:sidebar.item icon="magnifying-glass" :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
+					{{ __('Search') }}
+				</flux:sidebar.item>
+				<flux:sidebar.item icon="heart" :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
+					{{ __('Favorite images') }}
+				</flux:sidebar.item>
+				@auth
+					<livewire:image-usage :button-only="true" />
+				@endauth
+			</flux:sidebar.group>
+		</flux:sidebar.nav>
 
 		<flux:sidebar.nav>
 			<flux:sidebar.group class="grid" expandable heading="{{ __('Categories') }}">
@@ -38,17 +51,6 @@
 
 		<flux:spacer />
 
-		<flux:sidebar.nav>
-			<flux:sidebar.group class="grid">
-				<flux:sidebar.item icon="heart" :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
-					{{ __('Favorite images') }}
-				</flux:sidebar.item>
-				@auth
-					<livewire:image-usage :button-only="true" />
-				@endauth
-			</flux:sidebar.group>
-		</flux:sidebar.nav>
-
 		@auth
 			<livewire:image-usage />
 		@endauth
@@ -59,7 +61,7 @@
 	<flux:header class="sticky top-0 px-3! md:px-4!">
 		<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
-		@if (request()->routeIs('home', 'categories.show', 'images.show'))
+		@if (request()->routeIs('home', 'categories.show', 'images.show') || (request()->routeIs('search.*') && $gallerySearch !== ''))
 			<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
 				<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
 					{{ __('Nổi bật') }}
@@ -90,7 +92,7 @@
 
 	{{ $slot }}
 
-	@if (! request()->routeIs('profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit', 'manage.settings.*'))
+	@if (!request()->routeIs('profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit', 'manage.settings.*'))
 		<livewire:image-detail />
 	@endif
 

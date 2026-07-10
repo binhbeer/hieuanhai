@@ -4,16 +4,17 @@ use App\Models\AiTag;
 use App\Models\Category;
 use Illuminate\Support\Facades\Route;
 
-Route::bind('category', fn (string $value): Category => Category::query()
+Route::bind('category', fn(string $value): Category => Category::query()
     ->where('slug', $value)
     ->where('status', 'active')
     ->firstOrFail());
 
-Route::bind('tag', fn (string $value): AiTag => AiTag::query()
+Route::bind('tag', fn(string $value): AiTag => AiTag::query()
     ->where('slug', $value)
     ->firstOrFail());
 
 Route::livewire('/', 'pages::gallery')->name('home');
+Route::livewire('search', 'pages::search')->middleware('auth')->name('search.index');
 Route::livewire('c/{category:slug}', 'pages::gallery')->name('categories.show');
 Route::livewire('t/{tag:slug}', 'pages::gallery')->name('tags.show');
 Route::livewire('anh/{image}', 'pages::gallery')->name('images.show');
@@ -32,4 +33,4 @@ Route::middleware(['auth'])->prefix('manage')->name('manage.')->group(function (
 Route::redirect('api-keys', '/manage/api-keys')->middleware('auth')->name('api-keys.index');
 Route::redirect('dashboard', '/')->name('dashboard');
 
-require __DIR__.'/settings.php';
+require __DIR__ . '/settings.php';

@@ -14,7 +14,9 @@ class HomeTest extends TestCase
     {
         $response = $this->get(route('home'));
 
-        $response->assertOk();
+        $response
+            ->assertOk()
+            ->assertDontSee(__('Search images...'));
     }
 
     public function test_authenticated_users_can_visit_home(): void
@@ -24,6 +26,28 @@ class HomeTest extends TestCase
         $response = $this->actingAs($user)->get(route('home'));
 
         $response->assertOk();
+    }
+
+    public function test_guests_must_login_to_visit_search(): void
+    {
+        $this->get(route('search.index'))
+            ->assertRedirect(route('login', absolute: false));
+    }
+
+    public function test_authenticated_users_can_visit_search(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get(route('search.index'))
+            ->assertOk()
+            ->assertSee(__('Search images'))
+            ->assertSee(__('Search images...'))
+            ->assertSee('name="q"', false)
+            ->assertDontSee('name="search"', false);
+
+        $this->actingAs($user)->get(route('search.index', ['q' => 'logo']))
+            ->assertOk()
+            ->assertSee(__('Search results'));
     }
 
     public function test_regular_user_sees_daily_image_quota(): void

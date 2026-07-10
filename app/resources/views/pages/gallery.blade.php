@@ -12,176 +12,175 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Create image')] class extends Component
-{
-    public ?Category $category = null;
+new #[Title('Trang chủ')] class extends Component {
+	public ?Category $category = null;
 
-    public ?AiTag $tag = null;
+	public ?AiTag $tag = null;
 
-    public string $search = '';
+	public string $search = '';
 
-    public string $sort = 'featured';
+	public string $sort = 'featured';
 
-    public int $perPage = 36;
+	public int $perPage = 36;
 
-    public function mount(?Category $category = null, ?AiTag $tag = null, ?AiImage $image = null): void
-    {
-        $search = request()->query('search');
-        $sort = request()->query('sort');
+	public function mount(?Category $category = null, ?AiTag $tag = null, ?AiImage $image = null): void
+	{
+		$search = request()->routeIs('search.*') ? request()->query('q') : null;
+		$sort = request()->query('sort');
 
-        $this->category = $category;
-        $this->tag = $tag;
-        $this->search = is_string($search) ? trim($search) : '';
-        $this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'featured';
+		$this->category = $category;
+		$this->tag = $tag;
+		$this->search = is_string($search) ? trim($search) : '';
+		$this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'featured';
 
-        if ($image) {
-            abort_unless($this->isPublicImage($image), 404);
-        }
-    }
+		if ($image) {
+			abort_unless($this->isPublicImage($image), 404);
+		}
+	}
 
-    #[On('gallery-updated')]
-    public function refreshGallery(): void
-    {
-        unset($this->images, $this->categories, $this->favoriteIds);
-    }
+	#[On('gallery-updated')]
+	public function refreshGallery(): void
+	{
+		unset($this->images, $this->categories, $this->favoriteIds);
+	}
 
-    public function loadMore(): void
-    {
-        $this->perPage += 36;
+	public function loadMore(): void
+	{
+		$this->perPage += 36;
 
-        unset($this->images);
-    }
+		unset($this->images);
+	}
 
-    public function selectImage(int $id): void
-    {
-        $image = $this->publishedImage($id);
+	public function selectImage(int $id): void
+	{
+		$image = $this->publishedImage($id);
 
-        if ($image) {
-            $this->redirectRoute('images.show', ['image' => $image], navigate: true);
-        }
-    }
+		if ($image) {
+			$this->redirectRoute('images.show', ['image' => $image], navigate: true);
+		}
+	}
 
-    public function useAsPrompt(int $id): void
-    {
-        if (! Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+	public function useAsPrompt(int $id): void
+	{
+		if (!Auth::check()) {
+			$this->redirectRoute('login', navigate: true);
 
-            return;
-        }
+			return;
+		}
 
-        $image = $this->publishedImage($id);
+		$image = $this->publishedImage($id);
 
-        if (! $image) {
-            return;
-        }
+		if (!$image) {
+			return;
+		}
 
-        $this->dispatch('use-prompt', prompt: $image->prompt, imageId: $image->id);
-    }
+		$this->dispatch('use-prompt', prompt: $image->prompt, imageId: $image->id);
+	}
 
-    #[Computed]
-    public function images()
-    {
-        return app(AiImageEditor::class)->publishedGallery(category: $this->category, limit: $this->perPage + 1, search: $this->search, sort: $this->sort, tag: $this->tag);
-    }
+	#[Computed]
+	public function images()
+	{
+		return app(AiImageEditor::class)->publishedGallery(category: $this->category, limit: $this->perPage + 1, search: $this->search, sort: $this->sort, tag: $this->tag);
+	}
 
-    public function visibleImages()
-    {
-        return $this->images->take($this->perPage);
-    }
+	public function visibleImages()
+	{
+		return $this->images->take($this->perPage);
+	}
 
-    public function hasMoreImages(): bool
-    {
-        return $this->images->count() > $this->perPage;
-    }
+	public function hasMoreImages(): bool
+	{
+		return $this->images->count() > $this->perPage;
+	}
 
-    #[Computed]
-    public function favoriteIds(): array
-    {
-        if (! Auth::check()) {
-            return [];
-        }
+	#[Computed]
+	public function favoriteIds(): array
+	{
+		if (!Auth::check()) {
+			return [];
+		}
 
-        return AiImageFavorite::query()
-            ->where('user_id', (int) Auth::id())
-            ->pluck('ai_image_id')
-            ->all();
-    }
+		return AiImageFavorite::query()
+			->where('user_id', (int) Auth::id())
+			->pluck('ai_image_id')
+			->all();
+	}
 
-    public function isFavorite(AiImage $image): bool
-    {
-        return in_array($image->id, $this->favoriteIds, true);
-    }
+	public function isFavorite(AiImage $image): bool
+	{
+		return in_array($image->id, $this->favoriteIds, true);
+	}
 
-    public function favoriteCount(AiImage $image): int
-    {
-        return (int) ($image->favorites_count ?? 0);
-    }
+	public function favoriteCount(AiImage $image): int
+	{
+		return (int) ($image->favorites_count ?? 0);
+	}
 
-    public function toggleFavorite(int $id): void
-    {
-        if (! Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+	public function toggleFavorite(int $id): void
+	{
+		if (!Auth::check()) {
+			$this->redirectRoute('login', navigate: true);
 
-            return;
-        }
+			return;
+		}
 
-        $image = AiImage::query()
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
-            ->find($id);
+		$image = AiImage::query()
+			->where('is_published', true)
+			->where('status', 'succeeded')
+			->whereNotNull('result_path')
+			->find($id);
 
-        if (! $image) {
-            return;
-        }
+		if (!$image) {
+			return;
+		}
 
-        $userId = (int) Auth::id();
-        $favorite = AiImageFavorite::query()->where('user_id', $userId)->where('ai_image_id', $image->id)->first();
+		$userId = (int) Auth::id();
+		$favorite = AiImageFavorite::query()->where('user_id', $userId)->where('ai_image_id', $image->id)->first();
 
-        $wasFavorite = $favorite !== null;
+		$wasFavorite = $favorite !== null;
 
-        $wasFavorite
-            ? $favorite->delete()
-            : AiImageFavorite::query()->create(['user_id' => $userId, 'ai_image_id' => $image->id]);
+		$wasFavorite
+			? $favorite->delete()
+			: AiImageFavorite::query()->create(['user_id' => $userId, 'ai_image_id' => $image->id]);
 
-        unset($this->images, $this->favoriteIds);
+		unset($this->images, $this->favoriteIds);
 
-        Flux::toast(variant: 'success', text: $wasFavorite ? __('Remove favorite') : __('Favorite image'));
-    }
+		Flux::toast(variant: 'success', text: $wasFavorite ? __('Remove favorite') : __('Favorite image'));
+	}
 
-    public function imageThumbUrl(AiImage $image): ?string
-    {
-        if (! $image->result_path) {
-            return null;
-        }
+	public function imageThumbUrl(AiImage $image): ?string
+	{
+		if (!$image->result_path) {
+			return null;
+		}
 
-        return '/thumb_x720x/storage/'.ltrim($image->result_path, '/');
-    }
+		return '/thumb_x720x/storage/' . ltrim($image->result_path, '/');
+	}
 
-    public function detailUrl(AiImage $image): string
-    {
-        return route('images.show', $image);
-    }
+	public function detailUrl(AiImage $image): string
+	{
+		return route('images.show', $image);
+	}
 
-    public function creatorName(AiImage $image): string
-    {
-        return $image->user?->name ?: __('Guest');
-    }
+	public function creatorName(AiImage $image): string
+	{
+		return $image->user?->name ?: __('Guest');
+	}
 
-    private function isPublicImage(AiImage $image): bool
-    {
-        return $image->is_published && $image->status === 'succeeded' && filled($image->result_path);
-    }
+	private function isPublicImage(AiImage $image): bool
+	{
+		return $image->is_published && $image->status === 'succeeded' && filled($image->result_path);
+	}
 
-    private function publishedImage(int $id): ?AiImage
-    {
-        return AiImage::query()
-            ->where('is_published', true)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
-            ->whereKey($id)
-            ->first();
-    }
+	private function publishedImage(int $id): ?AiImage
+	{
+		return AiImage::query()
+			->where('is_published', true)
+			->where('status', 'succeeded')
+			->whereNotNull('result_path')
+			->whereKey($id)
+			->first();
+	}
 }; ?>
 
 <section class="min-h-full text-zinc-950 dark:text-white">
@@ -190,7 +189,7 @@ new #[Title('Create image')] class extends Component
 			@if($category?->name || $tag?->name || $search)
 				<div class="mb-5 flex flex-wrap items-end justify-between gap-3 pr-28">
 					<div>
-						<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ $category?->name ?? ($tag?->name ? '#'.$tag->name : 'AI Gallery') }}</h1>
+						<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ request()->routeIs('search.*') ? __('Search results') : ($category?->name ?? ($tag?->name ? '#' . $tag->name : 'AI Gallery')) }}</h1>
 						<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Published community images. Click an image to view details.') }}</p>
 					</div>
 				</div>

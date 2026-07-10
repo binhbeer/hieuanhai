@@ -416,9 +416,10 @@ class AiImageEditorTest extends TestCase
             ->assertOk()
             ->assertSee('Meme nội bộ')
             ->assertSee('/thumb_x720x/storage/ai-images/202607/08/result.png')
-            ->assertSee('Banner nước hoa cao cấp');
+            ->assertSee('Banner nước hoa cao cấp')
+            ->assertSee("title: 'Banner nước hoa cao cấp'", false);
 
-        $this->get(route('home', ['search' => 'nước hoa']))
+        $this->actingAs(User::factory()->create())->get(route('search.index', ['q' => 'nước hoa']))
             ->assertOk()
             ->assertSee('Banner nước hoa cao cấp')
             ->assertDontSee('Vẽ chân dung cổ điển');

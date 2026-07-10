@@ -300,27 +300,34 @@ new class extends Component {
 
 <div class="contents" x-data="{
     previousUrl: null,
-    openImage(id, url) {
+    previousTitle: null,
+    siteName: @js(\App\Support\AppSettings::string('site.name', config('app.name', 'Laravel'))),
+    openImage(id, url, title) {
         if (url) {
             if (this.previousUrl) {
                 history.replaceState(null, '', url);
             } else {
                 this.previousUrl = window.location.href;
+                this.previousTitle = document.title;
                 history.replaceState(null, '', url);
             }
         }
+
+        if (title) document.title = `${title} - ${this.siteName}`;
 
         $wire.openImage(id);
     },
     closeImage() {
         if (this.previousUrl) {
             history.replaceState(null, '', this.previousUrl);
+            document.title = this.previousTitle;
             this.previousUrl = null;
+            this.previousTitle = null;
         }
 
         $wire.closeImage();
     },
-}" x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url)">
+}" x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title)">
     @php($selected = $this->selectedImage)
 
     @if ($show && $selected)
@@ -457,8 +464,9 @@ new class extends Component {
                     <div class="grid grid-cols-2 gap-3">
                         @foreach ($this->relatedImages as $related)
                         @php($relatedUrl = $this->imageThumbUrl($related))
+                        @php($relatedTitle = Str::limit($related->title ?: $related->prompt, 70, ''))
                         @if ($relatedUrl)
-                            <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $this->detailUrl($related) }}" x-data x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $related->id }}, url: @js($this->detailUrl($related)) })" wire:key="related-image-detail-{{ $related->id }}">
+                            <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $this->detailUrl($related) }}" x-data x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $related->id }}, url: @js($this->detailUrl($related)), title: @js($relatedTitle) })" wire:key="related-image-detail-{{ $related->id }}">
                                 <img class="aspect-3/4 w-full object-cover" src="{{ $relatedUrl }}" alt="{{ Str::limit($related->title ?: $related->prompt, 50) }}" loading="lazy">
                             </a>
                         @endif
