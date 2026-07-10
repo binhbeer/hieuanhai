@@ -24,8 +24,12 @@ new class extends Component {
             return;
         }
 
-        if (request()->routeIs('images.index') && request()->boolean('composer')) {
-            $id = request()->integer('image') ?: $this->latestCreatedImage()?->id;
+        if (request()->routeIs('images.index')) {
+            $id = request()->integer('image');
+
+            if (!$id && request()->boolean('composer')) {
+                $id = $this->latestCreatedImage()?->id;
+            }
 
             if ($id) {
                 $this->openImage($id);
@@ -107,11 +111,29 @@ new class extends Component {
             return;
         }
 
-        $this->dispatch(
-            'use-prompt',
-            prompt: $image->prompt,
-            imageId: $this->canUseAsReference($image) ? $image->id : null,
-        );
+        $this->dispatch('use-prompt', prompt: $image->prompt);
+        $this->closeImage();
+    }
+
+    public function editImage(int $id): void
+    {
+        if (!Auth::check()) {
+            $this->redirectRoute('login', navigate: true);
+
+            return;
+        }
+
+        $image = AiImage::query()
+            ->where('user_id', Auth::id())
+            ->whereKey($id)
+            ->first();
+
+        if (!$image) {
+            return;
+        }
+
+        $this->dispatch('edit-image', imageId: $image->id);
+        $this->closeImage();
     }
 
     public function toggleFeatured(int $id): void
@@ -205,9 +227,9 @@ new class extends Component {
         return Auth::check() && $this->isPublicImage($image);
     }
 
-    public function canUseAsReference(AiImage $image): bool
+    public function canEdit(AiImage $image): bool
     {
-        return $this->isPublicImage($image);
+        return Auth::check() && $image->user_id === Auth::id();
     }
 
     public function canManageFeatured(): bool
@@ -424,7 +446,12 @@ new class extends Component {
 
                 <div class="space-y-3" x-data="{ copied: false, expanded: false, prompt: @js($canViewFullPrompt ? $selected->prompt : $visiblePrompt) }">
                     <div>
-                        <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Prompt') }}</div>
+                        <div class="mb-2 flex items-center justify-between gap-2">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Prompt') }}</div>
+                            <flux:button type="button" size="xs" variant="ghost" x-on:click="navigator.clipboard.writeText(prompt); copied = true; setTimeout(() => copied = false, 1400)">
+                                <span x-text="copied ? @js(__('Copied')) : @js(__('Copy prompt'))"></span>
+                            </flux:button>
+                        </div>
                         <div class="relative max-h-[200px] overflow-hidden rounded-2xl bg-zinc-100 p-4 text-sm leading-6 dark:bg-white/10" :class="expanded ? 'max-h-none' : 'max-h-[200px]'">
                             <p>{{ $visiblePrompt }}</p>
                             @if (! $canViewFullPrompt && mb_strlen($selected->prompt) > 160)
@@ -445,15 +472,15 @@ new class extends Component {
                         <div class="rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-100">{{ $selected->error }}</div>
                     @endif
 
-                    <div class="grid grid-cols-2 gap-2">
-                        <flux:button type="button" variant="filled" x-on:click="navigator.clipboard.writeText(prompt); copied = true; setTimeout(() => copied = false, 1400)">
-                            <span x-text="copied ? @js(__('Copied')) : @js(__('Copy prompt'))"></span>
-                        </flux:button>
+                    <div class="grid gap-2 {{ $this->canEdit($selected) && $selectedUrl ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-2' }}">
+                        @if ($selectedUrl)
+                            <flux:button :href="$selectedUrl" download="{{ $selected->downloadName() }}">{{ __('Download') }}</flux:button>
+                        @endif
 
                         <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">{{ __('Create similar image') }}</flux:button>
 
-                        @if ($selectedUrl)
-                            <flux:button class="col-span-2" :href="$selectedUrl" download="{{ $selected->downloadName() }}">{{ __('Download') }}</flux:button>
+                        @if ($this->canEdit($selected))
+                            <flux:button type="button" variant="filled" wire:click="editImage({{ $selected->id }})">{{ __('Edit image') }}</flux:button>
                         @endif
                     </div>
                 </div>

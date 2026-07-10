@@ -3,7 +3,7 @@
 @if ($images->isEmpty())
 	{{ $empty ?? '' }}
 @elseif ($ordered)
-	<div {{ $attributes->class('media-list-grid grid items-start gap-3')->merge(['style' => 'grid-auto-rows: 8px']) }} x-data="{
+	<div {{ $attributes->class('media-list-grid grid items-start gap-3 [&>[data-revealed=true]]:opacity-100!')->merge(['style' => 'grid-auto-rows: 8px']) }} x-data="{
 		mutationObserver: null,
 		refreshFrame: null,
 		revealTimers: [],

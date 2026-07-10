@@ -120,59 +120,145 @@ class CreatedImagesTest extends TestCase
             ->assertSee(__('Copy prompt'));
     }
 
-    public function test_create_similar_image_attaches_reference_image(): void
+    public function test_create_similar_image_loads_only_prompt(): void
     {
-        Storage::fake('public');
-        Storage::disk('public')->put('ai-images/202607/09/reference.png', 'fake-image');
-
-        $image = AiImage::create([
-            'visitor_key' => 'visitor-a',
-            'prompt' => 'Reference prompt',
-            'provider' => 'openai',
-            'model' => 'cx/gpt-5.5-image',
-            'status' => 'succeeded',
-            'result_path' => 'ai-images/202607/09/reference.png',
-            'is_published' => true,
-        ]);
         $this->actingAs(User::factory()->create());
 
         Livewire::test('pages::image-generator')
-            ->call('usePrompt', 'Reference prompt', $image->id)
+            ->set('parentId', 999)
+            ->set('parentPrompt', 'Old parent prompt')
+            ->set('parentReferenceIndexes', [0])
+            ->call('usePrompt', 'Reference prompt')
             ->assertSet('prompt', 'Reference prompt')
-            ->assertSet('referenceImageIds', [$image->id])
+            ->assertSet('parentId', null)
+            ->assertSet('parentPrompt', '')
+            ->assertSet('parentReferenceIndexes', [])
+            ->assertSet('referenceImageIds', [])
             ->assertSet('showComposer', true);
     }
 
-    public function test_creating_similar_image_stores_original_as_pending_reference(): void
+    public function test_edit_image_loads_parent_prompt_and_original_references(): void
     {
-        Bus::fake();
         Storage::fake('public');
-        Storage::disk('public')->put('ai-images/202607/09/reference.png', 'fake-image');
-
-        $image = AiImage::create([
+        Storage::disk('public')->put('ai-image-sources/202607/09/source.jpg', 'fake-image');
+        $user = User::factory()->create();
+        $parent = AiImage::create([
+            'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
-            'prompt' => 'Reference prompt',
+            'prompt' => 'Original parent prompt',
             'provider' => 'openai',
             'model' => 'cx/gpt-5.5-image',
             'status' => 'succeeded',
-            'result_path' => 'ai-images/202607/09/reference.png',
-            'is_published' => true,
+            'result_path' => 'ai-images/202607/09/result.png',
+            'response_meta' => ['source_paths' => ['ai-image-sources/202607/09/source.jpg']],
+        ]);
+        $this->actingAs($user);
+
+        Livewire::test('pages::image-generator')
+            ->call('editImage', $parent->id)
+            ->assertSet('parentId', $parent->id)
+            ->assertSet('parentPrompt', 'Original parent prompt')
+            ->assertSet('prompt', '')
+            ->assertSet('parentReferenceIndexes', [0])
+            ->assertSet('showComposer', true)
+            ->assertSee('Original parent prompt')
+            ->assertSee('/storage/ai-image-sources/202607/09/source.jpg');
+    }
+
+    public function test_edit_button_is_only_visible_to_image_owner(): void
+    {
+        $owner = User::factory()->create();
+        $image = AiImage::create([
+            'user_id' => $owner->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Owned image prompt',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/202607/09/result.png',
+        ]);
+
+        Livewire::actingAs($owner)
+            ->test('image-detail')
+            ->call('openImage', $image->id)
+            ->assertSee(__('Edit image'));
+
+        Livewire::actingAs(User::factory()->create())
+            ->test('image-detail')
+            ->call('openImage', $image->id)
+            ->assertDontSee(__('Edit image'));
+    }
+
+    public function test_non_owner_cannot_load_image_for_editing(): void
+    {
+        $parent = AiImage::create([
+            'user_id' => User::factory()->create()->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Private parent prompt',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
         ]);
         $this->actingAs(User::factory()->create());
 
         Livewire::test('pages::image-generator')
-            ->call('usePrompt', 'Reference prompt', $image->id)
+            ->call('editImage', $parent->id)
+            ->assertSet('parentId', null)
+            ->assertSet('showComposer', false)
+            ->assertDontSee('Private parent prompt');
+    }
+
+    public function test_edit_creates_child_with_copied_reference_and_new_prompt(): void
+    {
+        Bus::fake();
+        Storage::fake('public');
+        Storage::disk('public')->put('ai-image-sources/202607/09/source.jpg', 'fake-image');
+        $user = User::factory()->create();
+        $parent = AiImage::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Original parent prompt',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/202607/09/result.png',
+            'response_meta' => ['source_paths' => ['ai-image-sources/202607/09/source.jpg']],
+        ]);
+        $this->actingAs($user);
+
+        $component = Livewire::test('pages::image-generator')
+            ->call('editImage', $parent->id)
+            ->set('prompt', 'Make the lighting warmer')
             ->call('createImage')
-            ->assertSet('prompt', 'Reference prompt')
-            ->assertSet('referenceImageIds', [$image->id])
-            ->assertRedirect(route('images.index', ['composer' => 1], absolute: false));
+            ->assertSet('showComposer', false);
 
-        $pending = AiImage::query()->where('status', 'pending')->firstOrFail();
-        $pendingPath = data_get($pending->request_meta, 'pending_uploads.0.path');
+        $child = AiImage::query()->where('parent_id', $parent->id)->firstOrFail();
+        $pendingPath = data_get($child->request_meta, 'pending_uploads.0.path');
 
-        $this->assertSame([$image->id], $pending->request_meta['reference_image_ids']);
+        $component->assertRedirect(route('images.index', ['image' => $child->id], absolute: false));
+        $this->assertSame('Make the lighting warmer', $child->prompt);
         $this->assertIsString($pendingPath);
         Storage::disk('public')->assertExists($pendingPath);
+    }
+
+    public function test_edit_without_references_keeps_empty_reference_list(): void
+    {
+        $user = User::factory()->create();
+        $parent = AiImage::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Prompt-only parent',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+        ]);
+        $this->actingAs($user);
+
+        Livewire::test('pages::image-generator')
+            ->call('editImage', $parent->id)
+            ->assertSet('parentId', $parent->id)
+            ->assertSet('parentPrompt', 'Prompt-only parent')
+            ->assertSet('parentReferenceIndexes', []);
     }
 
     public function test_composer_rejects_prompt_over_1200_words(): void
@@ -209,25 +295,30 @@ class CreatedImagesTest extends TestCase
             && str_contains($prompt->prompt, 'make it cinematic'));
     }
 
-    public function test_creating_image_redirects_to_created_images_with_composer_open(): void
+    public function test_creating_image_closes_composer_and_opens_pending_detail(): void
     {
         Bus::fake();
 
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        Livewire::test('pages::image-generator')
+        $component = Livewire::test('pages::image-generator')
             ->set('showComposer', true)
             ->set('prompt', 'Create a small cat')
             ->call('createImage')
-            ->assertSet('showComposer', true)
-            ->assertSet('prompt', 'Create a small cat')
-            ->assertRedirect(route('images.index', ['composer' => 1], absolute: false));
+            ->assertSet('showComposer', false)
+            ->assertSet('prompt', 'Create a small cat');
 
         $image = AiImage::query()->latest()->firstOrFail();
+        $component->assertRedirect(route('images.index', ['image' => $image->id], absolute: false));
         $this->assertSame('pending', $image->status);
         $this->assertSame('Create a small cat', $image->prompt);
         Bus::assertDispatched(CreateAiImage::class, fn (CreateAiImage $job) => $job->imageId === $image->id);
+
+        $this->get(route('images.index', ['image' => $image->id]))
+            ->assertOk()
+            ->assertSee('image-detail-'.$image->id, false)
+            ->assertSee('Create a small cat');
     }
 
     public function test_unverified_user_after_registration_day_is_redirected_to_email_verification_when_creating_image(): void

@@ -21,7 +21,7 @@ new #[Title('Trang chủ')] class extends Component {
 
 	public string $sort = 'featured';
 
-	public int $perPage = 36;
+	public int $perPage = 20;
 
 	public function mount(?Category $category = null, ?AiTag $tag = null, ?AiImage $image = null): void
 	{
@@ -46,7 +46,7 @@ new #[Title('Trang chủ')] class extends Component {
 
 	public function loadMore(): void
 	{
-		$this->perPage += 36;
+		$this->perPage += 20;
 
 		unset($this->images);
 	}
@@ -74,7 +74,7 @@ new #[Title('Trang chủ')] class extends Component {
 			return;
 		}
 
-		$this->dispatch('use-prompt', prompt: $image->prompt, imageId: $image->id);
+		$this->dispatch('use-prompt', prompt: $image->prompt);
 	}
 
 	#[Computed]

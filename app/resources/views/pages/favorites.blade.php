@@ -50,7 +50,7 @@ new #[Title('Ảnh yêu thích')] class extends Component
             return;
         }
 
-        $this->dispatch('use-prompt', prompt: $image->prompt, imageId: $image->id);
+        $this->dispatch('use-prompt', prompt: $image->prompt);
     }
 
     public function imageUrl(AiImage $image): ?string

@@ -4,7 +4,9 @@ use App\Jobs\CreateAiImage;
 use App\Models\AiImage;
 use App\Services\AiImageEditor;
 use App\Support\AppSettings;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -20,9 +22,15 @@ new class extends Component
 
     public array $referenceImageIds = [];
 
+    public array $parentReferenceIndexes = [];
+
     public mixed $newPhotos = [];
 
     public string $prompt = '';
+
+    public ?int $parentId = null;
+
+    public string $parentPrompt = '';
 
     public string $rewriteInstruction = '';
 
@@ -54,7 +62,7 @@ new class extends Component
     }
 
     #[On('use-prompt')]
-    public function usePrompt(string $prompt, ?int $imageId = null): void
+    public function usePrompt(string $prompt): void
     {
         if (! Auth::check()) {
             $this->redirectRoute('login', navigate: true);
@@ -62,22 +70,47 @@ new class extends Component
             return;
         }
 
+        $this->reset('photos', 'referenceImageIds', 'parentReferenceIndexes', 'newPhotos', 'parentId', 'parentPrompt', 'rewriteInstruction', 'resultId', 'errorMessage', 'publishMessage');
         $this->prompt = $prompt;
-        $this->rewriteInstruction = '';
-        $this->resultId = null;
-        $this->publishMessage = null;
+        $this->resetValidation();
+        unset($this->parentReferenceImages);
         $this->showComposer = true;
+    }
 
-        if ($imageId) {
-            $this->referenceImageIds = array_slice(array_values(array_unique([$imageId, ...$this->referenceImageIds])), 0, $this->maxReferencePhotos());
-            $this->photos = array_slice($this->photos, 0, max(0, $this->maxReferencePhotos() - count($this->referenceImageIds)));
+    #[On('edit-image')]
+    public function editImage(int $imageId, AiImageEditor $editor): void
+    {
+        if (! Auth::check()) {
+            $this->redirectRoute('login', navigate: true);
+
+            return;
         }
+
+        $image = AiImage::query()
+            ->where('user_id', Auth::id())
+            ->whereKey($imageId)
+            ->first();
+
+        if (! $image) {
+            return;
+        }
+
+        $this->reset('photos', 'referenceImageIds', 'parentReferenceIndexes', 'newPhotos', 'prompt', 'parentId', 'parentPrompt', 'rewriteInstruction', 'resultId', 'errorMessage', 'publishMessage');
+        $this->parentId = $image->id;
+        $this->parentPrompt = $image->prompt;
+        $this->parentReferenceIndexes = array_slice(array_keys(array_filter(
+            $editor->referenceSourcePaths($image),
+            fn (string $path): bool => Storage::disk('public')->exists($path),
+        )), 0, $this->maxReferencePhotos());
+        $this->resetValidation();
+        unset($this->parentReferenceImages);
+        $this->showComposer = true;
     }
 
     public function updatedNewPhotos(): void
     {
         $newPhotos = is_array($this->newPhotos) ? $this->newPhotos : [$this->newPhotos];
-        $this->photos = array_slice([...$this->photos, ...$newPhotos], 0, max(0, $this->maxReferencePhotos() - count($this->referenceImageIds)));
+        $this->photos = array_slice([...$this->photos, ...$newPhotos], 0, max(0, $this->maxReferencePhotos() - count($this->referenceImageIds) - count($this->parentReferenceIndexes)));
         $this->newPhotos = [];
         $this->resultId = null;
         $this->errorMessage = null;
@@ -95,6 +128,12 @@ new class extends Component
     public function removeReferenceImage(int $id): void
     {
         $this->referenceImageIds = array_values(array_filter($this->referenceImageIds, fn (int $imageId) => $imageId !== $id));
+    }
+
+    public function removeParentReference(int $index): void
+    {
+        $this->parentReferenceIndexes = array_values(array_filter($this->parentReferenceIndexes, fn (int $referenceIndex) => $referenceIndex !== $index));
+        unset($this->parentReferenceImages);
     }
 
     public function maxReferencePhotos(): int
@@ -141,7 +180,10 @@ new class extends Component
             'prompt' => $this->promptRules(),
             'referenceImageIds' => ['array', 'max:'.$this->maxReferencePhotos()],
             'referenceImageIds.*' => ['integer'],
-            'photos' => ['array', 'max:'.max(0, $this->maxReferencePhotos() - count($this->referenceImageIds))],
+            'parentId' => ['nullable', 'integer'],
+            'parentReferenceIndexes' => ['array', 'max:'.$this->maxReferencePhotos()],
+            'parentReferenceIndexes.*' => ['integer', 'min:0', 'max:2'],
+            'photos' => ['array', 'max:'.max(0, $this->maxReferencePhotos() - count($this->referenceImageIds) - count($this->parentReferenceIndexes))],
             'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::int('ai.image_upload_max_kb', (int) config('ai.image_upload_max_kb', 32768))],
         ]);
 
@@ -152,13 +194,21 @@ new class extends Component
         }
 
         try {
-            $image = $editor->createPending(request(), $this->photos, $this->prompt, $this->referenceImageIds);
+            $image = $editor->createPending(
+                request(),
+                $this->photos,
+                $this->prompt,
+                $this->referenceImageIds,
+                $this->parentId,
+                $this->parentReferenceIndexes,
+            );
 
             CreateAiImage::dispatch($image->id, $image->user_id);
+            $this->showComposer = false;
             $this->resultId = null;
             unset($this->remainingToday, $this->resultImage);
             $this->dispatch('image-usage-updated');
-            $this->redirectRoute('images.index', ['composer' => 1], navigate: true);
+            $this->redirectRoute('images.index', ['image' => $image->id], navigate: true);
         } catch (InvalidArgumentException $e) {
             $this->errorMessage = $e->getMessage();
         } catch (Throwable $e) {
@@ -221,8 +271,9 @@ new class extends Component
 
     public function createNew(): void
     {
-        $this->reset('photos', 'referenceImageIds', 'newPhotos', 'prompt', 'rewriteInstruction', 'resultId', 'errorMessage', 'publishMessage');
+        $this->reset('photos', 'referenceImageIds', 'parentReferenceIndexes', 'newPhotos', 'prompt', 'parentId', 'parentPrompt', 'rewriteInstruction', 'resultId', 'errorMessage', 'publishMessage');
         $this->resetValidation();
+        unset($this->parentReferenceImages);
         $this->showComposer = true;
     }
 
@@ -259,6 +310,32 @@ new class extends Component
     }
 
     #[Computed]
+    public function parentReferenceImages(): array
+    {
+        if (! $this->parentId || $this->parentReferenceIndexes === []) {
+            return [];
+        }
+
+        $image = AiImage::query()
+            ->where('user_id', Auth::id())
+            ->whereKey($this->parentId)
+            ->first();
+
+        if (! $image) {
+            return [];
+        }
+
+        $paths = app(AiImageEditor::class)->referenceSourcePaths($image);
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        return collect($this->parentReferenceIndexes)
+            ->filter(fn (int $index): bool => isset($paths[$index]) && $disk->exists($paths[$index]))
+            ->mapWithKeys(fn (int $index): array => [$index => $disk->url($paths[$index])])
+            ->all();
+    }
+
+    #[Computed]
     public function resultImage(): ?AiImage
     {
         return $this->resultId ? AiImage::with('category')->find($this->resultId) : null;
@@ -276,7 +353,8 @@ new class extends Component
 	$resultDownloadName = $resultImage?->downloadName();
 	$maxReferencePhotos = $this->maxReferencePhotos();
 	$referenceImages = $this->referenceImages;
-	$referenceCount = count($photos) + $referenceImages->count();
+	$parentReferenceImages = $this->parentReferenceImages;
+	$referenceCount = count($photos) + $referenceImages->count() + count($parentReferenceImages);
 @endphp
 
 <div class="contents" x-data x-on:open-image-composer.window="$wire.openComposer()">
@@ -330,6 +408,14 @@ new class extends Component
 
 							@if ($referenceCount > 0)
 								<div class="grid grid-cols-3 gap-2">
+									@foreach ($parentReferenceImages as $index => $url)
+										<div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
+											<img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" />
+											<flux:button class="absolute right-1 top-1" type="button" size="xs" variant="filled" icon="x-mark"
+												wire:click="removeParentReference({{ $index }})" wire:loading.remove wire:target="createImage"
+												aria-label="{{ __('Remove reference image :number', ['number' => $loop->iteration]) }}" />
+										</div>
+									@endforeach
 									@foreach ($referenceImages as $image)
 										@php($url = $this->imageUrl($image))
 										@if ($url)
@@ -369,6 +455,13 @@ new class extends Component
 							@endif
 							<div class="mt-2 text-sm text-zinc-500" wire:loading wire:target="newPhotos">{{ __('Uploading image...') }}</div>
 						</flux:card>
+
+						@if ($parentId)
+							<div class="space-y-2 rounded-2xl bg-zinc-100 p-4 dark:bg-white/10">
+								<flux:heading size="sm">{{ __('Original prompt') }}</flux:heading>
+								<p class="max-h-40 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-200">{{ $parentPrompt }}</p>
+							</div>
+						@endif
 
 						<div
 							x-data="{

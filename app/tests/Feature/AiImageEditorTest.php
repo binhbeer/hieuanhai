@@ -301,6 +301,53 @@ class AiImageEditorTest extends TestCase
         Storage::disk('public')->assertMissing($pendingPath);
     }
 
+    public function test_child_generation_uses_parent_and_edit_prompts(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+
+        $source = UploadedFile::fake()->image('source.png');
+        $sourcePath = 'ai-image-sources/202607/09/source.jpg';
+        Storage::disk('public')->put($sourcePath, file_get_contents($source->getRealPath()));
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $parent = AiImage::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Original parent prompt',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'response_meta' => ['source_paths' => [$sourcePath]],
+        ]);
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+
+        $child = app(AiImageEditor::class)->createPending(
+            $request,
+            [],
+            'Make the lighting warmer',
+            parentId: $parent->id,
+            parentReferenceIndexes: [0],
+        );
+        $child = app(AiImageEditor::class)->completePending($child);
+
+        Http::assertSent(fn (HttpRequest $request): bool => str_contains($request['prompt'], 'Original prompt: Original parent prompt')
+            && str_contains($request['prompt'], 'Edit instructions: Make the lighting warmer'));
+        $this->assertSame($parent->id, $child->parent_id);
+        $this->assertSame('Make the lighting warmer', $child->prompt);
+        $this->assertSame('succeeded', $child->status);
+    }
+
     public function test_rejected_prompt_does_not_create_image_or_call_generation_api(): void
     {
         Storage::fake('public');

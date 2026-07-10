@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 /**
  * @property int $id
  * @property int|null $user_id
+ * @property int|null $parent_id
  * @property int|null $category_id
  * @property string|null $title
  * @property string $visitor_key
@@ -37,6 +38,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'user_id',
+    'parent_id',
     'category_id',
     'title',
     'visitor_key',
@@ -101,6 +103,14 @@ class AiImage extends BaseModel
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return BelongsTo<AiImage, $this>
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
     }
 
     /**

@@ -111,9 +111,17 @@ class AiImageEditor
     /**
      * @param  array<int, mixed>  $photos
      * @param  array<int, int>  $referenceImageIds
+     * @param  array<int, int>  $parentReferenceIndexes
      */
-    public function createPending(Request $request, array $photos, string $prompt, array $referenceImageIds = []): AiImage
-    {
+    public function createPending(
+        Request $request,
+        array $photos,
+        string $prompt,
+        array $referenceImageIds = [],
+        ?int $parentId = null,
+        array $parentReferenceIndexes = [],
+    ): AiImage {
+
         if (! Auth::check()) {
             throw new \InvalidArgumentException('Vui lòng đăng nhập để tạo ảnh.');
         }
@@ -126,9 +134,9 @@ class AiImageEditor
             throw new \InvalidArgumentException('Bạn đã dùng hết lượt tạo ảnh hôm nay.');
         }
 
-        $userId = Auth::id();
+        $userId = (int) Auth::id();
 
-        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $userId) {
+        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId) {
             User::query()->whereKey($userId)->lockForUpdate()->first();
 
             if (AiImage::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
@@ -141,14 +149,26 @@ class AiImageEditor
                 throw new \InvalidArgumentException('Prompt là bắt buộc.');
             }
 
-            $referenceImageIds = array_slice(array_values(array_unique(array_map('intval', $referenceImageIds))), 0, 3);
+            $parent = $parentId
+                ? AiImage::query()->where('user_id', $userId)->find($parentId)
+                : null;
+
+            if ($parentId && ! $parent) {
+                throw new \InvalidArgumentException('Không tìm thấy ảnh gốc để chỉnh sửa.');
+            }
+
+            $parentReferenceUploads = $parent
+                ? $this->storeParentReferenceUploads($parent, $parentReferenceIndexes)
+                : [];
+            $referenceImageIds = array_slice(array_values(array_unique(array_map('intval', $referenceImageIds))), 0, max(0, 3 - count($parentReferenceUploads)));
             $referenceUploads = $this->storeReferenceImageUploads($referenceImageIds);
-            $photos = array_slice(array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile)), 0, max(0, 3 - count($referenceUploads)));
-            $pendingUploads = [...$referenceUploads, ...$this->storePendingUploads($photos)];
+            $photos = array_slice(array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile)), 0, max(0, 3 - count($parentReferenceUploads) - count($referenceUploads)));
+            $pendingUploads = [...$parentReferenceUploads, ...$referenceUploads, ...$this->storePendingUploads($photos)];
             $photo = $photos[0] ?? null;
 
             return AiImage::create([
                 'user_id' => $userId,
+                'parent_id' => $parent?->id,
                 'visitor_key' => $this->visitorKey($request),
                 'ip_address' => $request->ip(),
                 'prompt' => $prompt,
@@ -161,6 +181,7 @@ class AiImageEditor
                     'upload_size' => $photo?->getSize(),
                     'upload_count' => count($pendingUploads),
                     'reference_image_ids' => array_values(array_filter(array_map(fn (array $upload) => $upload['image_id'] ?? null, $referenceUploads))),
+                    'parent_prompt' => $parent?->prompt,
                     'pending_uploads' => $pendingUploads,
                     'progress' => 'queued',
                 ],
@@ -179,13 +200,15 @@ class AiImageEditor
 
         try {
             $photos = $this->pendingUploadedFiles($pendingUploads);
+            $parentPrompt = $requestMeta['parent_prompt'] ?? null;
             $finalPrompt = trim(implode("\n\n", array_filter([
                 $photos === [] ? null : 'Use the provided reference image as the source. Edit that image according to the instructions. Preserve the original subjects, identities, composition, pose, and count unless explicitly asked to change them. Do not create an unrelated new image.',
-                $image->prompt,
+                is_string($parentPrompt) ? 'Original prompt: '.$parentPrompt : null,
+                $image->parent_id ? 'Edit instructions: '.$image->prompt : $image->prompt,
             ])));
 
             $this->updateImageProgress($image, $requestMeta, 'reviewing');
-            $this->reviewForCreation($image->prompt);
+            $this->reviewForCreation($finalPrompt);
             $this->updateImageProgress($image, $requestMeta, 'generating');
             $result = $this->generateImage($photos, $finalPrompt, $image->provider, $image->model);
             $this->updateImageProgress($image, $requestMeta, 'saving');
@@ -200,7 +223,7 @@ class AiImageEditor
                 throw new \RuntimeException('Không lưu được ảnh đã tạo.');
             }
 
-            unset($requestMeta['pending_uploads'], $requestMeta['progress']);
+            unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads'], $requestMeta['progress']);
 
             $image->update([
                 'source_path' => $result['source_path'],
@@ -219,7 +242,7 @@ class AiImageEditor
                 report($e);
             }
 
-            unset($requestMeta['pending_uploads']);
+            unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads']);
             $requestMeta['progress'] = 'failed';
 
             $image->update([
@@ -476,6 +499,56 @@ class AiImageEditor
         $disk = Storage::disk('public');
 
         return $disk->url($image->result_path);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function referenceSourcePaths(AiImage $image): array
+    {
+        $paths = is_array($image->response_meta) ? ($image->response_meta['source_paths'] ?? []) : [];
+
+        if (! is_array($paths)) {
+            return [];
+        }
+
+        return array_slice(array_values(array_filter($paths, fn (mixed $path): bool => is_string($path) && $path !== '')), 0, 3, true);
+    }
+
+    /**
+     * @param  array<int, int>  $indexes
+     * @return array<int, array{path: string, name: string|null, mime: string|null}>
+     */
+    private function storeParentReferenceUploads(AiImage $parent, array $indexes): array
+    {
+        $sourcePaths = $this->referenceSourcePaths($parent);
+        $indexes = array_slice(array_values(array_unique(array_map('intval', $indexes))), 0, 3);
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+        $uploads = [];
+
+        foreach ($indexes as $index) {
+            $sourcePath = $sourcePaths[$index] ?? null;
+
+            if (! is_string($sourcePath) || ! $disk->exists($sourcePath)) {
+                continue;
+            }
+
+            $extension = pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'jpg';
+            $path = $this->datedPath('ai-image-pending', Str::uuid().'.'.$extension);
+
+            if (! $disk->put($path, $disk->get($sourcePath), ['visibility' => 'private'])) {
+                throw new \RuntimeException('Không lưu được ảnh tham chiếu.');
+            }
+
+            $uploads[] = [
+                'path' => $path,
+                'name' => basename($sourcePath),
+                'mime' => $this->mimeForExtension($extension),
+            ];
+        }
+
+        return $uploads;
     }
 
     /**
