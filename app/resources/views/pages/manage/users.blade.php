@@ -1,8 +1,10 @@
 <?php
 
+use App\Concerns\PasswordValidationRules;
 use App\Enums\UserRole;
 use App\Models\User;
 use Flux\Flux;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -10,11 +12,21 @@ use Livewire\WithPagination;
 
 new #[Title('Manage users')] class extends Component
 {
-    use WithPagination;
+    use PasswordValidationRules, WithPagination;
 
     public string $search = '';
 
     public string $status = 'all';
+
+    public string $name = '';
+
+    public string $email = '';
+
+    public string $role = 'user';
+
+    public string $password = '';
+
+    public string $password_confirmation = '';
 
     public function mount(): void
     {
@@ -29,6 +41,31 @@ new #[Title('Manage users')] class extends Component
     public function updatedStatus(): void
     {
         $this->resetPage();
+    }
+
+    public function create(): void
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        $validated = $this->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)],
+            'role' => ['required', Rule::enum(UserRole::class)],
+            'password' => $this->passwordRules(),
+        ]);
+
+        User::create($validated);
+
+        $this->resetCreateForm();
+        $this->resetPage();
+        Flux::modal('create-user')->close();
+        Flux::toast(variant: 'success', text: __('User created.'));
+    }
+
+    public function resetCreateForm(): void
+    {
+        $this->reset('name', 'email', 'role', 'password', 'password_confirmation');
+        $this->resetValidation(['name', 'email', 'role', 'password']);
     }
 
     public function toggleBan(int $id): void
@@ -74,8 +111,39 @@ new #[Title('Manage users')] class extends Component
 			<flux:heading size="xl">{{ __('Manage users') }}</flux:heading>
 			<flux:text variant="subtle">{{ __('List, edit roles, and ban accounts.') }}</flux:text>
 		</div>
-		<flux:button :href="route('manage.index')" variant="filled" wire:navigate>{{ __('Manage') }}</flux:button>
+		<div class="flex gap-2">
+			<flux:modal.trigger name="create-user">
+				<flux:button type="button" variant="primary">{{ __('Add user') }}</flux:button>
+			</flux:modal.trigger>
+			<flux:button :href="route('manage.index')" variant="filled" wire:navigate>{{ __('Manage') }}</flux:button>
+		</div>
 	</div>
+
+	<flux:modal name="create-user" class="md:w-lg" :show="$errors->hasAny(['name', 'email', 'role', 'password'])" @close="resetCreateForm">
+		<form class="space-y-5" wire:submit="create">
+			<div class="space-y-1">
+				<flux:heading size="lg">{{ __('Add user') }}</flux:heading>
+				<flux:text variant="subtle">{{ __('Create a user account and assign its role.') }}</flux:text>
+			</div>
+
+			<flux:input wire:model="name" :label="__('Name')" required autofocus />
+			<flux:input wire:model="email" type="email" :label="__('Email')" required />
+			<flux:select wire:model="role" :label="__('Role')">
+				@foreach (UserRole::cases() as $roleOption)
+					<flux:select.option :value="$roleOption->value">{{ $this->roleLabel($roleOption) }}</flux:select.option>
+				@endforeach
+			</flux:select>
+			<flux:input wire:model="password" type="password" :label="__('Password')" viewable required />
+			<flux:input wire:model="password_confirmation" type="password" :label="__('Confirm password')" viewable required />
+
+			<div class="flex justify-end gap-2">
+				<flux:modal.close>
+					<flux:button type="button" variant="ghost">{{ __('Cancel') }}</flux:button>
+				</flux:modal.close>
+				<flux:button type="submit" variant="primary">{{ __('Create user') }}</flux:button>
+			</div>
+		</form>
+	</flux:modal>
 
 	<flux:card class="space-y-4">
 		<div class="grid gap-3 sm:grid-cols-[1fr_14rem]">

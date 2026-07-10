@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -471,6 +472,45 @@ class AiImageApiTest extends TestCase
             ->assertSee('Đã khóa');
 
         $this->assertNotNull($user->refresh()->banned_at);
+    }
+
+    public function test_admin_can_create_user_from_management(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.users')
+            ->set('name', 'New Moderator')
+            ->set('email', 'moderator@example.com')
+            ->set('role', 'mod')
+            ->set('password', 'secret123')
+            ->set('password_confirmation', 'secret123')
+            ->call('create')
+            ->assertHasNoErrors()
+            ->assertSet('name', '')
+            ->assertSet('role', 'user')
+            ->assertSet('password', '')
+            ->assertSee('New Moderator');
+
+        $user = User::query()->where('email', 'moderator@example.com')->firstOrFail();
+
+        $this->assertSame('mod', $user->role->value);
+        $this->assertTrue(Hash::check('secret123', $user->password));
+    }
+
+    public function test_user_creation_rejects_duplicate_email_and_unconfirmed_password(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+        $existing = User::factory()->create();
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.users')
+            ->set('name', 'Duplicate User')
+            ->set('email', $existing->email)
+            ->set('password', 'secret123')
+            ->set('password_confirmation', 'different')
+            ->call('create')
+            ->assertHasErrors(['email', 'password']);
     }
 
     public function test_admin_can_update_user_api_key_quota_from_user_edit(): void
