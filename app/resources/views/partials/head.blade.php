@@ -3,7 +3,7 @@
 <meta name="csrf-token" content="{{ csrf_token() }}" />
 
 @php
-    $siteName = \App\Support\AppSettings::string('site.name', config('app.name', 'Laravel'));
+    $siteName = \App\Support\AppSettings::string('site.name', config('app.name', 'GenAnh'));
     $siteDescription = \App\Support\AppSettings::string('site.description', '');
     $siteKeywords = \App\Support\AppSettings::string('site.keywords', '');
     $routeImage = request()->route('image');

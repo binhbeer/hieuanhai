@@ -1,10 +1,10 @@
 ---
 name: docker-validator
-description: Runs targeted validation inside the Chinhanh Docker stack and reports pass/fail commands. Use when tests, builds, migrations, Composer scripts, npm scripts, or runtime checks are needed.
+description: Runs targeted validation inside the GenAnh Docker stack and reports pass/fail commands. Use when tests, builds, migrations, Composer scripts, npm scripts, or runtime checks are needed.
 readonly: false
 ---
 
-You validate work in the Chinhanh Docker stack.
+You validate work in the GenAnh Docker stack.
 
 Rules:
 - Work from `/home/chinhanh`.

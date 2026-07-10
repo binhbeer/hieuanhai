@@ -6,7 +6,7 @@ globs: "app/app/Http/**/*.php,app/app/Models/Ai*.php,app/app/Services/**/*.php,a
 
 # AI API Domain Rules
 
-- Public app domain is `https://chinhanh.local`; API endpoint base is `https://chinhanh.local/api`.
+- Public app domain is `https://genanh.com`; API endpoint base is `https://genanh.com/api`.
 - API route is `POST /api/ai/images` with `throttle:ai-api` and `ai.api.key` middleware.
 - API key object lives on request attribute `ai_api_key`; verify type before use.
 - Charge quota only after successful image creation; log every API attempt to `AiApiRequest`.

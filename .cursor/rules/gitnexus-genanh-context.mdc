@@ -1,11 +1,11 @@
 ---
-description: GitNexus must use Chinhanh repository context in this workspace
+description: GitNexus must use GenAnh repository context in this workspace
 alwaysApply: true
 ---
 
-# GitNexus Chinhanh Context
+# GitNexus GenAnh Context
 
-- This workspace is Chinhanh, not TSS.
+- This workspace is GenAnh, not TSS.
 - When using GitNexus MCP tools, pass `repo: "hieuanhai"` unless user explicitly asks for another repo.
 - GitNexus repo `hieuanhai` maps to `/home/chinhanh` on branch `main`.
 - Do not omit `repo` for GitNexus queries because indexed TSS repos also exist.

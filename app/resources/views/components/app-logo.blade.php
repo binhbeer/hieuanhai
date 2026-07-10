@@ -2,15 +2,17 @@
     'sidebar' => false,
 ])
 
+@php($siteName = \App\Support\AppSettings::string('site.name', config('app.name', 'GenAnh')))
+
 @if ($sidebar)
 	<a {{ $attributes->merge(['class' => 'flex items-center gap-2']) }} style="height: 3rem;">
 		<x-app-logo-icon style="display: block; height: 2rem; max-height: none; max-width: none; object-fit: contain; width: auto;" />
 		<span class="truncate text-sm font-semibold in-data-flux-sidebar-collapsed-desktop:hidden">
-			{{ __('AI Photo Studio') }}
+			{{ $siteName }}
 		</span>
 	</a>
 @else
-	<flux:brand :name="__('AI Photo Studio')" {{ $attributes }}>
+	<flux:brand :name="$siteName" {{ $attributes }}>
 		<x-slot
 			class="bg-accent-content text-accent-foreground flex aspect-square size-8 items-center justify-center rounded-md"
 			name="logo">

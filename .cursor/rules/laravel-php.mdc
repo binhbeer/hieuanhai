@@ -1,5 +1,5 @@
 ---
-description: Laravel PHP standards for Chinhanh
+description: Laravel PHP standards for GenAnh
 alwaysApply: false
 globs: "app/**/*.php,app/routes/**/*.php,app/database/**/*.php"
 ---

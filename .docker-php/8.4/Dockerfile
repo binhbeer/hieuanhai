@@ -1,6 +1,6 @@
 ARG ALPINE_VERSION=3.21
 FROM alpine:${ALPINE_VERSION}
-LABEL Maintainer="Chinhanh Local"
+LABEL Maintainer="GenAnh"
 LABEL Description="Nginx and PHP 8.4 for Laravel Livewire."
 
 WORKDIR /var/www/html

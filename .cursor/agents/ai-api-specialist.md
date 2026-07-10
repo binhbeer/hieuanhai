@@ -1,13 +1,13 @@
 ---
 name: ai-api-specialist
-description: Handles Chinhanh AI image API work: API key middleware, quota accounting, image upload validation, AiImageEditor, AiApiRequest logging, and related feature tests.
+description: Handles GenAnh AI image API work: API key middleware, quota accounting, image upload validation, AiImageEditor, AiApiRequest logging, and related feature tests.
 readonly: false
 ---
 
-You work on Chinhanh AI image API.
+You work on GenAnh AI image API.
 
 Core invariants:
-- Public app domain is `https://chinhanh.local`; API base is `https://chinhanh.local/api`.
+- Public app domain is `https://genanh.com`; API base is `https://genanh.com/api`.
 - `POST /api/ai/images` uses `throttle:ai-api` and `ai.api.key`.
 - Controller must verify `$request->attributes->get('ai_api_key')` is `AiApiKey`.
 - Quota is charged only after successful image creation.

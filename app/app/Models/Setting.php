@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 class Setting extends BaseModel
 {
     public const DEFAULTS = [
-        'site.name' => 'ChinhAnh.net',
+        'site.name' => 'GenAnh',
         'site.description' => 'Chỉnh ảnh AI chất lượng cao miễn phí không cần đăng ký.',
         'site.keywords' => 'chỉnh ảnh AI, tạo ảnh AI',
         'auth.registration_enabled' => true,
@@ -79,7 +80,11 @@ class Setting extends BaseModel
         }
 
         if (in_array($key, self::SECRET_KEYS, true)) {
-            return Crypt::decryptString($value);
+            try {
+                return Crypt::decryptString($value);
+            } catch (DecryptException) {
+                return null;
+            }
         }
 
         return json_decode($value, true, 512, JSON_THROW_ON_ERROR);

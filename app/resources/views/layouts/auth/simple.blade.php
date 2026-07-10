@@ -12,7 +12,7 @@
 				<span class="mb-1 flex h-20 w-20 items-center justify-center rounded-md">
 					<x-app-logo-icon class="size-20 fill-current text-black dark:text-white" />
 				</span>
-				<span class="sr-only">{{ config('app.name', 'Laravel') }}</span>
+				<span class="sr-only">{{ config('app.name', 'GenAnh') }}</span>
 			</a>
 			<div class="flex flex-col gap-6">
 				{{ $slot }}

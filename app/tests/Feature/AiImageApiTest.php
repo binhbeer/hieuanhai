@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -530,13 +531,31 @@ class AiImageApiTest extends TestCase
         $this->assertSame(18, $key->quotaRemaining());
     }
 
+    public function test_settings_page_handles_invalid_encrypted_openai_key(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+        DB::table('settings')->insert([
+            'key' => 'ai.openai_api_key',
+            'value' => 'not-encrypted-with-this-app-key',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->assertSet('openaiApiKey', '')
+            ->assertOk();
+
+        $this->assertNull(Setting::getValue('ai.openai_api_key'));
+    }
+
     public function test_admin_can_update_settings(): void
     {
         $admin = User::factory()->create(['id' => 1]);
 
         Livewire::actingAs($admin)
             ->test('pages::manage.settings')
-            ->set('siteName', 'ChinhAnh Pro')
+            ->set('siteName', 'GenAnh Pro')
             ->set('registrationEnabled', false)
             ->set('emailVerificationRequired', false)
             ->set('aiReviewModel', 'gpt-5.5-mini')
@@ -549,7 +568,7 @@ class AiImageApiTest extends TestCase
             ->call('save')
             ->assertHasNoErrors();
 
-        $this->assertSame('ChinhAnh Pro', Setting::getValue('site.name'));
+        $this->assertSame('GenAnh Pro', Setting::getValue('site.name'));
         $this->assertFalse((bool) Setting::getValue('auth.registration_enabled'));
         $this->assertFalse((bool) Setting::getValue('auth.email_verification_required'));
         $this->assertSame('gpt-5.5-mini', Setting::getValue('ai.image_review_model'));

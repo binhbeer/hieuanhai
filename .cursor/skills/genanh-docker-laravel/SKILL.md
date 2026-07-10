@@ -1,9 +1,9 @@
 ---
-name: chinhanh-docker-laravel
-description: Run and validate work in the Chinhanh Laravel Docker stack. Use when changing PHP, Blade, Livewire, Vite assets, migrations, tests, Composer scripts, Docker services, or when the user mentions docker, artisan, composer, npm, vite, mysql, cache, queue, or tests in this project.
+name: genanh-docker-laravel
+description: Run and validate work in the GenAnh Laravel Docker stack. Use when changing PHP, Blade, Livewire, Vite assets, migrations, tests, Composer scripts, Docker services, or when the user mentions docker, artisan, composer, npm, vite, mysql, cache, queue, or tests in this project.
 ---
 
-# Chinhanh Docker Laravel
+# GenAnh Docker Laravel
 
 ## Context
 - Workspace root: `/home/chinhanh`.

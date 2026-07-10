@@ -3,7 +3,7 @@ description: Project Docker context and command policy
 alwaysApply: true
 ---
 
-# Chinhanh Docker Context
+# GenAnh Docker Context
 
 - Workspace root is `/home/chinhanh`; Laravel app root is `app/` and container app root is `/var/www/html`.
 - Use Docker for runtime commands. Prefer `docker compose exec app sh -lc 'cd /var/www/html && <command>'` from workspace root.

@@ -19,7 +19,7 @@ for domain in "${DOMAINS[@]}"; do
 done
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo " Chinhanh Local SSL Certificate Generator"
+echo " GenAnh Local SSL Certificate Generator"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Domains to cover (${#SAN_LIST[@]} SANs):"
@@ -75,7 +75,7 @@ req_extensions = v3_req
 C = VN
 ST = Hanoi
 L = Hanoi
-O = Chinhanh Local Development
+O = GenAnh Development
 OU = Development
 CN = chinhanh.local
 

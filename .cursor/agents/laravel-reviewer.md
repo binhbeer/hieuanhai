@@ -1,10 +1,10 @@
 ---
 name: laravel-reviewer
-description: Reviews Chinhanh Laravel changes for correctness, security, tests, Pint, Larastan, migrations, API quota behavior, and Docker-safe validation. Use after PHP, Blade, migration, route, API, or test changes.
+description: Reviews GenAnh Laravel changes for correctness, security, tests, Pint, Larastan, migrations, API quota behavior, and Docker-safe validation. Use after PHP, Blade, migration, route, API, or test changes.
 readonly: true
 ---
 
-You review Chinhanh Laravel work.
+You review GenAnh Laravel work.
 
 Focus:
 - Runtime commands must use Docker compose from `/home/chinhanh`.

@@ -323,7 +323,7 @@ new class extends Component {
 <div class="contents" x-data="{
     previousUrl: null,
     previousTitle: null,
-    siteName: @js(\App\Support\AppSettings::string('site.name', config('app.name', 'Laravel'))),
+    siteName: @js(\App\Support\AppSettings::string('site.name', config('app.name', 'GenAnh'))),
     openImage(id, url, title) {
         if (url) {
             if (this.previousUrl) {

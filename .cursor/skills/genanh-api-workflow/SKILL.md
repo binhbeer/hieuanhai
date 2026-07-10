@@ -1,12 +1,12 @@
 ---
-name: chinhanh-api-workflow
-description: Work on Chinhanh AI image API, API keys, quota, request logging, upload validation, and image result URLs. Use when editing AiImageController, AiImageEditor, AiApiKey, AiApiRequest, routes/api.php, quota UI, or AI image feature tests.
+name: genanh-api-workflow
+description: Work on GenAnh AI image API, API keys, quota, request logging, upload validation, and image result URLs. Use when editing AiImageController, AiImageEditor, AiApiKey, AiApiRequest, routes/api.php, quota UI, or AI image feature tests.
 ---
 
-# Chinhanh AI API Workflow
+# GenAnh AI API Workflow
 
 ## Flow
-- Public app domain: `https://chinhanh.local`; API endpoint base: `https://chinhanh.local/api`.
+- Public app domain: `https://genanh.com`; API endpoint base: `https://genanh.com/api`.
 1. `POST /api/ai/images` enters `routes/api.php` with `throttle:ai-api` and `ai.api.key`.
 2. Middleware stores validated key on `$request->attributes['ai_api_key']`.
 3. `AiImageController::store()` validates prompt/uploads, checks quota, calls `AiImageEditor::create()`.
