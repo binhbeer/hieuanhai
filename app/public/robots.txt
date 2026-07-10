@@ -1,2 +1,9 @@
 User-agent: *
-Disallow:
+Disallow: /manage
+Disallow: /settings
+Disallow: /favorites
+Disallow: /images
+Disallow: /dashboard
+Disallow: /api
+
+Sitemap: https://hieuanhai.com/sitemap.xml

@@ -23,4 +23,9 @@ class AiTag extends BaseModel
     {
         return $this->belongsToMany(AiImage::class, 'ai_image_tag', 'ai_tag_id', 'ai_image_id')->withTimestamps();
     }
+
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
 }

@@ -2,6 +2,7 @@
 
 use App\Models\AiImage;
 use App\Models\AiImageFavorite;
+use App\Models\AiTag;
 use App\Models\Category;
 use App\Services\AiImageEditor;
 use Flux\Flux;
@@ -15,18 +16,21 @@ new #[Title('Create image')] class extends Component
 {
     public ?Category $category = null;
 
+    public ?AiTag $tag = null;
+
     public string $search = '';
 
     public string $sort = 'featured';
 
     public int $perPage = 36;
 
-    public function mount(?Category $category = null, ?AiImage $image = null): void
+    public function mount(?Category $category = null, ?AiTag $tag = null, ?AiImage $image = null): void
     {
         $search = request()->query('search');
         $sort = request()->query('sort');
 
         $this->category = $category;
+        $this->tag = $tag;
         $this->search = is_string($search) ? trim($search) : '';
         $this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'featured';
 
@@ -77,7 +81,7 @@ new #[Title('Create image')] class extends Component
     #[Computed]
     public function images()
     {
-        return app(AiImageEditor::class)->publishedGallery($this->category, $this->perPage + 1, $this->search, $this->sort);
+        return app(AiImageEditor::class)->publishedGallery(category: $this->category, limit: $this->perPage + 1, search: $this->search, sort: $this->sort, tag: $this->tag);
     }
 
     public function visibleImages()
@@ -183,10 +187,10 @@ new #[Title('Create image')] class extends Component
 <section class="min-h-full text-zinc-950 dark:text-white">
 	<div class="">
 		<main class="min-w-0">
-			@if($category?->name || $search)
+			@if($category?->name || $tag?->name || $search)
 				<div class="mb-5 flex flex-wrap items-end justify-between gap-3 pr-28">
 					<div>
-						<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ $category?->name ?? 'AI Gallery' }}</h1>
+						<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ $category?->name ?? ($tag?->name ? '#'.$tag->name : 'AI Gallery') }}</h1>
 						<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Published community images. Click an image to view details.') }}</p>
 					</div>
 				</div>
@@ -205,11 +209,11 @@ new #[Title('Create image')] class extends Component
 					</div>
 				</div>
 			@else
-			<x-media-list :images="$this->visibleImages()">
+			<x-media-list :images="$this->visibleImages()" ordered>
 				@foreach ($this->visibleImages() as $image)
 				@php($thumbUrl = $this->imageThumbUrl($image))
 				@if ($thumbUrl)
-					<x-media-item :image="$image" :url="$thumbUrl" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" wire:key="published-image-{{ $image->id }}">
+					<x-media-item class="mb-0!" :image="$image" :url="$thumbUrl" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" defer-reveal wire:key="published-image-{{ $image->id }}">
 						<x-slot:badge>
 							<flux:button class="shadow" type="button" size="sm" :variant="$this->isFavorite($image) ? 'primary' : 'filled'" icon="heart" wire:click.stop="toggleFavorite({{ $image->id }})" aria-label="{{ $this->isFavorite($image) ? __('Remove favorite') : __('Favorite image') }}">{{ $this->favoriteCount($image) }}</flux:button>
 						</x-slot:badge>

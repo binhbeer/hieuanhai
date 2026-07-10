@@ -48,12 +48,52 @@
     }
 }
 
+@layer components {
+    .media-list-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .media-list-columns {
+        column-count: 2;
+    }
+
+    @media (width > 768px) {
+        .media-list-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .media-list-columns {
+            column-count: 4;
+        }
+    }
+
+    @media (width > 1440px) {
+        .media-list-grid {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+
+        .media-list-columns {
+            column-count: 6;
+        }
+    }
+
+    @media (width > 2100px) {
+        .media-list-grid {
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+        }
+
+        .media-list-columns {
+            column-count: 8;
+        }
+    }
+}
+
 [data-flux-field]:not(ui-radio, ui-checkbox) {
     @apply grid gap-2;
 }
 
 [data-flux-label] {
-    @apply  !mb-0 !leading-tight;
+    @apply mb-0! leading-tight!;
 }
 
 input:focus[data-flux-control],

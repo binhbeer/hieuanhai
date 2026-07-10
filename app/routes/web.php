@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AiTag;
 use App\Models\Category;
 use Illuminate\Support\Facades\Route;
 
@@ -8,8 +9,13 @@ Route::bind('category', fn (string $value): Category => Category::query()
     ->where('status', 'active')
     ->firstOrFail());
 
+Route::bind('tag', fn (string $value): AiTag => AiTag::query()
+    ->where('slug', $value)
+    ->firstOrFail());
+
 Route::livewire('/', 'pages::gallery')->name('home');
 Route::livewire('c/{category:slug}', 'pages::gallery')->name('categories.show');
+Route::livewire('t/{tag:slug}', 'pages::gallery')->name('tags.show');
 Route::livewire('anh/{image}', 'pages::gallery')->name('images.show');
 Route::livewire('quota-check', 'pages::quota-check')->name('quota-check.index');
 Route::livewire('favorites', 'pages::favorites')->middleware('auth')->name('favorites.index');

@@ -60,6 +60,7 @@ class AiImageEditor
             'visitor_key' => $visitorKey,
             'ip_address' => $request->ip(),
             'prompt' => $prompt,
+            'source' => $this->source($request),
             'provider' => $provider,
             'model' => $model,
             'status' => 'pending',
@@ -273,7 +274,7 @@ class AiImageEditor
     /**
      * @return Collection<int, AiImage>
      */
-    public function publishedGallery(?Category $category = null, int $limit = 80, string $search = '', string $sort = 'featured'): Collection
+    public function publishedGallery(?Category $category = null, int $limit = 80, string $search = '', string $sort = 'featured', ?AiTag $tag = null): Collection
     {
         $search = trim($search);
         $sort = in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'featured';
@@ -284,11 +285,13 @@ class AiImageEditor
             ->where('status', 'succeeded')
             ->whereNotNull('result_path')
             ->when($category, fn ($query) => $query->where('category_id', $category->id))
+            ->when($tag, fn ($query) => $query->whereHas('tags', fn ($query) => $query->whereKey($tag->id)))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('title', 'like', '%'.$search.'%')
                         ->orWhere('prompt', 'like', '%'.$search.'%')
-                        ->orWhereHas('category', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
+                        ->orWhereHas('category', fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
+                        ->orWhereHas('tags', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
                 });
             });
 
@@ -330,6 +333,21 @@ class AiImageEditor
             ->latest('published_at')
             ->limit($limit)
             ->get();
+    }
+
+    private function source(Request $request): ?string
+    {
+        $source = trim((string) $request->input('source', ''));
+
+        if ($source === '') {
+            return null;
+        }
+
+        if (! preg_match('/^[A-Za-z0-9._:-]+$/', $source)) {
+            throw new \InvalidArgumentException('Source không hợp lệ.');
+        }
+
+        return Str::limit($source, 120, '');
     }
 
     public function visitorKey(Request $request): string

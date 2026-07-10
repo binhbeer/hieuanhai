@@ -6,6 +6,7 @@ use App\Ai\ImageReviewAgent;
 use App\Models\AiApiKey;
 use App\Models\AiApiRequest;
 use App\Models\AiImage;
+use App\Models\AiTag;
 use App\Models\Category;
 use App\Models\Setting;
 use App\Models\User;
@@ -89,6 +90,7 @@ class AiImageApiTest extends TestCase
             ->withHeader('Authorization', 'Bearer '.$plain)
             ->post('/api/ai/images/publish', [
                 'prompt' => 'Make this a public avatar portrait',
+                'source' => 'meigen-123',
                 'images' => [UploadedFile::fake()->image('source.jpg', 800, 600)],
             ]);
 
@@ -100,6 +102,7 @@ class AiImageApiTest extends TestCase
             ->assertJsonPath('status', 'succeeded')
             ->assertJsonPath('published', true)
             ->assertJsonPath('title', 'Public avatar portrait')
+            ->assertJsonPath('source', 'meigen-123')
             ->assertJsonPath('category.slug', 'portraits')
             ->assertJsonPath('tags.0', 'avatar')
             ->assertJsonPath('tags.1', 'studio')
@@ -116,6 +119,7 @@ class AiImageApiTest extends TestCase
         $key->refresh();
         $this->assertSame(1, $key->quota_used);
         $this->assertTrue($image->is_published);
+        $this->assertSame('meigen-123', $image->source);
         $this->assertSame('portraits', $image->category?->slug);
         $this->assertSame(['avatar', 'studio'], $image->tags->pluck('name')->values()->all());
         $this->assertDatabaseHas('ai_api_requests', [
@@ -187,6 +191,94 @@ class AiImageApiTest extends TestCase
         }
 
         $this->withServerVariables(['REMOTE_ADDR' => $ip])->getJson('/api/categories')->assertTooManyRequests();
+    }
+
+    public function test_public_images_search_filters_published_images(): void
+    {
+        $user = User::factory()->create(['name' => 'Search User']);
+        $otherUser = User::factory()->create();
+        $category = Category::create(['name' => 'Search Portraits', 'slug' => 'search-portraits', 'sort_order' => 1, 'status' => 'active']);
+        $otherCategory = Category::create(['name' => 'Search Products', 'slug' => 'search-products', 'sort_order' => 2, 'status' => 'active']);
+        $tag = AiTag::create(['name' => 'Meigen Tag', 'slug' => 'meigen-tag']);
+        $otherTag = AiTag::create(['name' => 'Other Tag', 'slug' => 'other-tag']);
+        $image = AiImage::create([
+            'user_id' => $user->id,
+            'category_id' => $category->id,
+            'title' => 'Meigen portrait result',
+            'visitor_key' => 'visitor-search-a',
+            'prompt' => 'A searchable prompt with meigen keyword',
+            'source' => 'meigen-456',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/202607/10/search.png',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        $image->tags()->sync([$tag->id]);
+        $other = AiImage::create([
+            'user_id' => $otherUser->id,
+            'category_id' => $otherCategory->id,
+            'title' => 'Other result',
+            'visitor_key' => 'visitor-search-b',
+            'prompt' => 'Different prompt',
+            'source' => 'other-456',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/202607/10/other.png',
+            'is_published' => true,
+            'published_at' => now()->subMinute(),
+        ]);
+        $other->tags()->sync([$otherTag->id]);
+        AiImage::create([
+            'user_id' => $user->id,
+            'category_id' => $category->id,
+            'title' => 'Hidden meigen result',
+            'visitor_key' => 'visitor-search-c',
+            'prompt' => 'Hidden prompt',
+            'source' => 'meigen-456',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/202607/10/hidden.png',
+            'is_published' => false,
+        ]);
+
+        $response = $this->getJson('/api/images/search?keyword=meigen&category=search-portraits&tag=meigen-tag&source=meigen-456&user='.$user->id);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $image->id)
+            ->assertJsonPath('data.0.title', 'Meigen portrait result')
+            ->assertJsonPath('data.0.source', 'meigen-456')
+            ->assertJsonPath('data.0.category.slug', 'search-portraits')
+            ->assertJsonPath('data.0.tags.0.slug', 'meigen-tag')
+            ->assertJsonPath('data.0.user.id', $user->id)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonMissing(['id' => $other->id]);
+
+        $this->getJson('/api/images/search?source=meigen-456')->assertJsonPath('meta.total', 1);
+        $this->getJson('/api/images/search?category=search-products')->assertJsonPath('data.0.id', $other->id);
+        $this->getJson('/api/images/search?tag=other-tag')->assertJsonPath('data.0.id', $other->id);
+        $this->getJson('/api/images/search?user='.$otherUser->id)->assertJsonPath('data.0.id', $other->id);
+    }
+
+    public function test_api_rejects_invalid_source_without_charging_quota(): void
+    {
+        [$plain, $key] = $this->apiKey(quotaLimit: 1);
+
+        $this
+            ->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images', [
+                'prompt' => 'Make a comic portrait',
+                'source' => 'bad source with spaces',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('source');
+
+        $key->refresh();
+        $this->assertSame(0, $key->quota_used);
     }
 
     public function test_api_accepts_prompt_without_images(): void

@@ -8,4 +8,7 @@ Route::middleware(['throttle:ai-api', 'ai.api.key'])->group(function (): void {
     Route::post('ai/images/publish', [AiImageController::class, 'storeAndPublish']);
 });
 
-Route::middleware('throttle:public-api')->get('categories', [AiImageController::class, 'categories']);
+Route::middleware('throttle:public-api')->group(function (): void {
+    Route::get('categories', [AiImageController::class, 'categories']);
+    Route::get('images/search', [AiImageController::class, 'search']);
+});

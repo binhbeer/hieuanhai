@@ -19,6 +19,7 @@ use Illuminate\Support\Str;
  * @property string|null $preset
  * @property string $prompt
  * @property string|null $custom_prompt
+ * @property string|null $source
  * @property string|null $source_path
  * @property string|null $result_path
  * @property string $provider
@@ -43,6 +44,7 @@ use Illuminate\Support\Str;
     'preset',
     'prompt',
     'custom_prompt',
+    'source',
     'source_path',
     'result_path',
     'provider',
