@@ -94,7 +94,7 @@ new #[Title('Ảnh yêu thích')] class extends Component
 					@foreach ($this->images as $image)
 						@php($url = $this->imageUrl($image))
 						@if ($url)
-							<x-media-item :image="$image" :url="$url" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" wire:key="favorite-image-{{ $image->id }}">
+							<x-media-item :image="$image" :url="$url" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" :loading="$loop->iteration <= 5 ? 'eager' : 'lazy'" wire:key="favorite-image-{{ $image->id }}">
 								<x-slot:badge>
 									<flux:button class="shadow" type="button" size="sm" variant="primary" icon="heart" wire:click.stop="removeFavorite({{ $image->id }})" aria-label="{{ __('Remove favorite') }}">{{ (int) ($image->favorites_count ?? 0) }}</flux:button>
 								</x-slot:badge>

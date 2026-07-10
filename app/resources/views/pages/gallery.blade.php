@@ -21,7 +21,7 @@ new #[Title('Trang chủ')] class extends Component {
 
 	public string $sort = 'featured';
 
-	public int $perPage = 20;
+	public int $perPage = 36;
 
 	public function mount(?Category $category = null, ?AiTag $tag = null, ?AiImage $image = null): void
 	{
@@ -46,7 +46,7 @@ new #[Title('Trang chủ')] class extends Component {
 
 	public function loadMore(): void
 	{
-		$this->perPage += 20;
+		$this->perPage += 36;
 
 		unset($this->images);
 	}
@@ -212,7 +212,7 @@ new #[Title('Trang chủ')] class extends Component {
 				@foreach ($this->visibleImages() as $image)
 				@php($thumbUrl = $this->imageThumbUrl($image))
 				@if ($thumbUrl)
-					<x-media-item :image="$image" :url="$thumbUrl" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" wire:key="published-image-{{ $image->id }}">
+					<x-media-item :image="$image" :url="$thumbUrl" :detail-url="$this->detailUrl($image)" :creator="$this->creatorName($image)" :loading="$loop->iteration <= 5 ? 'eager' : 'lazy'" wire:key="published-image-{{ $image->id }}">
 						<x-slot:badge>
 							<flux:button class="shadow" type="button" size="sm" :variant="$this->isFavorite($image) ? 'primary' : 'filled'" icon="heart" wire:click.stop="toggleFavorite({{ $image->id }})" aria-label="{{ $this->isFavorite($image) ? __('Remove favorite') : __('Favorite image') }}">{{ $this->favoriteCount($image) }}</flux:button>
 						</x-slot:badge>

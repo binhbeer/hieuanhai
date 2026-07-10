@@ -3,6 +3,7 @@
 	'url',
 	'detailUrl',
 	'creator' => null,
+	'loading' => 'lazy',
 ])
 
 @php($detailTitle = Str::limit($image->title ?: $image->prompt, 70, ''))
@@ -12,7 +13,7 @@
 	<flux:skeleton class="pointer-events-none absolute inset-0 size-full rounded-2xl" animate="shimmer" />
 
 	<a class="relative block" href="{{ $detailUrl }}" aria-label="{{ __('View image details') }}" x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $image->id }}, url: @js($detailUrl), title: @js($detailTitle) })">
-		<img class="h-auto w-full object-cover transition duration-500 group-hover:scale-[1.02]" src="{{ $url }}" alt="{{ Str::limit($image->title ?: $image->prompt, 80) }}" @if ($imageSize) width="{{ $imageSize[0] }}" height="{{ $imageSize[1] }}" @endif loading="lazy" decoding="async">
+		<img class="h-auto w-full object-cover transition duration-500 group-hover:scale-[1.02]" src="{{ $url }}" alt="{{ Str::limit($image->title ?: $image->prompt, 80) }}" @if ($imageSize) width="{{ $imageSize[0] }}" height="{{ $imageSize[1] }}" @endif loading="{{ $loading }}" decoding="async">
 	</a>
 
 	@if (isset($badge))
