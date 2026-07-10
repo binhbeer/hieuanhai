@@ -5,6 +5,7 @@
 @elseif ($ordered)
 	<div {{ $attributes->class('media-list-grid grid items-start gap-3')->merge(['style' => 'grid-auto-rows: 8px']) }} x-data="{
 		mutationObserver: null,
+		refreshFrame: null,
 		revealTimers: [],
 		init() {
 			this.mutationObserver = new MutationObserver(() => this.$nextTick(() => this.refresh()))
@@ -13,11 +14,17 @@
 		},
 		destroy() {
 			this.mutationObserver?.disconnect()
+			if (this.refreshFrame) cancelAnimationFrame(this.refreshFrame)
 			this.revealTimers.forEach((timer) => clearTimeout(timer))
 		},
 		refresh() {
-			this.layout()
-			this.reveal()
+			if (this.refreshFrame) return
+
+			this.refreshFrame = requestAnimationFrame(() => {
+				this.refreshFrame = null
+				this.layout()
+				this.reveal()
+			})
 		},
 		layout() {
 			const styles = getComputedStyle(this.$el)
@@ -25,8 +32,8 @@
 			const rowGap = Number.parseFloat(styles.rowGap) || 0
 
 			Array.from(this.$el.children).forEach((item) => {
-				item.style.gridRowEnd = 'auto'
-				item.style.gridRowEnd = `span ${Math.ceil((item.getBoundingClientRect().height + rowGap) / (rowHeight + rowGap))}`
+				const span = Math.ceil((item.getBoundingClientRect().height + rowGap) / (rowHeight + rowGap))
+				item.style.gridRowEnd = `span ${span}`
 			})
 		},
 		orderedItems() {
