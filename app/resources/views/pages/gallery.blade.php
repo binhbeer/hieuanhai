@@ -225,7 +225,7 @@ new #[Title('Trang chủ')] class extends Component {
 			</x-media-list>
 
 			@if ($this->hasMoreImages())
-				<div class="flex justify-center py-8" wire:intersect.margin.0px.0px.600px.0px="loadMore">
+				<div class="flex justify-center py-8" wire:intersect.margin.0px.0px.900px.0px="loadMore">
 					<div class="flex items-center gap-3 rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-sm text-zinc-500 shadow-sm backdrop-blur dark:border-white/10 dark:bg-zinc-900/80 dark:text-zinc-400" role="status" aria-live="polite">
 						<div class="size-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-white/20 dark:border-t-white"></div>
 						<span wire:loading.remove wire:target="loadMore">{{ __('Load more images') }}</span>
