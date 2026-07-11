@@ -48,7 +48,7 @@ class FortifyServiceProvider extends ServiceProvider
     {
         $modal = fn (string $initial, string $title) => view('account-modal-page', compact('initial', 'title'));
 
-        Fortify::loginView(fn () => $modal('auth.login', __('Log in')));
+        Fortify::loginView(fn () => redirect()->route('home')->with('account-modal', 'auth.login'));
         Fortify::verifyEmailView(fn () => $modal('auth.verify-email', __('Email verification')));
         Fortify::twoFactorChallengeView(fn () => $modal('auth.two-factor-challenge', __('Two-factor authentication')));
         Fortify::confirmPasswordView(fn () => $modal('auth.confirm-password', __('Confirm password')));

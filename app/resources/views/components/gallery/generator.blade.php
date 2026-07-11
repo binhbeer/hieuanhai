@@ -48,7 +48,7 @@ new class extends Component
     public function openComposer(): void
     {
         if (! Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+            $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
         }
@@ -65,7 +65,7 @@ new class extends Component
     public function usePrompt(string $prompt): void
     {
         if (! Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+            $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
         }
@@ -81,7 +81,7 @@ new class extends Component
     public function editImage(int $imageId, AiImageEditor $editor): void
     {
         if (! Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+            $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
         }
@@ -152,7 +152,7 @@ new class extends Component
     public function createImage(AiImageEditor $editor): void
     {
         if (! Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+            $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
         }
@@ -226,7 +226,7 @@ new class extends Component
     public function rewritePrompt(AiImageEditor $editor): void
     {
         if (! Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+            $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
         }

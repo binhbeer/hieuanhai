@@ -26,14 +26,25 @@
 						<x-slot name="icon"><x-iconsax-bul-home class="size-5" /></x-slot>
 						{{ __('Home') }}
 					</flux:sidebar.item>
-					<flux:sidebar.item :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
-						<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
-						{{ __('Search') }}
-					</flux:sidebar.item>
-					<flux:sidebar.item :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
-						<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
-						{{ __('Favorite images') }}
-					</flux:sidebar.item>
+					@auth
+						<flux:sidebar.item :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
+							{{ __('Search') }}
+						</flux:sidebar.item>
+						<flux:sidebar.item :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
+							{{ __('Favorite images') }}
+						</flux:sidebar.item>
+					@else
+						<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
+							<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
+							{{ __('Search') }}
+						</flux:sidebar.item>
+						<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
+							<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
+							{{ __('Favorite images') }}
+						</flux:sidebar.item>
+					@endauth
 					@auth
 						<livewire:gallery.usage :button-only="true" />
 					@endauth
@@ -90,7 +101,7 @@
 					</flux:button>
 				</flux:modal.trigger>
 			@else
-				<flux:button size="sm" :href="route('login')" variant="primary" wire:navigate>
+				<flux:button size="sm" type="button" variant="primary" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
 					<x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
 				</flux:button>
 			@endauth
@@ -100,7 +111,7 @@
 	{{ $slot }}
 
 	@unless (request()->routeIs('login', 'register', 'password.*', 'verification.*', 'two-factor.*', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit'))
-		<livewire:account-modal />
+		<livewire:account-modal :initial="session('account-modal')" />
 	@endunless
 
 	@if (!request()->routeIs('images.show', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit', 'manage.settings.*'))

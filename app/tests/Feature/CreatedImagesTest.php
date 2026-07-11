@@ -30,6 +30,14 @@ class CreatedImagesTest extends TestCase
             ->assertRedirect(route('login', absolute: false));
     }
 
+    public function test_guest_create_image_action_opens_login_modal(): void
+    {
+        Livewire::test('gallery.generator')
+            ->call('openComposer')
+            ->assertDispatched('open-account-modal')
+            ->assertNoRedirect();
+    }
+
     public function test_user_can_view_pending_image_placeholder(): void
     {
         $user = User::factory()->create();

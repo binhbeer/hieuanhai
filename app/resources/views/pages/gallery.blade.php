@@ -59,7 +59,7 @@ new #[Title('Trang chủ')] class extends Component {
 	public function useAsPrompt(int $id): void
 	{
 		if (!Auth::check()) {
-			$this->redirectRoute('login', navigate: true);
+			$this->dispatch('open-account-modal', component: 'auth.login');
 
 			return;
 		}
@@ -115,7 +115,7 @@ new #[Title('Trang chủ')] class extends Component {
 	public function toggleFavorite(int $id): void
 	{
 		if (!Auth::check()) {
-			$this->redirectRoute('login', navigate: true);
+			$this->dispatch('open-account-modal', component: 'auth.login');
 
 			return;
 		}

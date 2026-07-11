@@ -89,7 +89,7 @@ new class extends Component {
     public function toggleFavorite(int $id): void
     {
         if (!Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+            $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
         }
@@ -117,7 +117,7 @@ new class extends Component {
     public function useAsPrompt(int $id): void
     {
         if (!Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+            $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
         }
@@ -138,7 +138,7 @@ new class extends Component {
     public function editImage(int $id): void
     {
         if (!Auth::check()) {
-            $this->redirectRoute('login', navigate: true);
+            $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
         }
@@ -364,13 +364,14 @@ new class extends Component {
 
         $wire.closeImage();
     },
-}" x-on:keydown.escape.window="{{ $standalone ? "window.location.href = '" . route('home') . "'" : 'closeImage()' }}" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title)" @endif>
+}" x-on:keydown.escape.window="if (!document.querySelector('.lightbox3-overlay')) { {{ $standalone ? "window.location.href = '" . route('home') . "'" : 'closeImage()' }} }" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title)" @endif>
     @php($selected = $this->selectedImage())
 
     @if ($show && $selected)
     @php($selectedUrl = $this->imageUrl($selected))
     @php($selectedThumbUrl = $this->imageUrl($selected, 'md'))
     @php($selectedImageSize = $this->imageSize($selected, 'md'))
+    @php($selectedOriginalSize = $this->imageSize($selected))
     @php($progressStep = $this->progressStep($selected))
     @php($selectedTitle = $selected->title ?: $selected->prompt)
     @php($canViewFullPrompt = Auth::check())
@@ -417,9 +418,9 @@ new class extends Component {
                 <div class="flex flex-1 items-center justify-center gap-4 p-0 md:px-16 md:py-16">
                     @if ($selectedThumbUrl)
                         <div class="relative flex flex-col min-w-0 flex-1 gap-2 items-center justify-center overflow-hidden">
-                            <div class="relative flex max-h-[62svh] max-w-full items-center justify-center overflow-hidden rounded-xl md:max-h-[calc(100svh-10rem)] md:rounded-2xl">
+                            <a class="relative flex max-h-[62svh] max-w-full cursor-zoom-in items-center justify-center overflow-hidden rounded-xl md:max-h-[calc(100svh-10rem)] md:rounded-2xl" href="{{ $selectedUrl }}" data-lightbox @if ($selectedOriginalSize) data-width="{{ $selectedOriginalSize['width'] }}" data-height="{{ $selectedOriginalSize['height'] }}" @endif aria-label="{{ __('View original image') }}">
                                 <img class="block h-auto max-h-[62svh] max-w-full object-contain opacity-100 md:max-h-[calc(100svh-10rem)]" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selectedTitle, 80) }}" @if ($selectedImageSize) width="{{ $selectedImageSize['width'] }}" height="{{ $selectedImageSize['height'] }}" @endif decoding="async" />
-                            </div>
+                            </a>
                         </div>
                     @elseif ($selected->status === 'pending')
                         <div class="relative flex aspect-square w-full max-w-md items-center justify-center overflow-hidden rounded-4xl bg-zinc-100 text-zinc-700 shadow-inner dark:bg-white/10 dark:text-white/80">
@@ -535,10 +536,17 @@ new class extends Component {
                         </flux:button>
                     @endif
 
-                    <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">
-                        <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
-                        {{ __('Create similar image') }}
-                    </flux:button>
+                    @auth
+                        <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">
+                            <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+                            {{ __('Create similar image') }}
+                        </flux:button>
+                    @else
+                        <flux:button type="button" variant="primary" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
+                            <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+                            {{ __('Create similar image') }}
+                        </flux:button>
+                    @endauth
 
                     @if ($this->canEdit($selected))
                         <flux:button type="button" variant="filled" wire:click="editImage({{ $selected->id }})">{{ __('Edit image') }}</flux:button>

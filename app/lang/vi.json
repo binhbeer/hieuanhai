@@ -345,6 +345,7 @@
     "User unbanned.": "Đã mở khóa user.",
     "Users, API keys, and system settings.": "User, API key và cấu hình hệ thống.",
     "View image details": "Xem chi tiết ảnh",
+    "View original image": "Xem ảnh gốc",
     "Admin can adjust this user API key limit.": "Admin có thể chỉnh quota API key của user này.",
     "API key generated.": "Đã tạo API key.",
     "API key quota": "Quota API key",

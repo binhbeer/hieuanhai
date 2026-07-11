@@ -67,6 +67,18 @@ class FavoriteImagesTest extends TestCase
         $this->assertSame(0, AiImage::query()->findOrFail($image->id)->favorites_count);
     }
 
+    public function test_guest_gallery_actions_open_login_modal(): void
+    {
+        $image = $this->publishedImage('Guest action image');
+
+        Livewire::test('gallery.detail')
+            ->call('useAsPrompt', $image->id)
+            ->assertDispatched('open-account-modal')
+            ->call('toggleFavorite', $image->id)
+            ->assertDispatched('open-account-modal')
+            ->assertNoRedirect();
+    }
+
     public function test_image_detail_links_do_not_expose_return_url(): void
     {
         $user = User::factory()->create();
