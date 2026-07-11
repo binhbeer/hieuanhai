@@ -618,6 +618,17 @@ class AiImageEditorTest extends TestCase
             && str_contains($prompt->prompt, 'make it cinematic'));
     }
 
+    public function test_prompt_rewrite_accepts_instruction_without_current_prompt(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        PromptRewriteAgent::fake([['prompt' => 'A cinematic portrait of a cat wearing a tiny hat.']]);
+
+        $prompt = app(AiImageEditor::class)->rewritePrompt('', 'create a cinematic cat portrait');
+
+        $this->assertSame('A cinematic portrait of a cat wearing a tiny hat.', $prompt);
+        PromptRewriteAgent::assertPrompted(fn ($prompt): bool => str_contains($prompt->prompt, 'create a cinematic cat portrait'));
+    }
+
     public function test_rejected_prompt_does_not_publish_image(): void
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');

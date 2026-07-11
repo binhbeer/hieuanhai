@@ -232,8 +232,8 @@ new class extends Component
         }
 
         $this->validate([
-            'prompt' => $this->promptRules(),
-            'rewriteInstruction' => ['nullable', 'string', 'max:1000'],
+            'prompt' => array_replace($this->promptRules(), ['nullable']),
+            'rewriteInstruction' => ['required_without:prompt', 'nullable', 'string', 'max:1000'],
         ]);
 
         try {

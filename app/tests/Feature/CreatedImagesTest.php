@@ -326,6 +326,22 @@ class CreatedImagesTest extends TestCase
             && str_contains($prompt->prompt, 'make it cinematic'));
     }
 
+    public function test_user_can_write_prompt_from_instruction_without_current_prompt(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        PromptRewriteAgent::fake([['prompt' => 'A cinematic product photo of a small cat.']]);
+
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test('gallery.generator')
+            ->set('showComposer', true)
+            ->set('rewriteInstruction', 'Create a cinematic product photo of a small cat')
+            ->call('rewritePrompt')
+            ->assertSet('prompt', 'A cinematic product photo of a small cat.')
+            ->assertSet('rewriteInstruction', '')
+            ->assertHasNoErrors();
+    }
+
     public function test_creating_image_closes_composer_and_opens_pending_detail(): void
     {
         Bus::fake();

@@ -856,8 +856,8 @@ class AiImageEditor
         $prompt = trim($prompt);
         $instruction = trim($instruction);
 
-        if ($prompt === '') {
-            throw new \InvalidArgumentException('Prompt là bắt buộc.');
+        if ($prompt === '' && $instruction === '') {
+            throw new \InvalidArgumentException('Prompt hoặc chỉ dẫn viết lại là bắt buộc.');
         }
 
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
