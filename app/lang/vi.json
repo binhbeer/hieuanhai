@@ -362,6 +362,8 @@
     "Success": "Thành công",
     "This key is stored encrypted and can be shown/copied again here.": "Key được mã hóa và có thể hiện/sao chép lại tại đây.",
     "This replaces your old API key immediately.": "Key này thay thế API key cũ ngay lập tức.",
+    "Leave password blank to keep it unchanged.": "Để trống mật khẩu nếu không muốn thay đổi.",
+    "Copy this key now. Generating another key invalidates it immediately.": "Sao chép key này ngay. Tạo key khác sẽ vô hiệu hóa key hiện tại ngay lập tức.",
     "Unlimited": "Không giới hạn",
     "User has no API key yet.": "User chưa có API key.",
     "Your API key": "API key của bạn",

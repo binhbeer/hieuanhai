@@ -531,6 +531,42 @@ class AiImageApiTest extends TestCase
         $this->assertSame(18, $key->quotaRemaining());
     }
 
+    public function test_admin_can_verify_and_change_user_password(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+        $user = User::factory()->unverified()->create();
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.user-edit', ['user' => $user])
+            ->set('verified', true)
+            ->set('password', 'new-password-123')
+            ->set('password_confirmation', 'new-password-123')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $user->refresh();
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertTrue(Hash::check('new-password-123', $user->password));
+    }
+
+    public function test_admin_can_generate_api_key_for_user(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+        $user = User::factory()->create();
+
+        $component = Livewire::actingAs($admin)
+            ->test('pages::manage.user-edit', ['user' => $user])
+            ->call('generateApiKey')
+            ->assertHasNoErrors();
+
+        $key = AiApiKey::query()->whereBelongsTo($user)->sole();
+        $plain = $component->get('newApiToken');
+
+        $this->assertIsString($plain);
+        $this->assertSame($key->token_hash, AiApiKey::hashToken($plain));
+        $this->assertSame(100, $key->quota_limit);
+    }
+
     public function test_settings_page_handles_invalid_encrypted_openai_key(): void
     {
         $admin = User::factory()->create(['id' => 1]);

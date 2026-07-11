@@ -5,6 +5,7 @@ use App\Models\AiApiRequest;
 use App\Models\User;
 use Flux\Flux;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -21,7 +22,17 @@ new #[Title('Edit user')] class extends Component
 
     public bool $banned = false;
 
+    public bool $verified = false;
+
+    public string $password = '';
+
+    public string $password_confirmation = '';
+
     public ?int $apiKeyQuotaLimit = null;
+
+    public ?string $newApiToken = null;
+
+    public ?int $newApiTokenKeyId = null;
 
     public function mount(User $user): void
     {
@@ -32,16 +43,21 @@ new #[Title('Edit user')] class extends Component
         $this->email = $user->email;
         $this->role = $user->role?->value ?? 'user';
         $this->banned = $user->banned_at !== null;
+        $this->verified = $user->email_verified_at !== null;
         $this->syncApiKeyQuotaLimit();
     }
 
     public function save(): void
     {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($this->user->id)],
             'role' => ['required', Rule::in(['admin', 'mod', 'user'])],
             'banned' => ['boolean'],
+            'verified' => ['boolean'],
+            'password' => ['nullable', 'string', Password::default(), 'confirmed'],
         ]);
 
         $this->user->fill([
@@ -54,14 +70,52 @@ new #[Title('Edit user')] class extends Component
             $this->user->banned_at = $validated['banned'] ? ($this->user->banned_at ?? now()) : null;
         }
 
-        if ($this->user->isDirty('email')) {
-            $this->user->email_verified_at = null;
+        $this->user->email_verified_at = $validated['verified'] ? ($this->user->email_verified_at ?? now()) : null;
+
+        if ($validated['password']) {
+            $this->user->password = $validated['password'];
         }
 
         $this->user->save();
         $this->banned = $this->user->banned_at !== null;
+        $this->verified = $this->user->email_verified_at !== null;
+        $this->reset('password', 'password_confirmation');
 
         Flux::toast(variant: 'success', text: __('User saved.'));
+    }
+
+    public function generateApiKey(): void
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        $token = AiApiKey::newToken();
+        $key = $this->apiKey;
+
+        if ($key) {
+            $key->update([
+                'token_hash' => $token['hash'],
+                'token_prefix' => $token['prefix'],
+                'token' => $token['plain'],
+                'last_used_at' => null,
+            ]);
+        } else {
+            $key = AiApiKey::create([
+                'user_id' => $this->user->id,
+                'token_hash' => $token['hash'],
+                'token_prefix' => $token['prefix'],
+                'token' => $token['plain'],
+                'quota_limit' => 100,
+                'quota_used' => 0,
+                'last_used_at' => null,
+            ]);
+        }
+
+        $this->newApiToken = $token['plain'];
+        $this->newApiTokenKeyId = $key->id;
+        $this->refreshApiKeyData();
+        $this->syncApiKeyQuotaLimit();
+
+        Flux::toast(variant: 'success', text: __('API key generated.'));
     }
 
     public function saveApiKeyQuota(): void
@@ -154,7 +208,16 @@ new #[Title('Edit user')] class extends Component
 				@endforeach
 			</flux:select>
 
-			<flux:checkbox wire:model="banned" :label="__('Ban this user')" :disabled="$user->id === auth()->id() || $user->id === 1" />
+			<div class="grid gap-4 sm:grid-cols-2">
+				<flux:checkbox wire:model="verified" :label="__('Verified')" />
+				<flux:checkbox wire:model="banned" :label="__('Ban this user')" :disabled="$user->id === auth()->id() || $user->id === 1" />
+			</div>
+
+			<div class="grid gap-4 sm:grid-cols-2">
+				<flux:input wire:model="password" type="password" :label="__('New password')" viewable autocomplete="new-password" />
+				<flux:input wire:model="password_confirmation" type="password" :label="__('Confirm password')" viewable autocomplete="new-password" />
+			</div>
+			<flux:text variant="subtle">{{ __('Leave password blank to keep it unchanged.') }}</flux:text>
 
 			<div class="flex gap-3">
 				<flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
@@ -169,7 +232,20 @@ new #[Title('Edit user')] class extends Component
 			<flux:text variant="subtle">{{ __('Admin can adjust this user API key limit.') }}</flux:text>
 		</div>
 
+		@if ($newApiToken)
+			<div class="space-y-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4" wire:key="admin-api-token-{{ $newApiTokenKeyId }}">
+				<flux:heading size="sm">{{ __('New API key #:id', ['id' => $newApiTokenKeyId]) }}</flux:heading>
+				<flux:input class:input="font-mono" readonly copyable :value="$newApiToken" />
+				<flux:text class="text-xs" variant="subtle">{{ __('Copy this key now. Generating another key invalidates it immediately.') }}</flux:text>
+			</div>
+		@endif
+
 		@if ($this->apiKey)
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<flux:text variant="subtle">Prefix: <span class="font-mono">{{ $this->apiKey->token_prefix }}...</span> · {{ __('Last used:') }} {{ $this->apiKey->last_used_at?->diffForHumans() ?? __('Never used') }}</flux:text>
+				<flux:button type="button" variant="danger" wire:click="generateApiKey" wire:confirm="{{ __('Regenerating will invalidate this key. Continue?') }}">{{ __('Regenerate API key') }}</flux:button>
+			</div>
+
 			<div class="grid gap-3 sm:grid-cols-3">
 				<div class="rounded-xl bg-white/5 p-4">
 					<flux:text variant="subtle">{{ __('Used') }}</flux:text>
@@ -194,9 +270,9 @@ new #[Title('Edit user')] class extends Component
 				</div>
 			</form>
 
-			<flux:text variant="subtle">Prefix: <span class="font-mono">{{ $this->apiKey->token_prefix }}...</span> · {{ __('Last used:') }} {{ $this->apiKey->last_used_at?->diffForHumans() ?? __('Never used') }}</flux:text>
 		@else
 			<flux:text variant="subtle">{{ __('User has no API key yet.') }}</flux:text>
+			<flux:button type="button" variant="primary" wire:click="generateApiKey">{{ __('Generate API key') }}</flux:button>
 		@endif
 	</flux:card>
 </section>
