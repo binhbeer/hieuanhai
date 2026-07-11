@@ -61,7 +61,7 @@ class RegistrationTest extends TestCase
 
     public function test_registration_password_must_be_at_least_six_characters(): void
     {
-        $response = $this->from(route('register'))->post(route('register.store'), [
+        $response = $this->postJson(route('register.store'), [
             'name' => 'John Doe',
             'email' => 'short@example.com',
             'password' => 'short',
@@ -69,8 +69,8 @@ class RegistrationTest extends TestCase
         ]);
 
         $response
-            ->assertSessionHasErrors('password')
-            ->assertRedirect(route('register'));
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('password');
 
         $this->assertGuest();
     }

@@ -22,16 +22,16 @@ new class extends Component {};
         @endif
 
         <div class="flex flex-col items-center justify-between space-y-3">
-            <form method="POST" action="{{ route('verification.send') }}">
+            <form method="POST" action="{{ route('verification.send') }}" x-data="{ submitting: false }" x-on:submit="submitting = true">
                 @csrf
-                <flux:button type="submit" variant="primary" class="w-full">
+                <flux:button type="submit" variant="primary" class="w-full" x-bind:disabled="submitting">
                     {{ __('Resend verification email') }}
                 </flux:button>
             </form>
 
-            <form method="POST" action="{{ route('logout') }}">
+            <form method="POST" action="{{ route('logout') }}" x-data="{ submitting: false }" x-on:submit="submitting = true">
                 @csrf
-                <flux:button variant="ghost" type="submit" class="text-sm cursor-pointer" data-test="logout-button">
+                <flux:button variant="ghost" type="submit" class="text-sm cursor-pointer" x-bind:disabled="submitting" data-test="logout-button">
                     {{ __('Log out') }}
                 </flux:button>
             </form>

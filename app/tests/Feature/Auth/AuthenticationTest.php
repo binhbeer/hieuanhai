@@ -38,12 +38,14 @@ class AuthenticationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->post(route('login.store'), [
+        $response = $this->postJson(route('login.store'), [
             'email' => $user->email,
             'password' => 'wrong-password',
         ]);
 
-        $response->assertSessionHasErrorsIn('email');
+        $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('email');
 
         $this->assertGuest();
     }

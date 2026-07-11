@@ -14,18 +14,18 @@
 			<flux:menu.radio.group>
 				@if (auth()->user()?->isAdmin())
 					<flux:menu.item :href="route('manage.index')" wire:navigate>
-						<x-slot name="icon"><x-iconsax-bul-setting-2 class="size-5 mr-1.5" /></x-slot>
+						<x-slot name="icon"><x-iconsax-two-setting-2 class="size-5 mr-1.5" /></x-slot>
 						{{ __('Manage') }}
 					</flux:menu.item>
 				@endif
 				@foreach ([
-					['component' => 'settings.profile', 'label' => __('Profile')],
-					['component' => 'settings.security', 'label' => __('Security')],
-					['component' => 'settings.api-key', 'label' => __('API key')],
-					['component' => 'settings.appearance', 'label' => __('Appearance')],
+					['component' => 'settings.profile', 'label' => __('Profile'), 'icon' => 'iconsax-two-profile'],
+					['component' => 'settings.security', 'label' => __('Security'), 'icon' => 'iconsax-two-shield-security'],
+					['component' => 'settings.api-key', 'label' => __('API key'), 'icon' => 'iconsax-two-key'],
+					['component' => 'settings.appearance', 'label' => __('Appearance'), 'icon' => 'iconsax-two-color-swatch'],
 				] as $setting)
-					<flux:menu.item as="button" type="button" onclick="Livewire.dispatch('open-account-modal', { component: '{{ $setting['component'] }}' })">
-						<x-slot name="icon"><x-iconsax-bul-setting-2 class="size-5 mr-1.5" /></x-slot>
+					<flux:menu.item as="button" type="button" class="cursor-pointer" onclick="Livewire.dispatch('open-account-modal', { component: '{{ $setting['component'] }}' })">
+						<x-slot name="icon"><x-dynamic-component :component="$setting['icon']" class="size-5 mr-1.5" /></x-slot>
 						{{ $setting['label'] }}
 					</flux:menu.item>
 				@endforeach

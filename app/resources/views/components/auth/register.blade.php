@@ -10,8 +10,10 @@ new class extends Component {};
         <!-- Session Status -->
         <x-auth-session-status class="text-center" :status="session('status')" />
 
-        <form method="POST" action="{{ route('register.store') }}" class="flex flex-col gap-6">
+        <form method="POST" action="{{ route('register.store') }}" class="flex flex-col gap-6" x-data="accountForm" x-on:submit.prevent="submit">
             @csrf
+            <flux:text x-cloak x-show="errors.form" x-text="errors.form?.[0]" color="red" />
+
             <!-- Name -->
             <flux:input
                 name="name"
@@ -23,6 +25,7 @@ new class extends Component {};
                 autocomplete="name"
                 :placeholder="__('Full name')"
             />
+            <flux:text x-cloak x-show="errors.name" x-text="errors.name?.[0]" color="red" />
 
             <!-- Email Address -->
             <flux:input
@@ -34,6 +37,7 @@ new class extends Component {};
                 autocomplete="email"
                 placeholder="email@example.com"
             />
+            <flux:text x-cloak x-show="errors.email" x-text="errors.email?.[0]" color="red" />
 
             <!-- Password -->
             <flux:input
@@ -46,6 +50,7 @@ new class extends Component {};
                 passwordrules="{{ \Illuminate\Validation\Rules\Password::defaults()->toPasswordRulesString() }}"
                 viewable
             />
+            <flux:text x-cloak x-show="errors.password" x-text="errors.password?.[0]" color="red" />
 
             <!-- Confirm Password -->
             <flux:input
@@ -60,7 +65,7 @@ new class extends Component {};
             />
 
             <div class="flex items-center justify-end">
-                <flux:button type="submit" variant="primary" class="w-full" data-test="register-user-button">
+                <flux:button type="submit" variant="primary" class="w-full" x-bind:disabled="submitting" data-test="register-user-button">
                     {{ __('Create account') }}
                 </flux:button>
             </div>
@@ -68,6 +73,6 @@ new class extends Component {};
 
         <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-zinc-600 dark:text-zinc-400">
             <span>{{ __('Already have an account?') }}</span>
-            <flux:link class="cursor-pointer" wire:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in') }}</flux:link>
+            <flux:link class="cursor-pointer" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in') }}</flux:link>
         </div>
     </div>

@@ -376,7 +376,7 @@ new class extends Component {
     @php($canViewFullPrompt = Auth::check())
     @php($visiblePrompt = $canViewFullPrompt ? $selected->prompt : Str::limit($selected->prompt, 160))
 
-    <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-hidden bg-zinc-100/90 text-zinc-950 backdrop-blur dark:bg-zinc-950/80 dark:text-white md:grid md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)]" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
+    <div class="{{ $standalone ? 'md:h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 backdrop-blur dark:bg-zinc-950/80 dark:text-white md:grid md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
         <div class="relative flex flex-col shrink-0 md:shrink md:flex-1">
             <div class="absolute inset-x-4 top-4 z-20 flex min-w-0 items-center gap-3">
                 @if (filled($selected->title))
@@ -451,7 +451,7 @@ new class extends Component {
             </div>
         </div>
 
-        <aside class="flex min-h-0 overflow-hidden flex-col border-l border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950">
+        <aside class="flex flex-col border-l border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950 md:min-h-0 md:overflow-hidden">
             <header class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 p-3 dark:border-white/10">
                 <div class="flex items-center gap-3">
                     <flux:avatar
@@ -469,7 +469,7 @@ new class extends Component {
                 </div>
             </header>
 
-            <div class="min-h-0 flex-1 overflow-y-auto p-4">
+            <div class="flex-1 p-4 md:min-h-0 md:overflow-y-auto">
                 <div class="mb-5 flex flex-wrap gap-1">
                     @if ($selected->is_featured)
                         <flux:badge size="sm" color="amber">{{ __('Featured') }}</flux:badge>
@@ -532,7 +532,7 @@ new class extends Component {
                 @endif
             </div>
 
-            <footer class="shrink-0 border-t border-zinc-200 p-2 dark:border-white/10">
+            <footer class="sticky bottom-0 z-10 shrink-0 border-t border-zinc-200 bg-white p-2 dark:border-white/10 dark:bg-zinc-950 md:static">
                 <div class="grid gap-2 {{ $this->canEdit($selected) && $selectedUrl ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-2' }}">
                     @if ($selectedUrl)
                         <flux:button :href="$selectedUrl" download="{{ $selected->downloadName() }}">

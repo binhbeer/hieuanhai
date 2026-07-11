@@ -93,7 +93,7 @@ new class extends Component {
 <section class="w-full">
     <flux:heading class="sr-only">{{ __('Profile settings') }}</flux:heading>
 
-    <x-settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
+    <x-settings.layout active="profile" :heading="__('Profile')" :subheading="__('Update your name and email address')">
         <form wire:submit="updateAvatar" class="my-6 flex items-center gap-4">
             <flux:file-upload wire:model="avatar" accept="image/jpeg,image/png,image/webp" aria-label="{{ __('Avatar') }}">
                 <div class="relative flex size-20 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-100 transition-colors hover:border-zinc-300 hover:bg-zinc-200 in-data-dragging:bg-zinc-200 in-data-loading:opacity-60 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15 dark:in-data-dragging:bg-white/15">

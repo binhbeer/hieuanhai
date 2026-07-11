@@ -49,7 +49,7 @@ new class extends Component {
     {
         $this->validate(['securityPassword' => ['required', 'string']]);
 
-        if (! Hash::check($this->securityPassword, auth()->user()->password)) {
+        if (!Hash::check($this->securityPassword, auth()->user()->password)) {
             $this->addError('securityPassword', __('The provided password is incorrect.'));
 
             return;
@@ -67,18 +67,34 @@ new class extends Component {
     }
 }; ?>
 
-<div>
-<flux:modal name="account" wire:model.self="show" class="w-full max-w-3xl" @close="close">
-    @if ($active)
-        @if ($active === 'settings.security' && (time() - (int) session('auth.password_confirmed_at', 0)) > config('auth.password_timeout'))
-            <form wire:submit="confirmSecurity" class="mx-auto max-w-md space-y-6">
-                <x-auth-header :title="__('Confirm password')" :description="__('This is a secure area of the application. Please confirm your password before continuing.')" />
-                <flux:input wire:model="securityPassword" :label="__('Password')" type="password" required autocomplete="current-password" viewable />
-                <flux:button type="submit" variant="primary" class="w-full">{{ __('Confirm') }}</flux:button>
-            </form>
-        @else
-            @livewire($active, [], $active)
+<div x-on:open-account-modal.window="$wire.open($event.detail.component)">
+    <flux:modal name="account" wire:model.self="show" class="w-full max-w-xl has-[.compact-account-modal]:max-w-96!" @close="close">
+        @if ($active)
+            <div @class(['compact-account-modal' => in_array($active, ['auth.login', 'auth.register', 'auth.forgot-password', 'settings.profile', 'settings.security', 'settings.appearance'], true)])>
+                @if ($active === 'settings.security' && (time() - (int) session('auth.password_confirmed_at', 0)) > config('auth.password_timeout'))
+                    <form wire:submit="confirmSecurity" class="mx-auto max-w-md space-y-6">
+                        <x-auth-header :title="__('Confirm password')" :description="__('This is a secure area of the application. Please confirm your password before continuing.')" />
+                        <flux:input wire:model="securityPassword" :label="__('Password')" type="password" required autocomplete="current-password" viewable />
+                        <flux:button type="submit" variant="primary" class="w-full">{{ __('Confirm') }}</flux:button>
+                    </form>
+                @elseif ($active === 'auth.login')
+                    <livewire:auth.login :key="$active" />
+                @elseif ($active === 'auth.register')
+                    <livewire:auth.register :key="$active" />
+                @elseif ($active === 'auth.forgot-password')
+                    <livewire:auth.forgot-password :key="$active" />
+                @elseif ($active === 'settings.profile')
+                    <livewire:settings.profile :key="$active" />
+                @elseif ($active === 'settings.security')
+                    <livewire:settings.security :key="$active" />
+                @elseif ($active === 'settings.api-key')
+                    <livewire:settings.api-key :key="$active" />
+                @elseif ($active === 'settings.appearance')
+                    <livewire:settings.appearance :key="$active" />
+                @else
+                    @livewire($active, [], $active)
+                @endif
+            </div>
         @endif
-    @endif
-</flux:modal>
+    </flux:modal>
 </div>

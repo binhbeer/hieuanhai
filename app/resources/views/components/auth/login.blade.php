@@ -12,8 +12,10 @@ new class extends Component {};
 
         <x-passkey-verify />
 
-        <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
+        <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6" x-data="accountForm" x-on:submit.prevent="submit">
             @csrf
+
+            <flux:text x-cloak x-show="errors.form" x-text="errors.form?.[0]" color="red" />
 
             <!-- Email Address -->
             <flux:input
@@ -26,6 +28,7 @@ new class extends Component {};
                 autocomplete="email"
                 placeholder="email@example.com"
             />
+            <flux:text x-cloak x-show="errors.email" x-text="errors.email?.[0]" color="red" />
 
             <!-- Password -->
             <div class="relative">
@@ -40,7 +43,7 @@ new class extends Component {};
                 />
 
                 @if (Route::has('password.request'))
-                    <flux:link class="absolute top-0 cursor-pointer text-sm inset-e-0" wire:click="$dispatch('open-account-modal', { component: 'auth.forgot-password' })">
+                    <flux:link class="absolute top-0 cursor-pointer text-sm inset-e-0" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.forgot-password' })">
                         {{ __('Forgot your password?') }}
                     </flux:link>
                 @endif
@@ -50,7 +53,7 @@ new class extends Component {};
             <flux:checkbox name="remember" :label="__('Remember me')" :checked="old('remember')" />
 
             <div class="flex items-center justify-end">
-                <flux:button variant="primary" type="submit" class="w-full" data-test="login-button">
+                <flux:button variant="primary" type="submit" class="w-full" x-bind:disabled="submitting" data-test="login-button">
                     {{ __('Log in') }}
                 </flux:button>
             </div>
@@ -59,7 +62,7 @@ new class extends Component {};
         @if (\App\Support\AppSettings::bool('auth.registration_enabled', true))
             <div class="space-x-1 text-sm text-center rtl:space-x-reverse text-zinc-600 dark:text-zinc-400">
                 <span>{{ __('Don\'t have an account?') }}</span>
-                <flux:link class="cursor-pointer" wire:click="$dispatch('open-account-modal', { component: 'auth.register' })">{{ __('Sign up') }}</flux:link>
+                <flux:link class="cursor-pointer" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.register' })">{{ __('Sign up') }}</flux:link>
             </div>
         @endif
     </div>

@@ -48,7 +48,7 @@ new class extends Component {};
                 />
             </div>
 
-            <form method="POST" action="{{ route('two-factor.login.store') }}">
+            <form method="POST" action="{{ route('two-factor.login.store') }}" x-data="{ submitting: false }" x-on:submit="submitting = true">
                 @csrf
 
                 <div class="space-y-5 text-center">
@@ -88,6 +88,7 @@ new class extends Component {};
                         variant="primary"
                         type="submit"
                         class="w-full"
+                        x-bind:disabled="submitting"
                     >
                         {{ __('Continue') }}
                     </flux:button>

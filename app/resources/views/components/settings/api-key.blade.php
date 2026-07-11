@@ -95,7 +95,7 @@ new class extends Component {
 <section class="w-full">
     <flux:heading class="sr-only">{{ __('API key settings') }}</flux:heading>
 
-    <x-settings.layout :heading="__('API key')" :subheading="__('Generate one API key for image API requests and track quota usage.')">
+    <x-settings.layout active="api-key" :heading="__('API key')" :subheading="__('Generate one API key for image API requests and track quota usage.')">
         <div class="mb-6">
             <flux:modal.trigger name="api-usage-guide">
                 <flux:button type="button" variant="filled">{{ __('Guide') }}</flux:button>

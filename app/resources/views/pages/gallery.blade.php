@@ -182,7 +182,7 @@ new #[Title('Trang chủ')] class extends Component {
 				</div>
 			@endif
 
-			<livewire:gallery.tags mode="popular" :category="$category" lazy />
+			<livewire:gallery.tags mode="popular" :category="$category" :key="'gallery-tags-'.($category?->id ?? 'all')" />
 
 			@if ($this->visibleImages()->isEmpty())
 				<div class="rounded-4xl flex min-h-[55svh] items-center justify-center border border-dashed border-zinc-300 bg-white text-center dark:border-white/10 dark:bg-white/5">
