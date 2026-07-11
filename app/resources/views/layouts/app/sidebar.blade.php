@@ -64,10 +64,8 @@
 	</flux:sidebar>
 
 	@if (!request()->routeIs('images.show'))
-		<flux:header class="sticky top-0 px-3! md:px-4!">
-			<flux:sidebar.toggle class="lg:hidden" inset="left">
-				<x-slot name="icon"><x-iconsax-two-menu class="size-5" /></x-slot>
-			</flux:sidebar.toggle>
+		<flux:header class="sticky top-0 border-b border-zinc-200 bg-white/70 px-3! md:px-4! dark:border-zinc-700 dark:bg-zinc-900/70 backdrop-blur">
+			<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
 			@if (request()->routeIs('home', 'categories.show') || (request()->routeIs('search.*') && $gallerySearch !== ''))
 				<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
@@ -100,6 +98,10 @@
 	@endif
 
 	{{ $slot }}
+
+	@unless (request()->routeIs('login', 'register', 'password.*', 'verification.*', 'two-factor.*', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit'))
+		<livewire:account-modal />
+	@endunless
 
 	@if (!request()->routeIs('images.show', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit', 'manage.settings.*'))
 		<livewire:gallery.detail />

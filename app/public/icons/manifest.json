@@ -7,9 +7,9 @@
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#18181b",
-  "theme_color": "#7c3aed",
+  "orientation": "portrait",
+  "background_color": "#f59e0b",
+  "theme_color": "#f59e0b",
   "categories": ["photo", "graphics", "productivity"],
   "icons": [
     {
