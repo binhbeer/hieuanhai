@@ -82,7 +82,7 @@ class SecurityTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Livewire::test('pages::settings.security');
+        $component = Livewire::test('settings.security');
 
         $component->assertSet('twoFactorEnabled', false);
 
@@ -101,7 +101,7 @@ class SecurityTest extends TestCase
 
         $this->actingAs($user);
 
-        $response = Livewire::test('pages::settings.security')
+        $response = Livewire::test('settings.security')
             ->set('current_password', 'password')
             ->set('password', 'new-password')
             ->set('password_confirmation', 'new-password')
@@ -120,7 +120,7 @@ class SecurityTest extends TestCase
 
         $this->actingAs($user);
 
-        $response = Livewire::test('pages::settings.security')
+        $response = Livewire::test('settings.security')
             ->set('current_password', 'wrong-password')
             ->set('password', 'new-password')
             ->set('password_confirmation', 'new-password')

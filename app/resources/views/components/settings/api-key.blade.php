@@ -8,10 +8,9 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('API key settings')] class extends Component {
+new class extends Component {
     public ?string $newApiToken = null;
 
     public ?int $newApiTokenKeyId = null;
@@ -94,11 +93,9 @@ new #[Title('API key settings')] class extends Component {
 }; ?>
 
 <section class="w-full">
-    @include('partials.settings-heading')
-
     <flux:heading class="sr-only">{{ __('API key settings') }}</flux:heading>
 
-    <x-pages::settings.layout :heading="__('API key')" :subheading="__('Generate one API key for image API requests and track quota usage.')">
+    <x-settings.layout :heading="__('API key')" :subheading="__('Generate one API key for image API requests and track quota usage.')">
         <div class="mb-6">
             <flux:modal.trigger name="api-usage-guide">
                 <flux:button type="button" variant="filled">{{ __('Guide') }}</flux:button>
@@ -202,52 +199,62 @@ new #[Title('API key settings')] class extends Component {
                 </flux:card>
             @endif
         </div>
-    </x-pages::settings.layout>
+    </x-settings.layout>
 
     @php
         $maxImages = AppSettings::maxReferencePhotos();
         $maxUploadMb = (int) ceil(AppSettings::imageUploadMaxKb() / 1024);
     @endphp
 
-    <flux:modal name="api-usage-guide" class="md:w-2xl">
-        <div class="space-y-5">
-            <div class="space-y-1">
-                <flux:heading size="lg">{{ __('API usage guide') }}</flux:heading>
-                <flux:text variant="subtle">{{ __('Send JSON to create an image from a prompt, or multipart when reference images are included. Each successful request costs 1 quota.') }}</flux:text>
+    <flux:modal name="api-usage-guide" flyout variant="floating" class="md:w-xl">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="xl">{{ __('API usage guide') }}</flux:heading>
+                <flux:text class="mt-2">{{ __('Send JSON to create an image from a prompt, or multipart when reference images are included. Each successful request costs 1 quota.') }}</flux:text>
             </div>
 
-            <div class="grid gap-3 sm:grid-cols-2">
-                <div class="rounded-xl bg-white/5 p-4 text-sm">
-                    <div class="mb-2 font-medium">Endpoint</div>
-                    <div class="break-all font-mono text-xs">POST {{ url('/api/ai/images') }}</div>
+            <flux:callout variant="secondary" icon="code-bracket">
+                <flux:callout.heading>POST {{ url('/api/ai/images') }}</flux:callout.heading>
+                <flux:callout.text><span class="font-mono text-xs">Authorization: Bearer hai_xxx</span></flux:callout.text>
+            </flux:callout>
+
+            <div class="space-y-3">
+                <flux:heading size="lg">Body</flux:heading>
+                <div class="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-white/10">
+                    <div class="flex items-start gap-3">
+                        <flux:badge color="blue" size="sm">required</flux:badge>
+                        <flux:text><code class="font-medium text-zinc-800 dark:text-white">prompt</code> — {{ __('Image generation request, maximum 1200 words.') }}</flux:text>
+                    </div>
+                    <flux:separator />
+                    <div class="flex items-start gap-3">
+                        <flux:badge color="zinc" size="sm">optional</flux:badge>
+                        <flux:text><code class="font-medium text-zinc-800 dark:text-white">images[]</code> — {{ __('Up to :count reference images, jpg, jpeg, png, webp, or avif, up to :mbMB each.', ['count' => $maxImages, 'mb' => $maxUploadMb]) }}</flux:text>
+                    </div>
                 </div>
-                <div class="rounded-xl bg-white/5 p-4 text-sm">
-                    <div class="mb-2 font-medium">{{ __('Authentication') }}</div>
-                    <div class="break-all font-mono text-xs">Authorization: Bearer hai_xxx</div>
-                </div>
             </div>
 
-            <div class="space-y-2 text-sm">
-                <div class="font-medium">Body</div>
-                <ul class="list-disc space-y-1 ps-5 text-zinc-300">
-                    <li>{!! __('<span class="font-mono">prompt</span>: required image generation request, maximum 1200 words.') !!}</li>
-                    <li>{!! __('<span class="font-mono">images[]</span>: optional, up to :count reference images, jpg, jpeg, png, webp, or avif, up to :mbMB each.', ['count' => $maxImages, 'mb' => $maxUploadMb]) !!}</li>
-                </ul>
-            </div>
-
-            <pre class="overflow-x-auto rounded-xl bg-zinc-950 p-4 text-xs text-zinc-100"><code>curl -X POST '{{ url('/api/ai/images') }}' \
+            <div class="space-y-3">
+                <flux:heading size="lg">JSON</flux:heading>
+                <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST '{{ url('/api/ai/images') }}' \
   -H 'Authorization: Bearer hai_xxx' \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"Create a comic-style portrait"}'</code></pre>
+            </div>
 
-            <pre class="overflow-x-auto rounded-xl bg-zinc-950 p-4 text-xs text-zinc-100"><code>curl -X POST '{{ url('/api/ai/images') }}' \
+            <div class="space-y-3">
+                <flux:heading size="lg">Multipart</flux:heading>
+                <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST '{{ url('/api/ai/images') }}' \
   -H 'Authorization: Bearer hai_xxx' \
   -F 'prompt=Turn this image into a comic-style portrait' \
   -F 'images[]=@/path/to/source.jpg'</code></pre>
+            </div>
 
-            <div class="space-y-2 text-sm">
-                <div class="font-medium">{{ __('Successful response') }}</div>
-                <pre class="overflow-x-auto rounded-xl bg-zinc-950 p-4 text-xs text-zinc-100"><code>{
+            <div class="space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <flux:heading size="lg">{{ __('Successful response') }}</flux:heading>
+                    <flux:badge color="green" size="sm">201</flux:badge>
+                </div>
+                <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>{
   "id": 123,
   "url": "https://example.com/storage/ai-images/result.png",
   "download_name": "ai-image-123.png",

@@ -674,7 +674,7 @@ class AiImageApiTest extends TestCase
         ]);
 
         Livewire::actingAs($key->user)
-            ->test('pages::settings.api-key')
+            ->test('settings.api-key')
             ->assertSee('Hướng dẫn sử dụng API')
             ->assertSee('POST')
             ->assertSee('/api/ai/images')

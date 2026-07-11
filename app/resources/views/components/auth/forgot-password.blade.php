@@ -1,4 +1,9 @@
-<x-layouts::auth :title="__('Forgot password')">
+<?php
+
+use Livewire\Component;
+
+new class extends Component {};
+?>
     <div class="flex flex-col gap-6">
         <x-auth-header :title="__('Forgot password')" :description="__('Enter your email to receive a password reset link')" />
 
@@ -25,7 +30,6 @@
 
         <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-zinc-400">
             <span>{{ __('Or, return to') }}</span>
-            <flux:link :href="route('login')" wire:navigate>{{ __('log in') }}</flux:link>
+            <flux:link class="cursor-pointer" wire:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('log in') }}</flux:link>
         </div>
     </div>
-</x-layouts::auth>

@@ -7,11 +7,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new #[Title('Profile settings')] class extends Component {
+new class extends Component {
     use ProfileValidationRules, WithFileUploads;
 
     public string $name = '';
@@ -92,11 +91,9 @@ new #[Title('Profile settings')] class extends Component {
 }; ?>
 
 <section class="w-full">
-    @include('partials.settings-heading')
-
     <flux:heading class="sr-only">{{ __('Profile settings') }}</flux:heading>
 
-    <x-pages::settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
+    <x-settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
         <form wire:submit="updateAvatar" class="my-6 flex items-center gap-4">
             <flux:file-upload wire:model="avatar" accept="image/jpeg,image/png,image/webp" aria-label="{{ __('Avatar') }}">
                 <div class="relative flex size-20 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-zinc-100 transition-colors hover:border-zinc-300 hover:bg-zinc-200 in-data-dragging:bg-zinc-200 in-data-loading:opacity-60 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15 dark:in-data-dragging:bg-white/15">
@@ -162,7 +159,7 @@ new #[Title('Profile settings')] class extends Component {
         </form>
 
         @if ($this->showDeleteUser)
-            <livewire:pages::settings.delete-user-form />
+            <livewire:settings.delete-user-form />
         @endif
-    </x-pages::settings.layout>
+    </x-settings.layout>
 </section>

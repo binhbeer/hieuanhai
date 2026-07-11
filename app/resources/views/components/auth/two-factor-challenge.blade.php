@@ -1,4 +1,9 @@
-<x-layouts::auth :title="__('Two-factor authentication')">
+<?php
+
+use Livewire\Component;
+
+new class extends Component {};
+?>
     <div class="flex flex-col gap-6">
         <div
             class="relative w-full h-auto"
@@ -98,4 +103,3 @@
             </form>
         </div>
     </div>
-</x-layouts::auth>

@@ -154,7 +154,7 @@
         gtag('config', @js($googleMeasurementId));
     </script>
 @endif
-<meta name="theme-color" content="#7c3aed">
+<meta name="theme-color" content="#f59e0b">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="{{ $siteName }}">

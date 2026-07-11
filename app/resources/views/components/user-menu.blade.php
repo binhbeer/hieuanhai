@@ -18,10 +18,17 @@
 						{{ __('Manage') }}
 					</flux:menu.item>
 				@endif
-				<flux:menu.item :href="route('profile.edit')" wire:navigate>
-					<x-slot name="icon"><x-iconsax-bul-setting-2 class="size-5 mr-1.5" /></x-slot>
-					{{ __('Settings') }}
-				</flux:menu.item>
+				@foreach ([
+					['component' => 'settings.profile', 'label' => __('Profile')],
+					['component' => 'settings.security', 'label' => __('Security')],
+					['component' => 'settings.api-key', 'label' => __('API key')],
+					['component' => 'settings.appearance', 'label' => __('Appearance')],
+				] as $setting)
+					<flux:menu.item as="button" type="button" onclick="Livewire.dispatch('open-account-modal', { component: '{{ $setting['component'] }}' })">
+						<x-slot name="icon"><x-iconsax-bul-setting-2 class="size-5 mr-1.5" /></x-slot>
+						{{ $setting['label'] }}
+					</flux:menu.item>
+				@endforeach
 				<form class="w-full" method="POST" action="{{ route('logout') }}">
 					@csrf
 					<flux:menu.item class="w-full cursor-pointer" data-test="logout-button" as="button" type="submit">
@@ -33,7 +40,14 @@
 		</flux:menu>
 	</flux:dropdown>
 @else
-	<flux:button class="items-center w-full" :href="route('login')" variant="outline" wire:navigate {{ $attributes }}>
-		{{ __('Log in') }}
-	</flux:button>
+	<div class="grid grid-cols-2 gap-2" {{ $attributes }}>
+		<flux:button class="w-full" type="button" variant="outline" x-data x-on:click="Livewire.dispatch('open-account-modal', { component: 'auth.login' })">
+			{{ __('Log in') }}
+		</flux:button>
+		@if (\App\Support\AppSettings::bool('auth.registration_enabled', true))
+			<flux:button class="w-full" type="button" variant="primary" x-data x-on:click="Livewire.dispatch('open-account-modal', { component: 'auth.register' })">
+				{{ __('Register') }}
+			</flux:button>
+		@endif
+	</div>
 @endauth

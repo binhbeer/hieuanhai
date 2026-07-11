@@ -158,6 +158,8 @@
     "API key was not found or is invalid.": "Không tìm thấy API key hoặc key không hợp lệ.",
     "API usage guide": "Hướng dẫn sử dụng API",
     "Guide": "Hướng dẫn",
+    "Image generation request, maximum 1200 words.": "Nội dung yêu cầu tạo ảnh, tối đa 1200 từ.",
+    "Up to :count reference images, jpg, jpeg, png, webp, or avif, up to :mbMB each.": "Tối đa :count ảnh tham chiếu, định dạng jpg, jpeg, png, webp hoặc avif, tối đa :mbMB mỗi ảnh.",
     "Actions": "Thao tác",
     "Active": "Đang hoạt động",
     "Admin accounts are not limited by daily image quota.": "Tài khoản admin không bị giới hạn lượt tạo ảnh hằng ngày.",

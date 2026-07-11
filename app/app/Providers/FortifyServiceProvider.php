@@ -46,15 +46,17 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
-        Fortify::loginView(fn () => view('pages::auth.login'));
-        Fortify::verifyEmailView(fn () => view('pages::auth.verify-email'));
-        Fortify::twoFactorChallengeView(fn () => view('pages::auth.two-factor-challenge'));
-        Fortify::confirmPasswordView(fn () => view('pages::auth.confirm-password'));
+        $modal = fn (string $initial, string $title) => view('account-modal-page', compact('initial', 'title'));
+
+        Fortify::loginView(fn () => $modal('auth.login', __('Log in')));
+        Fortify::verifyEmailView(fn () => $modal('auth.verify-email', __('Email verification')));
+        Fortify::twoFactorChallengeView(fn () => $modal('auth.two-factor-challenge', __('Two-factor authentication')));
+        Fortify::confirmPasswordView(fn () => $modal('auth.confirm-password', __('Confirm password')));
         Fortify::registerView(fn () => AppSettings::bool('auth.registration_enabled', true)
-            ? view('pages::auth.register')
+            ? $modal('auth.register', __('Register'))
             : abort(404));
-        Fortify::resetPasswordView(fn () => view('pages::auth.reset-password'));
-        Fortify::requestPasswordResetLinkView(fn () => view('pages::auth.forgot-password'));
+        Fortify::resetPasswordView(fn () => $modal('auth.reset-password', __('Reset password')));
+        Fortify::requestPasswordResetLinkView(fn () => $modal('auth.forgot-password', __('Forgot password')));
     }
 
     /**
