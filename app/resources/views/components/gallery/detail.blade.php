@@ -376,36 +376,36 @@ new class extends Component {
     @php($canViewFullPrompt = Auth::check())
     @php($visiblePrompt = $canViewFullPrompt ? $selected->prompt : Str::limit($selected->prompt, 160))
 
-    <div class="{{ $standalone ? 'md:h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 backdrop-blur dark:bg-zinc-950/80 dark:text-white md:grid md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
+    <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 dark:bg-zinc-950/80 dark:text-white md:grid md:backdrop-blur md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
         <div class="relative flex flex-col shrink-0 md:shrink md:flex-1">
-            <div class="absolute inset-x-4 top-4 z-20 flex min-w-0 items-center gap-3">
+            <div class="fixed inset-x-0 top-0 z-20 flex h-16 min-w-0 items-center gap-3 bg-zinc-100/90 px-4 backdrop-blur dark:bg-zinc-950/80 md:absolute md:inset-x-4 md:top-4 md:h-auto md:bg-transparent md:p-0 md:backdrop-blur-none">
                 @if (filled($selected->title))
                     <h1 class="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight" title="{{ $selected->title }}">{{ $selected->title }}</h1>
                 @else
                     <div class="flex-1"></div>
                 @endif
 
-                <div class="flex shrink-0 items-center gap-2">
+                <div class="flex shrink-0 items-center gap-1">
                     @if ($this->canManageFeatured() && $this->isPublicImage($selected))
-                        <flux:button type="button" :variant="'primary'" :color="$selected->is_featured ? 'amber' : 'zinc'" wire:click="toggleFeatured({{ $selected->id }})" :aria-label="$selected->is_featured ? __('Featured') : __('Feature image')">
+                        <flux:button type="button" size="sm" :variant="'primary'" :color="$selected->is_featured ? 'amber' : 'zinc'" wire:click="toggleFeatured({{ $selected->id }})" :aria-label="$selected->is_featured ? __('Featured') : __('Feature image')">
                             <x-slot name="icon"><x-iconsax-bul-star class="size-5" /></x-slot>
                         </flux:button>
                     @endif
 
                     @if ($this->canFavorite($selected))
-                        <flux:button type="button" :variant="'primary'" :color="$this->isFavorite($selected) ? 'amber' : 'zinc'" wire:click="toggleFavorite({{ $selected->id }})" :aria-label="$this->isFavorite($selected) ? __('Remove favorite') : __('Favorite image')">
+                        <flux:button type="button" size="sm" :variant="'primary'" :color="$this->isFavorite($selected) ? 'amber' : 'zinc'" wire:click="toggleFavorite({{ $selected->id }})" :aria-label="$this->isFavorite($selected) ? __('Remove favorite') : __('Favorite image')">
                             <x-slot name="icon"><x-iconsax-two-heart class="size-5" /></x-slot>
                             {{ $this->favoriteCount($selected) }}
                         </flux:button>
                     @endif
 
                     @if ($standalone)
-                        <flux:button :href="route('home')" wire:navigate variant="filled">
+                        <flux:button size="sm" :href="route('home')" wire:navigate :variant="'primary'">
                             <x-slot name="icon"><x-iconsax-bul-close-circle class="size-5" /></x-slot>
                             Esc
                         </flux:button>
                     @else
-                        <flux:button type="button" variant="filled" x-on:click="closeImage">
+                        <flux:button type="button" size="sm" :variant="'primary'" x-on:click="closeImage">
                             <x-slot name="icon"><x-iconsax-bul-close-circle class="size-5" /></x-slot>
                             Esc
                         </flux:button>
@@ -413,8 +413,8 @@ new class extends Component {
                 </div>
             </div>
 
-            <div class="flex flex-1 items-start justify-center overflow-hidden sm:p-4 md:min-h-0 md:items-center">
-                <div class="flex flex-1 items-center justify-center gap-4 p-2 md:px-16 md:py-16">
+            <div class="flex flex-1 items-start justify-center overflow-hidden pt-16 sm:px-4 sm:pb-4 md:min-h-0 md:items-center md:p-4">
+                <div class="flex flex-1 items-center justify-center gap-4 p-0 md:px-16 md:py-16">
                     @if ($selectedThumbUrl)
                         <div class="relative flex flex-col min-w-0 flex-1 gap-2 items-center justify-center overflow-hidden">
                             <div class="relative flex max-h-[62svh] max-w-full items-center justify-center overflow-hidden rounded-xl md:max-h-[calc(100svh-10rem)] md:rounded-2xl">
@@ -454,13 +454,7 @@ new class extends Component {
         <aside class="flex flex-col border-l border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950 md:min-h-0 md:overflow-hidden">
             <header class="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 p-3 dark:border-white/10">
                 <div class="flex items-center gap-3">
-                    <flux:avatar
-                        size="lg"
-                        circle
-                        :name="$this->creatorName($selected)"
-                        :initials="$selected->user?->initials() ?? Str::upper(Str::substr($this->creatorName($selected), 0, 1))"
-                        :src="$selected->user?->avatar_path ? Storage::url($selected->user->avatar_path) : null"
-                    />
+                    <flux:avatar size="lg" circle :name="$this->creatorName($selected)" :initials="$selected->user?->initials() ?? Str::upper(Str::substr($this->creatorName($selected), 0, 1))" :src="$selected->user?->avatar_path ? Storage::url($selected->user->avatar_path) : null" />
                     <div class="text-sm font-semibold">{{ $this->creatorName($selected) }}</div>
                 </div>
                 <div class="text-right">
