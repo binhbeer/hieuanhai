@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
 use App\Models\AiImage;
 use App\Models\Category;
@@ -19,7 +20,8 @@ class ManageImagesTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => true, 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar'], 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageMetadataAgent::fake([['title' => 'Chân dung studio', 'description' => 'Chân dung studio chuyên nghiệp, ánh sáng mềm, nền sạch, phù hợp avatar và hồ sơ công khai.', 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar', 'chuyên nghiệp']]]);
 
         $this->actingAs(User::factory()->create(['id' => 1]));
         $category = Category::query()->where('slug', 'ads-product')->firstOrFail();

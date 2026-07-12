@@ -17,13 +17,13 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, Queueable;
 
-    public const STALE_AFTER_MINUTES = 10;
+    public const STALE_AFTER_MINUTES = 25;
 
-    public int $timeout = 360;
+    public int $timeout = 1260;
 
     public int $tries = 1;
 
-    public int $uniqueFor = 360;
+    public int $uniqueFor = 1260;
 
     public bool $failOnTimeout = true;
 

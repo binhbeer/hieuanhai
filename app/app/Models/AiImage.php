@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
  * @property int|null $parent_id
  * @property int|null $category_id
  * @property string|null $title
+ * @property string|null $description
  * @property string $visitor_key
  * @property string|null $ip_address
  * @property string|null $preset
@@ -41,6 +42,7 @@ use Illuminate\Support\Str;
     'parent_id',
     'category_id',
     'title',
+    'description',
     'visitor_key',
     'ip_address',
     'preset',
@@ -86,6 +88,21 @@ class AiImage extends BaseModel
         $timestamp = $this->created_at instanceof Carbon ? $this->created_at->timestamp : time();
 
         return 'GenAnh.com-'.$timestamp.'.'.$extension;
+    }
+
+    /**
+     * User-facing failure text. Admins keep the stored technical error.
+     */
+    public function displayError(?User $viewer = null): string
+    {
+        $raw = trim((string) ($this->error ?? ''));
+        $viewer ??= auth()->user();
+
+        if ($viewer instanceof User && $viewer->isAdmin() && $raw !== '') {
+            return $raw;
+        }
+
+        return __('Could not create this image.');
     }
 
     /**

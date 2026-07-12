@@ -21,8 +21,11 @@ return [
     'default_for_reranking' => 'cohere',
 
     'image_model' => 'cx/gpt-5.5-image',
-    'image_review_model' => env('AI_IMAGE_REVIEW_MODEL', 'gpt-5.5'),
-    'prompt_rewrite_model' => env('AI_PROMPT_REWRITE_MODEL', 'gpt-5.5'),
+    'text_model' => env('AI_TEXT_MODEL', 'gpt-5.5'),
+    'image_review_model' => env('AI_IMAGE_REVIEW_MODEL', ''),
+    'tag_model' => env('AI_TAG_MODEL', ''),
+    'prompt_rewrite_model' => env('AI_PROMPT_REWRITE_MODEL', ''),
+    'image_to_prompt_model' => env('AI_IMAGE_TO_PROMPT_MODEL', ''),
     'image_timeout' => 600,
     'image_size' => 'auto',
     'image_quality' => 'auto',

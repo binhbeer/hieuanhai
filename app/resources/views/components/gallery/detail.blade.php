@@ -5,6 +5,7 @@ use App\Models\AiImage;
 use App\Models\AiImageFavorite;
 use App\Models\User;
 use App\Services\AiImageEditor;
+use App\Support\GptImageOptions;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
@@ -24,6 +25,10 @@ new class extends Component {
 
         if ($image) {
             abort_unless($this->isPublicImage($image), 404);
+
+            if (request()->route()?->originalParameter('image') !== $image->getRouteKey()) {
+                abort(new \Illuminate\Http\RedirectResponse(route('images.show', $image), 301));
+            }
 
             $this->standalone = true;
             $this->openImage($image->id);
@@ -285,7 +290,7 @@ new class extends Component {
      */
     public function referenceImageUrls(AiImage $image): array
     {
-        if (! $this->canEdit($image) && ! $this->canManageFeatured()) {
+        if (!$this->canEdit($image) && !$this->canManageFeatured()) {
             return [];
         }
 
@@ -294,7 +299,7 @@ new class extends Component {
 
         return array_values(array_filter(
             array_map(
-                fn (string $path): ?string => $disk->exists($path) ? $disk->url($path) : null,
+                fn(string $path): ?string => $disk->exists($path) ? $disk->url($path) : null,
                 app(AiImageEditor::class)->referenceSourcePaths($image),
             ),
         ));
@@ -378,6 +383,35 @@ new class extends Component {
             'saving' => 4,
             default => 1,
         };
+    }
+
+    /**
+     * @return array{aspect_ratio: ?string, resolution: ?string, image_detail: ?string}
+     */
+    public function generationOptions(AiImage $image): array
+    {
+        $meta = is_array($image->request_meta) ? $image->request_meta : [];
+        $aspectRatio = is_string($meta['aspect_ratio'] ?? null) ? $meta['aspect_ratio'] : null;
+        $resolution = is_string($meta['resolution'] ?? null) ? strtoupper($meta['resolution']) : null;
+        $imageDetail = is_string($meta['image_detail'] ?? null) ? $meta['image_detail'] : null;
+
+        if (($aspectRatio === null || $resolution === null) && is_string($meta['size'] ?? null)) {
+            $defaults = GptImageOptions::defaultsFromSettings($meta['size']);
+            $aspectRatio ??= $defaults['aspect_ratio'];
+            $resolution ??= strtoupper($defaults['resolution']);
+        }
+
+        return [
+            'aspect_ratio' => $aspectRatio === 'auto' ? __('Auto') : $aspectRatio,
+            'resolution' => $resolution,
+            'image_detail' => match ($imageDetail) {
+                'auto' => __('Automatic'),
+                'low' => __('Fair'),
+                'high' => __('Good'),
+                'original' => __('High'),
+                default => null,
+        },
+        ];
     }
 
     protected function getListeners(): array
@@ -467,6 +501,7 @@ new class extends Component {
     @php($selectedTitle = $selected->title ?: $selected->prompt)
     @php($canViewFullPrompt = Auth::check())
     @php($visiblePrompt = $canViewFullPrompt ? $selected->prompt : Str::limit($selected->prompt, 160))
+    @php($generationOptions = $this->generationOptions($selected))
 
     <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 dark:bg-zinc-950/80 dark:text-white md:grid md:backdrop-blur md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
         <div class="relative flex flex-col shrink-0 md:shrink md:flex-1">
@@ -538,7 +573,7 @@ new class extends Component {
                             <div class="max-w-xs p-8">
                                 <x-iconsax-two-danger class="mx-auto mb-4 size-12" />
                                 <div class="text-lg font-semibold">{{ __('Failed') }}</div>
-                                <div class="mt-2 text-sm">{{ $selected->error ?: __('Could not create this image.') }}</div>
+                                <div class="mt-2 text-sm">{{ $selected->displayError() }}</div>
                             </div>
                         </div>
                     @endif
@@ -597,23 +632,40 @@ new class extends Component {
                         @endif
                     </div>
 
-                    @if ($selected->status === 'failed' && filled($selected->error))
-                        <div class="rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-100">{{ $selected->error }}</div>
+                    @if (collect($generationOptions)->filter()->isNotEmpty())
+                        <div x-show="expanded" x-cloak>
+                            <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Image settings') }}</div>
+                            <div class="flex flex-wrap gap-2">
+                                @if ($generationOptions['aspect_ratio'])
+                                    <flux:badge size="sm" color="zinc" rounded>{{ $generationOptions['aspect_ratio'] }}</flux:badge>
+                                @endif
+                                @if ($generationOptions['resolution'])
+                                    <flux:badge size="sm" color="zinc" rounded>{{ $generationOptions['resolution'] }}</flux:badge>
+                                @endif
+                                @if ($generationOptions['image_detail'])
+                                    <flux:badge size="sm" color="zinc" rounded>{{ __('Quality') }}: {{ $generationOptions['image_detail'] }}</flux:badge>
+                                @endif
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($selected->status === 'failed')
+                        <div class="rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-100">{{ $selected->displayError() }}</div>
                     @endif
                 </div>
 
                 @php($referenceImageUrls = $this->referenceImageUrls($selected))
                 @if ($referenceImageUrls !== [])
-                <div class="mt-7">
-                    <div class="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Reference images') }}</div>
-                    <div class="grid grid-cols-3 gap-2">
-                        @foreach ($referenceImageUrls as $refUrl)
-                            <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $refUrl }}" data-lightbox wire:key="reference-image-{{ $selected->id }}-{{ $loop->index }}" aria-label="{{ __('Reference image :number', ['number' => $loop->iteration]) }}">
-                                <img class="aspect-square size-full object-cover" src="{{ $refUrl }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" loading="lazy" />
-                            </a>
-                        @endforeach
+                    <div class="mt-7">
+                        <div class="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Reference images') }}</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            @foreach ($referenceImageUrls as $refUrl)
+                                <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $refUrl }}" data-lightbox wire:key="reference-image-{{ $selected->id }}-{{ $loop->index }}" aria-label="{{ __('Reference image :number', ['number' => $loop->iteration]) }}">
+                                    <img class="aspect-square size-full object-cover" src="{{ $refUrl }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" loading="lazy" />
+                                </a>
+                            @endforeach
+                        </div>
                     </div>
-                </div>
                 @endif
 
                 @if ($this->relatedImages->isNotEmpty())

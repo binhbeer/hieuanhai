@@ -7,9 +7,25 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 new #[Title('Ảnh của bạn')] class extends Component {
+    use WithPagination;
+
+    #[Url]
+    public string $status = 'all';
+
+    #[Url]
+    public string $publish = 'all';
+
+    #[Url]
+    public string $sortBy = 'created_at';
+
+    #[Url]
+    public string $sortDirection = 'desc';
+
     public function refreshCompletedImage(array $payload = []): void
     {
         $this->refreshImages();
@@ -25,11 +41,37 @@ new #[Title('Ảnh của bạn')] class extends Component {
         }
     }
 
+    public function updatedStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedPublish(): void
+    {
+        $this->resetPage();
+    }
+
+    public function sort(string $column): void
+    {
+        if (! in_array($column, ['id', 'created_at', 'status'], true)) {
+            return;
+        }
+
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = $column === 'created_at' || $column === 'id' ? 'desc' : 'asc';
+        }
+
+        $this->resetPage();
+    }
+
     public function togglePublish(int $id, AiImageEditor $editor): void
     {
         $image = $this->findImage($id);
 
-        if (!$image) {
+        if (! $image) {
             return;
         }
 
@@ -48,6 +90,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
             $this->dispatch('gallery-updated');
             Flux::toast(variant: 'success', text: __('Image published.'));
         } catch (InvalidArgumentException $e) {
+            $this->refreshImages();
             Flux::toast(text: $e->getMessage());
         }
     }
@@ -62,7 +105,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
 
         $image = $query->where('status', 'pending')->find($id);
 
-        if (!$image || !$editor->cancelPending($image)) {
+        if (! $image || ! $editor->cancelPending($image)) {
             return;
         }
 
@@ -70,10 +113,35 @@ new #[Title('Ảnh của bạn')] class extends Component {
         Flux::toast(text: __('Image creation cancelled.'));
     }
 
+    public function deleteImage(int $id, AiImageEditor $editor): void
+    {
+        $editor->deleteGuestImage(request(), $id);
+        $this->refreshImages();
+        $this->dispatch('gallery-updated');
+        Flux::toast(variant: 'success', text: __('Image deleted.'));
+    }
+
     #[Computed]
     public function images()
     {
-        return app(AiImageEditor::class)->guestHistory(request(), 120);
+        $sortBy = in_array($this->sortBy, ['id', 'created_at', 'status'], true) ? $this->sortBy : 'created_at';
+        $sortDirection = $this->sortDirection === 'asc' ? 'asc' : 'desc';
+
+        $query = AiImage::query();
+
+        Auth::check()
+            ? $query->where('user_id', Auth::id())
+            : $query->where('visitor_key', app(AiImageEditor::class)->visitorKey(request()));
+
+        return $query
+            ->with('category')
+            ->whereIn('status', ['pending', 'succeeded', 'failed'])
+            ->when($this->status !== 'all', fn ($q) => $q->where('status', $this->status))
+            ->when($this->publish === 'published', fn ($q) => $q->where('is_published', true))
+            ->when($this->publish === 'unpublished', fn ($q) => $q->where('is_published', false))
+            ->orderBy($sortBy, $sortDirection)
+            ->orderByDesc('id')
+            ->paginate(20);
     }
 
     public function imageUrl(AiImage $image, string $size = 'original'): ?string
@@ -110,11 +178,53 @@ new #[Title('Ảnh của bạn')] class extends Component {
         };
     }
 
+    public function statusLabel(AiImage $image): string
+    {
+        return match ($image->status) {
+            'pending' => __('Creating'),
+            'failed' => __('Failed'),
+            default => $image->is_published ? __('Published') : __('Unpublished'),
+        };
+    }
+
+    public function sizeLabel(AiImage $image): ?string
+    {
+        $meta = $image->request_meta ?? [];
+        $size = is_string($meta['size'] ?? null) ? $meta['size'] : null;
+        $aspect = is_string($meta['aspect_ratio'] ?? null) ? $meta['aspect_ratio'] : null;
+        $resolution = is_string($meta['resolution'] ?? null) ? $meta['resolution'] : null;
+
+        return collect([$aspect, $resolution, $size])->filter()->unique()->implode(' · ') ?: null;
+    }
+
+    public function errorCode(AiImage $image): ?string
+    {
+        if (! Auth::user()?->isAdmin()) {
+            return null;
+        }
+
+        $error = trim((string) ($image->error ?? ''));
+
+        if ($error === '') {
+            return null;
+        }
+
+        if (preg_match('/(?:lỗi|error|status)\s*(\d{3})\b/iu', $error, $matches)) {
+            return $matches[1];
+        }
+
+        if (preg_match('/\b([45]\d{2})\b/', $error, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
     protected function getListeners(): array
     {
         $userId = Auth::id();
 
-        return $userId ? ['echo-private:App.Models.User.' . $userId . ',AiImageCompleted' => 'refreshCompletedImage'] : [];
+        return $userId ? ['echo-private:App.Models.User.'.$userId.',AiImageCompleted' => 'refreshCompletedImage'] : [];
     }
 
     private function findImage(int $id): ?AiImage
@@ -138,16 +248,31 @@ new #[Title('Ảnh của bạn')] class extends Component {
     }
 }; ?>
 
-<section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6" @if ($this->images->contains(fn($image) => $image->status === 'pending')) wire:poll.2s @endif>
+<section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6" @if ($this->images->contains(fn ($image) => $image->status === 'pending')) wire:poll.2s @endif>
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-1">
             <flux:heading size="xl">{{ __('Created images') }}</flux:heading>
             <flux:text variant="subtle">{{ __('Images you created in this browser. Publish them to make them appear in the gallery.') }}</flux:text>
         </div>
+        <flux:text variant="subtle">{{ __(':count images', ['count' => number_format($this->images->total())]) }}</flux:text>
+    </div>
+
+    <div class="flex flex-wrap items-end gap-3">
+        <flux:select class="min-w-40" wire:model.live="status" :label="__('Status')">
+            <flux:select.option value="all">{{ __('All') }}</flux:select.option>
+            <flux:select.option value="succeeded">{{ __('Succeeded') }}</flux:select.option>
+            <flux:select.option value="pending">{{ __('Creating') }}</flux:select.option>
+            <flux:select.option value="failed">{{ __('Failed') }}</flux:select.option>
+        </flux:select>
+        <flux:select class="min-w-40" wire:model.live="publish" :label="__('Publish')">
+            <flux:select.option value="all">{{ __('All') }}</flux:select.option>
+            <flux:select.option value="published">{{ __('Published') }}</flux:select.option>
+            <flux:select.option value="unpublished">{{ __('Unpublished') }}</flux:select.option>
+        </flux:select>
     </div>
 
     @if ($this->images->isEmpty())
-        <div class="flex min-h-[55svh] items-center justify-center rounded-4xl border border-dashed border-zinc-300 bg-white text-center dark:border-white/10 dark:bg-white/5">
+        <div class="flex min-h-[40svh] items-center justify-center rounded-4xl border border-dashed border-zinc-300 bg-white text-center dark:border-white/10 dark:bg-white/5">
             <div class="max-w-sm p-8">
                 <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-white/10">
                     <x-iconsax-two-gallery class="size-7 text-zinc-500" />
@@ -157,75 +282,117 @@ new #[Title('Ảnh của bạn')] class extends Component {
             </div>
         </div>
     @else
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-        @foreach ($this->images as $image)
-        @php($url = $this->imageUrl($image))
-        @php($thumbUrl = $this->imageUrl($image, 'sm'))
-        @php($imageSize = $this->imageSize($image, 'sm'))
-        @php($progressStep = $this->progressStep($image))
-        <flux:card class="relative overflow-hidden p-0" wire:key="created-image-{{ $image->id }}">
-            @if ($image->status === 'pending')
-                <flux:button class="absolute right-2 top-2 z-10" type="button" size="sm" variant="danger" icon="stop" wire:click="cancelPending({{ $image->id }})" wire:confirm="{{ __('Cancel image creation?') }}" wire:loading.attr="disabled" wire:target="cancelPending({{ $image->id }})" :aria-label="__('Stop')" />
-            @endif
-            <button class="block w-full text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
-                @if ($thumbUrl)
-                    <img class="aspect-square w-full bg-zinc-100 object-cover dark:bg-white/10" src="{{ $thumbUrl }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif loading="lazy" />
-                @elseif ($image->status === 'pending')
-                    <div class="relative flex aspect-square items-center justify-center overflow-hidden bg-zinc-100 text-zinc-700 dark:bg-white/10 dark:text-white/80">
-                        <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-zinc-50),var(--color-zinc-200))] dark:bg-[radial-gradient(circle_at_center,rgba(255,255,255,.12),rgba(255,255,255,.04))]"></div>
-                        <div class="relative flex w-4/5 max-w-56 flex-col items-center gap-4 rounded-3xl border border-white/80 bg-white/85 p-5 text-center shadow-lg backdrop-blur dark:border-white/10 dark:bg-zinc-900/80">
-                            <div class="relative flex size-16 items-center justify-center">
-                                <div class="absolute inset-0 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900 dark:border-white/15 dark:border-t-white"></div>
-                                <x-iconsax-two-magic-star class="size-7" />
+        <flux:table :paginate="$this->images">
+            <flux:table.columns>
+                <flux:table.column sortable :sorted="$sortBy === 'id'" :direction="$sortDirection" wire:click="sort('id')">{{ __('Image') }}</flux:table.column>
+                <flux:table.column>{{ __('Prompt') }}</flux:table.column>
+                <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">{{ __('Status') }}</flux:table.column>
+                <flux:table.column>{{ __('Size') }}</flux:table.column>
+                <flux:table.column sortable :sorted="$sortBy === 'created_at'" :direction="$sortDirection" wire:click="sort('created_at')">{{ __('Time') }}</flux:table.column>
+                <flux:table.column>{{ __('Actions') }}</flux:table.column>
+            </flux:table.columns>
+
+            <flux:table.rows>
+                @foreach ($this->images as $image)
+                    @php($originalUrl = $this->imageUrl($image))
+                    @php($thumbUrl = $this->imageUrl($image, 'xs'))
+                    @php($thumbSize = $this->imageSize($image, 'xs'))
+                    @php($sizeLabel = $this->sizeLabel($image))
+                    @php($progressStep = $this->progressStep($image))
+                    <flux:table.row wire:key="created-image-{{ $image->id }}-{{ $image->is_published ? 'published' : 'unpublished' }}">
+                        <flux:table.cell>
+                            <div class="flex items-center gap-3">
+                                <button class="shrink-0 overflow-hidden rounded-xl bg-zinc-100 dark:bg-white/10" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
+                                    @if ($thumbUrl)
+                                        <img class="size-16 object-cover" src="{{ $thumbUrl }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" @if ($thumbSize) width="{{ $thumbSize['width'] }}" height="{{ $thumbSize['height'] }}" @endif loading="lazy" />
+                                    @elseif ($image->status === 'pending')
+                                        <div class="relative flex size-16 items-center justify-center text-zinc-600 dark:text-white/70">
+                                            <div class="absolute inset-2 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900 dark:border-white/15 dark:border-t-white"></div>
+                                            <x-iconsax-two-magic-star class="size-5" />
+                                        </div>
+                                    @else
+                                        <div class="flex size-16 items-center justify-center text-red-500 dark:text-red-200">
+                                            <x-iconsax-two-danger class="size-6" />
+                                        </div>
+                                    @endif
+                                </button>
+                                <div class="min-w-0">
+                                    <div class="text-xs text-zinc-500 dark:text-zinc-400">#{{ $image->id }}</div>
+                                    @if ($image->category)
+                                        <flux:text class="text-xs" variant="subtle">{{ $image->category->name }}</flux:text>
+                                    @endif
+                                </div>
                             </div>
-                            <div>
-                                <div class="text-sm font-semibold">{{ __('Creating image') }}</div>
-                                <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{{ $this->progressLabel($image) }}</div>
+                        </flux:table.cell>
+
+                        <flux:table.cell class="max-w-sm">
+                            <button class="block w-full text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })">
+                                <div class="line-clamp-2 font-medium">{{ $image->title ?: $image->prompt }}</div>
+                            </button>
+                            @if ($image->status === 'pending')
+                                <flux:text class="mt-1 text-xs" variant="subtle">{{ $this->progressLabel($image) }}</flux:text>
+                                <div class="mt-2 h-1 w-full max-w-40 overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="{{ $progressStep }}" aria-label="{{ $this->progressLabel($image) }}">
+                                    <div class="h-full animate-pulse rounded-full bg-zinc-900 transition-[width] dark:bg-white" style="width: {{ $progressStep * 25 }}%"></div>
+                                </div>
+                            @elseif ($image->status !== 'failed')
+                                <flux:text class="mt-1 line-clamp-1 text-xs" variant="subtle">{{ $image->model }}</flux:text>
+                            @endif
+                        </flux:table.cell>
+
+                        <flux:table.cell>
+                            <div class="space-y-1">
+                                <flux:badge size="sm" :color="$image->status === 'failed' ? 'red' : ($image->status === 'pending' ? 'amber' : null)">
+                                    {{ $this->statusLabel($image) }}
+                                </flux:badge>
+                                @if ($image->status === 'failed' && ($errorCode = $this->errorCode($image)))
+                                    <flux:text class="block text-xs text-red-600 dark:text-red-300">{{ $errorCode }}</flux:text>
+                                @endif
                             </div>
-                            <div class="h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="{{ $progressStep }}" aria-label="{{ $this->progressLabel($image) }}">
-                                <div class="h-full animate-pulse rounded-full bg-zinc-900 transition-[width] dark:bg-white" style="width: {{ $progressStep * 25 }}%"></div>
+                        </flux:table.cell>
+
+                        <flux:table.cell>
+                            <flux:text class="text-xs" variant="subtle">{{ $sizeLabel ?: '—' }}</flux:text>
+                        </flux:table.cell>
+
+                        <flux:table.cell>
+                            <div class="whitespace-nowrap text-sm">{{ $image->created_at?->format('Y-m-d H:i') }}</div>
+                            <flux:text class="text-xs" variant="subtle">{{ $image->created_at?->diffForHumans() }}</flux:text>
+                        </flux:table.cell>
+
+                        <flux:table.cell>
+                            <div class="flex flex-wrap items-center justify-end gap-2">
+                                @if ($image->status === 'pending')
+                                    <flux:button type="button" size="sm" variant="danger" icon="stop" wire:click="cancelPending({{ $image->id }})" wire:confirm="{{ __('Cancel image creation?') }}" wire:loading.attr="disabled" wire:target="cancelPending({{ $image->id }})">{{ __('Stop') }}</flux:button>
+                                @elseif ($image->status === 'succeeded' && $image->result_path)
+                                    @php($publishError = is_string(data_get($image->response_meta, 'publish_error')) ? data_get($image->response_meta, 'publish_error') : null)
+                                    @php($publishDisabled = $publishError && ! auth()->user()?->isAdmin())
+                                    @if ($publishDisabled)
+                                        <flux:tooltip :content="$publishError">
+                                            <div>
+                                                <flux:button type="button" size="sm" variant="primary" disabled>{{ __('Publish') }}</flux:button>
+                                            </div>
+                                        </flux:tooltip>
+                                    @else
+                                        <flux:button type="button" size="sm" :variant="$image->is_published ? 'danger' : 'primary'" wire:click="togglePublish({{ $image->id }})">
+                                            {{ $image->is_published ? __('Unpublish') : __('Publish') }}
+                                        </flux:button>
+                                    @endif
+                                @endif
+
+                                <flux:dropdown position="bottom" align="end">
+                                    <flux:button size="sm" variant="ghost" icon="ellipsis-horizontal" :aria-label="__('Actions')" />
+                                    <flux:menu>
+                                        @if ($originalUrl)
+                                            <flux:menu.item :href="$originalUrl" download="{{ $image->downloadName() }}" icon="arrow-down-tray">{{ __('Download') }}</flux:menu.item>
+                                        @endif
+                                        <flux:menu.item as="button" type="button" variant="danger" icon="trash" wire:click="deleteImage({{ $image->id }})" wire:confirm="{{ __('Delete this image?') }}">{{ __('Delete') }}</flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
                             </div>
-                        </div>
-                    </div>
-                @else
-                    <div class="flex aspect-square items-center justify-center bg-red-50 text-red-500 dark:bg-red-400/10 dark:text-red-200">
-                        <x-iconsax-two-danger class="size-8" />
-                    </div>
-                @endif
-            </button>
-
-            <div class="space-y-3 p-4">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <flux:badge size="sm" :color="$image->status === 'failed' ? 'red' : null">
-                        {{ match ($image->status) {
-            'pending' => __('Creating'),
-            'failed' => __('Failed'),
-            default => $image->is_published ? __('Published') : __('Unpublished'),
-        } }}
-                    </flux:badge>
-                    <flux:text class="text-xs" variant="subtle">#{{ $image->id }} · {{ $image->created_at?->diffForHumans() }}</flux:text>
-                </div>
-
-                <p class="line-clamp-3 text-sm font-medium">{{ $image->title ?: $image->prompt }}</p>
-
-                @if ($image->status === 'failed')
-                    <flux:text class="text-sm text-red-600 dark:text-red-300">{{ $image->error ?: __('Could not create this image.') }}</flux:text>
-                @endif
-
-                <div class="grid grid-cols-2 gap-2">
-                    @if ($url)
-                        <flux:button :href="$url" download="{{ $image->downloadName() }}" size="sm" variant="filled">{{ __('Download') }}</flux:button>
-                    @endif
-                    @if ($image->status === 'succeeded' && $image->result_path)
-                        <flux:button type="button" size="sm" :variant="$image->is_published ? 'danger' : 'primary'" wire:click="togglePublish({{ $image->id }})">
-                            {{ $image->is_published ? __('Unpublish') : __('Publish image') }}
-                        </flux:button>
-                    @endif
-                </div>
-            </div>
-        </flux:card>
-        @endforeach
-    </div>
+                        </flux:table.cell>
+                    </flux:table.row>
+                @endforeach
+            </flux:table.rows>
+        </flux:table>
     @endif
-
 </section>

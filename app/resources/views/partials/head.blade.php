@@ -25,7 +25,11 @@
     };
 
     $metaDescription = match (true) {
-        $metaImage !== null => \Illuminate\Support\Str::limit($metaImage->prompt, 160, ''),
+        $metaImage !== null => \Illuminate\Support\Str::limit(
+            filled($metaImage->description) ? $metaImage->description : ($metaImage->title ?: $metaImage->prompt),
+            160,
+            '',
+        ),
         $metaCategory !== null => \Illuminate\Support\Str::limit('Ảnh AI chủ đề '.$metaCategory->name.'. Khám phá các ảnh cộng đồng đã publish.', 160, ''),
         $metaTag !== null => \Illuminate\Support\Str::limit('Ảnh AI gắn thẻ #'.$metaTag->name.'. Khám phá các ảnh cộng đồng đã publish.', 160, ''),
         default => $siteDescription,
@@ -45,6 +49,9 @@
     $metaImageUrl = $metaImage ? $imageEditor->imageUrl($metaImage, 'og') : null;
     $metaImageUrl = $metaImageUrl && ! \Illuminate\Support\Str::startsWith($metaImageUrl, ['http://', 'https://']) ? url($metaImageUrl) : $metaImageUrl;
     $metaImageAlt = $metaImage ? \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 120, '') : null;
+    $metaKeywords = $metaImage
+        ? $metaImage->tags()->pluck('name')->filter()->implode(', ')
+        : $siteKeywords;
     $metaRobots = $isIndexable ? 'index,follow,max-image-preview:large' : 'noindex,nofollow';
     $metaLocale = str_replace('-', '_', str_replace('_', '-', app()->getLocale()));
     $publishedAt = $metaImage?->published_at?->toIso8601String();
@@ -104,8 +111,8 @@
 @if (filled($metaDescription))
     <meta name="description" content="{{ $metaDescription }}">
 @endif
-@if ($siteKeywords !== '')
-    <meta name="keywords" content="{{ $siteKeywords }}">
+@if ($metaKeywords !== '')
+    <meta name="keywords" content="{{ $metaKeywords }}">
 @endif
 <meta property="og:site_name" content="{{ $siteName }}">
 <meta property="og:locale" content="{{ $metaLocale }}">
@@ -154,7 +161,7 @@
         gtag('config', @js($googleMeasurementId));
     </script>
 @endif
-<meta name="theme-color" content="#f59e0b">
+<meta name="theme-color" content="#000000">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="{{ $siteName }}">

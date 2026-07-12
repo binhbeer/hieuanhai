@@ -53,6 +53,17 @@ class HomeTest extends TestCase
             ->assertSee("gtag('config', 'G-SZ9BZEKLZ1');", false);
     }
 
+    public function test_manage_pages_skip_google_analytics(): void
+    {
+        Setting::putValue('analytics.google_measurement_id', 'G-SZ9BZEKLZ1');
+
+        $admin = User::factory()->create(['id' => 1]);
+
+        $this->actingAs($admin)->get(route('manage.index'))
+            ->assertOk()
+            ->assertDontSee('googletagmanager.com', false);
+    }
+
     public function test_guests_must_login_to_visit_search(): void
     {
         $this->get(route('search.index'))

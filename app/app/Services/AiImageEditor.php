@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
+use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Events\AiImageCompleted;
 use App\Models\AiImage;
@@ -10,6 +12,7 @@ use App\Models\AiTag;
 use App\Models\Category;
 use App\Models\User;
 use App\Support\AppSettings;
+use App\Support\GptImageOptions;
 use GdImage;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Collection;
@@ -57,8 +60,8 @@ class AiImageEditor
             throw new \InvalidArgumentException('Prompt là bắt buộc.');
         }
 
-        $this->reviewForCreation($prompt);
         $photos = array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile));
+        $this->reviewForCreation($prompt, $photos);
         $photo = $photos[0] ?? null;
         $visitorKey = $this->visitorKey($request);
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai'));
@@ -132,6 +135,10 @@ class AiImageEditor
         array $referenceImageIds = [],
         ?int $parentId = null,
         array $parentReferenceIndexes = [],
+        ?string $size = null,
+        ?string $imageDetail = null,
+        ?string $aspectRatio = null,
+        ?string $resolution = null,
     ): AiImage {
 
         if (! Auth::check()) {
@@ -147,8 +154,16 @@ class AiImageEditor
         }
 
         $userId = (int) Auth::id();
+        $size = is_string($size) && GptImageOptions::isValidSize($size) ? $size : null;
+        $imageDetail = is_string($imageDetail) && GptImageOptions::isValidImageDetail($imageDetail) ? $imageDetail : null;
+        $aspectRatio = is_string($aspectRatio) && in_array($aspectRatio, GptImageOptions::ASPECT_RATIOS, true) ? $aspectRatio : null;
+        $resolution = is_string($resolution) && in_array($resolution, GptImageOptions::RESOLUTIONS, true) ? $resolution : null;
 
-        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId) {
+        if ($aspectRatio !== null && $resolution !== null) {
+            $size = GptImageOptions::size($aspectRatio, $resolution);
+        }
+
+        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution) {
             User::query()->whereKey($userId)->lockForUpdate()->first();
 
             if (AiImage::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
@@ -187,7 +202,7 @@ class AiImageEditor
                 'provider' => AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai')),
                 'model' => AppSettings::string('ai.image_model', (string) config('ai.image_model', 'cx/gpt-5.5-image')),
                 'status' => 'pending',
-                'request_meta' => [
+                'request_meta' => array_filter([
                     'upload_name' => $photo?->getClientOriginalName(),
                     'upload_mime' => $photo?->getClientMimeType(),
                     'upload_size' => $photo?->getSize(),
@@ -195,8 +210,12 @@ class AiImageEditor
                     'reference_image_ids' => array_values(array_filter(array_map(fn (array $upload) => $upload['image_id'] ?? null, $referenceUploads))),
                     'parent_prompt' => $parent?->prompt,
                     'pending_uploads' => $pendingUploads,
+                    'aspect_ratio' => $aspectRatio,
+                    'resolution' => $resolution,
+                    'size' => $size,
+                    'image_detail' => $imageDetail,
                     'progress' => 'queued',
-                ],
+                ], fn (mixed $value): bool => $value !== null),
             ]);
         });
     }
@@ -294,13 +313,15 @@ class AiImageEditor
                 return $image->refresh();
             }
 
-            $this->reviewForCreation($finalPrompt);
+            $this->reviewForCreation($finalPrompt, array_values($photos));
 
             if (! $this->updateImageProgress($image, $requestMeta, 'generating')) {
                 return $image->refresh();
             }
 
-            $result = $this->generateImage($photos, $finalPrompt, $image->provider, $image->model, $sourcePaths);
+            $size = is_string($requestMeta['size'] ?? null) ? $requestMeta['size'] : null;
+            $imageDetail = is_string($requestMeta['image_detail'] ?? null) ? $requestMeta['image_detail'] : null;
+            $result = $this->generateImage($photos, $finalPrompt, $image->provider, $image->model, $sourcePaths, $size, $imageDetail);
 
             if ($image->fresh()->status !== 'pending') {
                 if ($sourcePaths !== []) {
@@ -444,20 +465,56 @@ class AiImageEditor
             throw new \InvalidArgumentException('Chỉ publish được ảnh đã tạo xong.');
         }
 
-        $review = $this->reviewForPublish($image);
+        $responseMeta = is_array($image->response_meta) ? $image->response_meta : [];
+
+        if (is_string($responseMeta['publish_error'] ?? null) && ! Auth::user()?->isAdmin()) {
+            throw new \InvalidArgumentException($responseMeta['publish_error']);
+        }
+
+        try {
+            $review = $this->reviewForPublish($image);
+        } catch (\InvalidArgumentException $e) {
+            if ($e->getMessage() === 'Prompt không phù hợp để tạo hoặc publish ảnh.') {
+                $image->update(['response_meta' => [...$responseMeta, 'publish_error' => $e->getMessage()]]);
+            }
+
+            throw $e;
+        }
 
         DB::transaction(function () use ($image, $review): void {
             $image->update([
                 'category_id' => $this->classifyCategory($review['category'])->id,
                 'title' => $review['title'],
+                'description' => $review['description'],
                 'is_published' => true,
                 'published_at' => $image->published_at ?? now(),
+                'response_meta' => collect($image->response_meta ?? [])->except('publish_error')->all(),
             ]);
 
             $this->syncTags($image, $review['tags']);
         });
 
         return $image->refresh()->load('tags');
+    }
+
+    public function backfillMetadata(AiImage $image): AiImage
+    {
+        $metadata = $this->imageMetadata($image);
+        $prompt = (string) $image->prompt;
+        $category = is_string($metadata['category'] ?? null) ? $metadata['category'] : 'other';
+        $title = $this->imageTitle($metadata['title'] ?? null, $prompt);
+
+        DB::transaction(function () use ($image, $metadata, $prompt, $category, $title): void {
+            $image->update([
+                'category_id' => $this->classifyCategory($category)->id,
+                'title' => $title,
+                'description' => $this->imageDescription($metadata['description'] ?? null, $title, $prompt),
+            ]);
+
+            $this->syncTags($image, $this->tagNames($metadata['tags'] ?? []));
+        });
+
+        return $image->refresh()->load('category', 'tags');
     }
 
     /**
@@ -922,8 +979,15 @@ class AiImageEditor
      * @param  array<int, string>  $sourcePaths
      * @return array{base64: string, mime: string, source_paths: array<int, string>, usage: array<string, mixed>}
      */
-    private function generateImage(array $photos, string $prompt, string $provider, string $model, array &$sourcePaths = []): array
-    {
+    private function generateImage(
+        array $photos,
+        string $prompt,
+        string $provider,
+        string $model,
+        array &$sourcePaths = [],
+        ?string $size = null,
+        ?string $imageDetail = null,
+    ): array {
         $sourcePaths = [];
         $referenceImages = [];
 
@@ -960,10 +1024,14 @@ class AiImageEditor
             'model' => $model,
             'prompt' => $prompt,
             'n' => 1,
-            'size' => AppSettings::string('ai.image_size', (string) config('ai.image_size', 'auto')),
+            'size' => is_string($size) && ($size === 'auto' || GptImageOptions::isValidSize($size))
+                ? $size
+                : AppSettings::string('ai.image_size', (string) config('ai.image_size', 'auto')),
             'quality' => AppSettings::string('ai.image_quality', (string) config('ai.image_quality', 'auto')),
             'background' => 'auto',
-            'image_detail' => AppSettings::string('ai.image_detail', (string) config('ai.image_detail', 'high')),
+            'image_detail' => is_string($imageDetail) && GptImageOptions::isValidImageDetail($imageDetail)
+                ? $imageDetail
+                : AppSettings::string('ai.image_detail', (string) config('ai.image_detail', 'high')),
             'output_format' => 'png',
         ];
 
@@ -1015,7 +1083,7 @@ class AiImageEditor
         }
 
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
-        $model = AppSettings::string('ai.prompt_rewrite_model', (string) config('ai.prompt_rewrite_model', 'gpt-5.5'));
+        $model = $this->textModel('ai.prompt_rewrite_model', (string) config('ai.prompt_rewrite_model', 'gpt-5.5'));
 
         $this->configureReviewProvider($provider);
 
@@ -1042,6 +1110,38 @@ class AiImageEditor
         return Str::limit($rewritten, 2000, '');
     }
 
+    public function promptFromImage(UploadedFile $photo): string
+    {
+        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
+        $model = $this->textModel('ai.image_to_prompt_model', (string) config('ai.image_to_prompt_model', 'gpt-5.5'));
+        $attachment = new Base64Image(base64_encode($this->referenceImageContent($photo)), 'image/jpeg');
+
+        $this->configureReviewProvider($provider);
+
+        try {
+            $response = ImageToPromptAgent::make()->prompt(
+                'Phân tích ảnh đính kèm và tạo prompt tạo ảnh dùng được ngay.',
+                attachments: [$attachment],
+                provider: $provider,
+                model: $model,
+                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            throw new \InvalidArgumentException('Không tạo được prompt từ ảnh. Vui lòng thử lại sau.');
+        }
+
+        $data = $response instanceof Arrayable ? $response->toArray() : [];
+        $prompt = trim(is_string($data['prompt'] ?? null) ? $data['prompt'] : $response->text);
+
+        if ($prompt === '') {
+            throw new \InvalidArgumentException('Không tạo được prompt từ ảnh. Vui lòng thử lại sau.');
+        }
+
+        return $prompt;
+    }
+
     private function classifyCategory(string $slug): Category
     {
         $categoryNames = $this->categoryNames();
@@ -1053,58 +1153,85 @@ class AiImageEditor
     }
 
     /**
+     * @param  list<UploadedFile>  $photos
      * @return array{allowed: bool, reason: string}
      */
-    private function reviewForCreation(string $prompt): array
+    private function reviewForCreation(string $prompt, array $photos = []): array
     {
-        $review = $this->reviewPrompt($prompt, publish: false);
+        $review = $this->reviewPrompt($prompt, publish: false, attachments: $this->reviewUploadedFileAttachments($photos));
         $reason = is_string($review['reason'] ?? null) ? $review['reason'] : '';
 
         return ['allowed' => true, 'reason' => Str::limit($reason, 500, '')];
     }
 
     /**
-     * @return array{allowed: bool, title: string, category: string, tags: list<string>, reason: string}
+     * @return array{allowed: bool, title: string, description: string, category: string, tags: list<string>, reason: string}
      */
     private function reviewForPublish(AiImage $image): array
     {
         $prompt = (string) $image->prompt;
         $review = $this->reviewPrompt($prompt, publish: true, image: $image);
-        $title = $this->imageTitle($review['title'] ?? null, $prompt);
-        $category = is_string($review['category'] ?? null) ? $review['category'] : 'other';
-        $reason = is_string($review['reason'] ?? null) ? $review['reason'] : '';
-        $tags = $this->tagNames($review['tags'] ?? []);
-
+        $metadata = $this->imageMetadata($image);
+        $category = is_string($metadata['category'] ?? null) ? $metadata['category'] : 'other';
         $categoryNames = $this->categoryNames();
+        $title = $this->imageTitle($metadata['title'] ?? null, $prompt);
 
         return [
             'allowed' => true,
             'title' => $title,
+            'description' => $this->imageDescription($metadata['description'] ?? null, $title, $prompt),
             'category' => array_key_exists($category, $categoryNames) ? $category : $this->fallbackCategorySlug($categoryNames),
-            'tags' => $tags,
-            'reason' => Str::limit($reason, 500, ''),
+            'tags' => $this->tagNames($metadata['tags'] ?? []),
+            'reason' => Str::limit(is_string($review['reason'] ?? null) ? $review['reason'] : '', 500, ''),
         ];
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function reviewPrompt(string $prompt, bool $publish, ?AiImage $image = null): array
+    /** @return array<string, mixed> */
+    private function imageMetadata(AiImage $image): array
     {
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
-        $model = AppSettings::string('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
+        $model = $this->textModel('ai.tag_model', (string) config('ai.tag_model', config('ai.image_review_model', 'gpt-5.5')));
+        $this->configureReviewProvider($provider);
+
+        try {
+            $response = ImageMetadataAgent::make()->prompt(
+                "Tạo metadata để publish ảnh sau.\n\nPrompt:\n".(string) $image->prompt,
+                attachments: $this->reviewImageAttachments($image),
+                provider: $provider,
+                model: $model,
+                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            throw new \InvalidArgumentException('Không tạo được metadata ảnh. Vui lòng thử lại sau.');
+        }
+
+        return $response instanceof Arrayable ? $response->toArray() : [];
+    }
+
+    /**
+     * @param  list<Base64Image>  $attachments
+     * @return array<string, mixed>
+     */
+    private function reviewPrompt(string $prompt, bool $publish, ?AiImage $image = null, array $attachments = []): array
+    {
+        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
+        $model = $this->textModel('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
 
         $this->configureReviewProvider($provider);
 
-        $attachments = $image ? $this->reviewImageAttachments($image) : [];
+        $attachments = $image ? $this->reviewImageAttachments($image) : $attachments;
         $prefix = $publish
             ? ($attachments === []
                 ? "Duyệt prompt để publish ảnh, tạo title, chọn danh mục và tags phù hợp.\n\nPrompt:\n"
                 : "Duyệt ảnh kèm để publish, tạo title, chọn danh mục và tags phù hợp.\n\nPrompt:\n")
-            : "Duyệt prompt tạo ảnh sau.\n\nPrompt:\n";
+            : ($attachments === []
+                ? "Duyệt prompt tạo ảnh sau.\n\nPrompt:\n"
+                : "Duyệt ảnh tham chiếu và prompt trước khi tạo ảnh.\n\nPrompt:\n");
 
         try {
-            $response = ImageReviewAgent::make(publish: $publish)->prompt(
+            $response = ImageReviewAgent::make()->prompt(
                 $prefix.$prompt,
                 attachments: $attachments,
                 provider: $provider,
@@ -1130,36 +1257,48 @@ class AiImageEditor
     }
 
     /**
+     * @param  list<UploadedFile>  $photos
+     * @return list<Base64Image>
+     */
+    private function reviewUploadedFileAttachments(array $photos): array
+    {
+        return array_map(
+            fn (UploadedFile $photo): Base64Image => new Base64Image(base64_encode($this->referenceImageContent($photo)), 'image/jpeg'),
+            $photos,
+        );
+    }
+
+    /**
      * @return list<Base64Image>
      */
     private function reviewImageAttachments(AiImage $image): array
     {
-        $path = $image->result_path;
-
-        if (! is_string($path) || $path === '') {
+        if (! is_string($image->result_path) || $image->result_path === '') {
             return [];
         }
 
+        /** @var FilesystemAdapter $disk */
         $disk = Storage::disk('public');
 
-        if (! $disk->exists($path)) {
+        if (! $disk->exists($image->result_path)) {
             return [];
         }
 
-        $content = $disk->get($path);
+        return $this->reviewUploadedFileAttachments([new UploadedFile(
+            $disk->path($image->result_path),
+            basename($image->result_path),
+        )]);
+    }
 
-        if (! is_string($content) || $content === '') {
-            return [];
+    private function textModel(string $overrideKey, string $fallback): string
+    {
+        $override = AppSettings::string($overrideKey);
+
+        if ($override !== '') {
+            return $override;
         }
 
-        $mime = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
-            'jpg', 'jpeg' => 'image/jpeg',
-            'webp' => 'image/webp',
-            'avif' => 'image/avif',
-            default => 'image/png',
-        };
-
-        return [new Base64Image(base64_encode($content), $mime)];
+        return AppSettings::string('ai.text_model', (string) config('ai.text_model', $fallback)) ?: $fallback;
     }
 
     private function configureReviewProvider(string $provider): void
@@ -1198,6 +1337,21 @@ class AiImageEditor
         $title = Str::of($title)->squish()->limit(80, '')->toString();
 
         return $title !== '' ? $title : 'Ảnh AI';
+    }
+
+    private function imageDescription(mixed $description, string $title, string $prompt): string
+    {
+        $description = is_string($description) ? Str::of($description)->squish()->limit(300, '')->toString() : '';
+
+        if ($description !== '') {
+            return $description;
+        }
+
+        $fallback = $title !== '' && $title !== 'Ảnh AI'
+            ? $title
+            : ($this->readableTitle($prompt) ?? $prompt);
+
+        return Str::of($fallback)->squish()->limit(160, '')->toString();
     }
 
     private function readableTitle(string $text): ?string
@@ -1306,7 +1460,7 @@ class AiImageEditor
             }
         }
 
-        return array_slice(array_values($names), 0, 5);
+        return array_slice(array_values($names), 0, 7);
     }
 
     /**

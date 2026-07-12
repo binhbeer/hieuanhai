@@ -47,3 +47,10 @@ php artisan migrate
 - Never run destructive Docker/database commands without explicit user approval.
 - Use smallest check that covers the diff; full `composer test` only for broad PHP changes.
 - If container is down, start with `docker compose up -d` and wait for MySQL health.
+- After `php artisan optimize:clear` (or any artisan that rewrites `storage/` / `bootstrap/cache` as root), always `chown -R app:app storage bootstrap/cache` in the same container session. Example:
+
+```bash
+docker compose exec app sh -lc 'cd /var/www/html && php artisan optimize:clear && chown -R app:app storage bootstrap/cache'
+```
+
+  Skip `chown` only if command already ran as `app` (e.g. `docker compose exec -u app`).

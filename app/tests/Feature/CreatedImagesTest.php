@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
+use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Events\AiImageCompleted;
 use App\Jobs\CreateAiImage;
@@ -11,6 +13,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\AiImageEditor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -107,6 +110,7 @@ class CreatedImagesTest extends TestCase
 
     public function test_created_image_detail_opens_failed_images(): void
     {
+        User::factory()->create(); // id 1 is always admin
         $user = User::factory()->create();
         $image = AiImage::create([
             'user_id' => $user->id,
@@ -119,17 +123,38 @@ class CreatedImagesTest extends TestCase
         ]);
 
         Livewire::actingAs($user)
-            ->test('image-detail')
+            ->test('gallery.detail')
             ->call('openImage', $image->id)
             ->assertSet('selectedImageId', $image->id)
             ->assertSet('show', true)
             ->assertSee('Failed portrait image')
-            ->assertSee('Provider exploded')
+            ->assertSee(__('Could not create this image.'))
+            ->assertDontSee('Provider exploded')
             ->assertSee(__('Failed'));
+    }
+
+    public function test_admin_sees_technical_image_error_in_detail(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $image = AiImage::create([
+            'user_id' => $admin->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Admin failed portrait image',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'failed',
+            'error' => 'Provider exploded',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test('gallery.detail')
+            ->call('openImage', $image->id)
+            ->assertSee('Provider exploded');
     }
 
     public function test_images_composer_route_opens_latest_created_image_detail(): void
     {
+        User::factory()->create(); // id 1 is always admin
         $user = User::factory()->create();
         $this->actingAs($user);
 
@@ -147,7 +172,8 @@ class CreatedImagesTest extends TestCase
             ->assertOk()
             ->assertSee('image-detail-'.$image->id, false)
             ->assertSee('Latest failed composer image')
-            ->assertSee('Safety review failed')
+            ->assertSee(__('Could not create this image.'))
+            ->assertDontSee('Safety review failed')
             ->assertSee(__('Copy prompt'));
     }
 
@@ -304,6 +330,29 @@ class CreatedImagesTest extends TestCase
             ->assertNoRedirect();
     }
 
+    public function test_user_can_create_prompt_from_uploaded_image(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_to_prompt_model', 'gpt-5.5-vision');
+        ImageToPromptAgent::fake([['prompt' => 'A cinematic product photo with dramatic studio lighting.']]);
+
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test('gallery.generator')
+            ->set('showComposer', true)
+            ->assertSee(__('Uploading image...'))
+            ->assertSee(__('Analyzing image...'))
+            ->set('promptSourcePhoto', UploadedFile::fake()->image('source.png', 800, 600))
+            ->assertDispatched('prompt-source-uploaded')
+            ->call('analyzePromptSourcePhoto')
+            ->assertSet('prompt', 'A cinematic product photo with dramatic studio lighting.')
+            ->assertSet('promptSourcePhoto', null)
+            ->assertHasNoErrors();
+
+        ImageToPromptAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-vision'
+            && $prompt->attachments->count() === 1);
+    }
+
     public function test_user_can_rewrite_current_composer_prompt_with_instruction(): void
     {
         Setting::putValue('ai.openai_api_key', 'test-key');
@@ -388,6 +437,69 @@ class CreatedImagesTest extends TestCase
         Bus::assertNotDispatched(CreateAiImage::class);
     }
 
+    public function test_metadata_backfill_only_updates_missing_published_images_up_to_limit(): void
+    {
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageMetadataAgent::fake([[
+            'title' => 'Ảnh cũ',
+            'description' => 'Ảnh chân dung cũ được mô tả rõ chủ thể, ánh sáng và bối cảnh để tối ưu hiển thị trên kết quả tìm kiếm.',
+            'category' => 'portraits',
+            'tags' => ['chân dung', 'studio', 'ánh sáng', 'avatar'],
+        ]]);
+
+        $first = AiImage::create([
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Old published portrait',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/old-1.png',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        $second = AiImage::create([
+            'visitor_key' => 'visitor-b',
+            'prompt' => 'Second old published portrait',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/old-2.png',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        $existing = AiImage::create([
+            'visitor_key' => 'visitor-c',
+            'prompt' => 'Already described portrait',
+            'description' => 'Keep this description.',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/old-3.png',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+
+        $this->artisan('ai-images:backfill-metadata', ['--limit' => 1])
+            ->expectsOutput('Processed 1: 1 metadata backfilled, 0 failed.')
+            ->assertSuccessful();
+
+        $first->refresh()->load('category', 'tags');
+        $this->assertSame('Ảnh cũ', $first->title);
+        $this->assertNotNull($first->description);
+        $this->assertSame('portraits', $first->category?->slug);
+        $this->assertSame(['chân dung', 'studio', 'ánh sáng', 'avatar'], $first->tags->pluck('name')->all());
+        $this->assertNull($second->fresh()->description);
+        $this->assertSame('Keep this description.', $existing->fresh()->description);
+    }
+
+    public function test_metadata_backfill_rejects_negative_limit(): void
+    {
+        $this->artisan('ai-images:backfill-metadata', ['--limit' => -1])
+            ->expectsOutput('--limit must be zero or greater.')
+            ->assertExitCode(2);
+    }
+
     public function test_stale_pending_images_are_failed_and_release_quota(): void
     {
         Storage::fake('public');
@@ -448,7 +560,8 @@ class CreatedImagesTest extends TestCase
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => true, 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar'], 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageMetadataAgent::fake([['title' => 'Chân dung studio', 'description' => 'Chân dung studio chuyên nghiệp, ánh sáng mềm, nền sạch, phù hợp avatar và hồ sơ công khai.', 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar', 'chuyên nghiệp']]]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
                 'data' => [['b64_json' => base64_encode('fake-png')]],
@@ -477,7 +590,8 @@ class CreatedImagesTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => true, 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar'], 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageMetadataAgent::fake([['title' => 'Chân dung studio', 'description' => 'Chân dung studio chuyên nghiệp, ánh sáng mềm, nền sạch, phù hợp avatar và hồ sơ công khai.', 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar', 'chuyên nghiệp']]]);
 
         $user = User::factory()->create();
         $image = AiImage::create([
@@ -495,18 +609,46 @@ class CreatedImagesTest extends TestCase
         $this->get(route('images.index'))
             ->assertOk()
             ->assertSee(__('Created images'))
-            ->assertSee('/thumb_x720x/storage/ai-images/202607/08/created.png')
+            ->assertSee('/thumb_x320x/storage/ai-images/202607/08/created.png')
             ->assertSee('/storage/ai-images/202607/08/created.png')
             ->assertSee('Created portrait image')
-            ->assertSee(__('Publish image'));
+            ->assertSee(__('Publish'));
 
-        Livewire::test('pages::images')
-            ->call('togglePublish', $image->id);
+        $component = Livewire::test('pages::images')
+            ->call('togglePublish', $image->id)
+            ->assertSee(__('Published'))
+            ->assertSee(__('Unpublish'));
 
         $this->assertTrue($image->fresh()->is_published);
 
+        $component
+            ->call('togglePublish', $image->id)
+            ->assertSee(__('Unpublished'))
+            ->assertSee(__('Publish'));
+
+        $this->assertFalse($image->fresh()->is_published);
+    }
+
+    public function test_rejected_publish_is_disabled_with_error_tooltip_for_non_admin(): void
+    {
+        User::factory()->create(['id' => 1]);
+        $user = User::factory()->create();
+        $image = AiImage::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Rejected image',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/rejected.png',
+            'response_meta' => ['publish_error' => 'Prompt không phù hợp để tạo hoặc publish ảnh.'],
+        ]);
+
+        $this->actingAs($user);
+
         Livewire::test('pages::images')
-            ->call('togglePublish', $image->id);
+            ->assertSee('Prompt không phù hợp để tạo hoặc publish ảnh.')
+            ->assertSeeHtml('disabled');
 
         $this->assertFalse($image->fresh()->is_published);
     }

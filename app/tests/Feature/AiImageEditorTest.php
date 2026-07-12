@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
+use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Models\AiImage;
 use App\Models\AiTag;
@@ -10,6 +12,7 @@ use App\Models\Category;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\AiImageEditor;
+use App\Support\GptImageOptions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\Request;
@@ -19,6 +22,7 @@ use Illuminate\Session\Store;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Laravel\Ai\Files\Base64Image;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -293,6 +297,7 @@ class AiImageEditorTest extends TestCase
 
         $image = app(AiImageEditor::class)->completePending($image);
 
+        ImageReviewAgent::assertPrompted(fn ($prompt): bool => $prompt->attachments->first() instanceof Base64Image);
         Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
             && str_contains($request['prompt'], 'Edit that image according to the instructions')
             && str_contains($request['input_image'], 'data:image/jpeg;base64,'));
@@ -348,7 +353,7 @@ class AiImageEditorTest extends TestCase
         $this->assertSame('succeeded', $child->status);
     }
 
-    public function test_rejected_prompt_does_not_create_image_or_call_generation_api(): void
+    public function test_rejected_reference_image_does_not_create_image_or_call_generation_api(): void
     {
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
@@ -365,8 +370,9 @@ class AiImageEditorTest extends TestCase
         $this->expectExceptionMessage('Prompt không phù hợp để tạo hoặc publish ảnh.');
 
         try {
-            app(AiImageEditor::class)->create($request, [], 'Tạo ảnh chính trị cực đoan');
+            app(AiImageEditor::class)->create($request, [UploadedFile::fake()->image('politician.png')], 'Chế ảnh ác quỷ');
         } finally {
+            ImageReviewAgent::assertPrompted(fn ($prompt): bool => $prompt->attachments->first() instanceof Base64Image);
             $this->assertSame(0, AiImage::query()->count());
             Http::assertNothingSent();
         }
@@ -395,24 +401,46 @@ class AiImageEditorTest extends TestCase
         Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations');
     }
 
+    public function test_metadata_agent_prioritizes_visible_subject_tags(): void
+    {
+        $instructions = (new ImageMetadataAgent)->instructions();
+
+        $this->assertStringContainsString('Đặt từ khóa chính gần đầu', $instructions);
+        $this->assertStringContainsString('Title và description phải khác nhau về câu chữ', $instructions);
+        $this->assertStringContainsString('2-3 chủ thể/vật thể chính', $instructions);
+        $this->assertStringContainsString('Không tạo hai tag đồng nghĩa/gần trùng', $instructions);
+        $this->assertStringContainsString('Chỉ dùng lại tag có sẵn khi khớp chính xác', $instructions);
+    }
+
     public function test_publish_sets_category_and_category_route_filters_gallery(): void
     {
+        Storage::fake('public');
+        $result = UploadedFile::fake()->image('result.png', 1200, 800);
+        Storage::disk('public')->put('ai-images/202607/08/result.png', file_get_contents($result->getRealPath()));
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
         Setting::putValue('ai.image_review_model', 'gpt-5.5-mini');
+        Setting::putValue('ai.tag_model', 'gpt-5.5-metadata');
         $category = Category::create(['name' => 'Meme nội bộ', 'slug' => 'internal-meme', 'sort_order' => 5, 'status' => 'active']);
         AiTag::create(['name' => 'Nước hoa', 'slug' => 'nuoc-hoa']);
-        ImageReviewAgent::fake([$this->publishReview('internal-meme', ['Nước hoa', 'banner ads', 'sản phẩm'])]);
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        ImageMetadataAgent::fake([$this->publishReview('internal-meme', ['Nước hoa', 'banner ads', 'sản phẩm'])]);
 
         $agent = new ImageReviewAgent;
-        $this->assertStringContainsString('- internal-meme: Meme nội bộ', $agent->instructions());
-        $this->assertStringContainsString('tạo title tiếng Việt ngắn', $agent->instructions());
-        $this->assertStringContainsString('- Nước hoa', $agent->instructions());
-        $this->assertStringContainsString('tạo 0-5 tags ngắn', $agent->instructions());
+        $metadataAgent = new ImageMetadataAgent;
+        $this->assertStringContainsString('- internal-meme: Meme nội bộ', $metadataAgent->instructions());
+        $this->assertStringContainsString('Tạo title tiếng Việt ngắn', $metadataAgent->instructions());
+        $this->assertStringContainsString('- Nước hoa', $metadataAgent->instructions());
+        $this->assertStringContainsString('Tạo 4-7 tags ngắn', $metadataAgent->instructions());
+        $this->assertStringContainsString('2-3 chủ thể/vật thể chính', $metadataAgent->instructions());
+        $this->assertStringContainsString('Không tạo hai tag đồng nghĩa/gần trùng', $metadataAgent->instructions());
+        $this->assertStringContainsString('Chỉ dùng lại tag có sẵn khi khớp chính xác', $metadataAgent->instructions());
+        $this->assertStringContainsString('Tạo description tiếng Việt', $metadataAgent->instructions());
         $this->assertStringContainsString('Mặc định allowed=true và blocked_policy=none', $agent->instructions());
         $this->assertStringContainsString('blocked_policy=sexual', $agent->instructions());
         $this->assertStringContainsString('blocked_policy=political', $agent->instructions());
-        $this->assertStringContainsString('Không từ chối vì thương hiệu, logo, người nổi tiếng, nhân vật bản quyền, deepfake', $agent->instructions());
+        $this->assertStringContainsString('Ảnh chính trị vẫn phải bị chặn dù prompt dùng từ trung tính', $agent->instructions());
+        $this->assertStringContainsString('Cho phép người nổi tiếng không giữ vai trò chính trị', $agent->instructions());
         $this->assertStringContainsString('mô phỏng giao diện hồ sơ mạng xã hội', $agent->instructions());
 
         $editor = app(AiImageEditor::class);
@@ -437,6 +465,18 @@ class AiImageEditorTest extends TestCase
             && $prompt->provider->driver() === 'openrouter'
             && $prompt->provider->providerCredentials()['key'] === 'test-key'
             && $prompt->provider->additionalConfiguration()['url'] === 'http://42.112.31.227:22150/v1');
+        ImageMetadataAgent::assertPrompted(function ($prompt): bool {
+            $attachment = $prompt->attachments->first();
+            $size = $attachment instanceof Base64Image ? getimagesizefromstring($attachment->content()) : false;
+
+            return $prompt->model === 'gpt-5.5-metadata'
+                && $prompt->provider->name() === 'openai'
+                && $attachment instanceof Base64Image
+                && is_array($size)
+                && $size[0] === 1024
+                && $size[1] === 683
+                && $attachment->mimeType() === 'image/jpeg';
+        });
 
         $other = AiImage::create([
             'visitor_key' => $editor->visitorKey($request),
@@ -451,6 +491,7 @@ class AiImageEditorTest extends TestCase
 
         $this->assertTrue($published->is_published);
         $this->assertSame('Banner nước hoa cao cấp', $published->title);
+        $this->assertSame('Banner nước hoa cao cấp cho quảng cáo sản phẩm, bố cục rõ chủ thể, phong cách thương mại hiện đại, phù hợp SEO gallery công khai.', $published->description);
         $this->assertTrue($published->category->is($category));
         $this->assertSame(['banner-ads', 'nuoc-hoa', 'san-pham'], $published->tags->pluck('slug')->sort()->values()->all());
         $this->assertSame('Nước hoa', AiTag::query()->where('slug', 'nuoc-hoa')->value('name'));
@@ -484,20 +525,50 @@ class AiImageEditorTest extends TestCase
             ->assertSee('og:image');
     }
 
+    public function test_image_detail_displays_saved_generation_options(): void
+    {
+        $image = $this->publishedImage('Ảnh có thiết lập');
+        $image->update([
+            'request_meta' => [
+                'aspect_ratio' => '16:9',
+                'resolution' => '2k',
+                'size' => '2048x1152',
+                'image_detail' => 'original',
+            ],
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('images.show', $image))
+            ->assertOk()
+            ->assertSee('x-show="expanded"', false)
+            ->assertSee('x-cloak', false)
+            ->assertSee('Thiết lập ảnh')
+            ->assertSee('Tỷ lệ: 16:9')
+            ->assertSee('Độ phân giải: 2K')
+            ->assertSee('Chất lượng ảnh: Cao');
+    }
+
     public function test_guest_image_detail_truncates_prompt_and_login_sees_full_prompt(): void
     {
         $prompt = str_repeat('mô tả dài ', 30).'phần cuối bí mật';
         $image = $this->publishedImage($prompt);
         $image->update(['title' => 'Ảnh prompt dài']);
+        $this->syncImageTags($image, ['chân dung', 'ánh sáng studio']);
 
         $this->get(route('images.show', $image))
             ->assertOk()
             ->assertSee('/anh/'.$image->id.'-anh-prompt-dai')
+            ->assertSee('<meta name="keywords" content="chân dung, ánh sáng studio">', false)
             ->assertSee('Đăng nhập để xem đầy đủ prompt.')
             ->assertDontSee('Tải thêm ảnh')
             ->assertDontSee('phần cuối bí mật');
 
-        $this->get('/anh/'.$image->id)->assertOk();
+        $this->get('/anh/'.$image->id)
+            ->assertStatus(301)
+            ->assertRedirect(route('images.show', $image));
+        $this->get('/anh/'.$image->id.'-slug-sai')
+            ->assertStatus(301)
+            ->assertRedirect(route('images.show', $image));
         $this->assertLessThanOrEqual(100, strlen(Str::after($image->getRouteKey(), '-')));
 
         $this->actingAs(User::factory()->create())
@@ -506,11 +577,42 @@ class AiImageEditorTest extends TestCase
             ->assertSee('phần cuối bí mật');
     }
 
+    public function test_publish_sends_stored_image_as_base64_attachment(): void
+    {
+        Storage::fake('public');
+        $result = UploadedFile::fake()->image('result.png', 1200, 800);
+        Storage::disk('public')->put('ai-images/result.png', file_get_contents($result->getRealPath()));
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        ImageMetadataAgent::fake([$this->publishReview('other', [])]);
+
+        $editor = app(AiImageEditor::class);
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+        $image = AiImage::create([
+            'visitor_key' => $editor->visitorKey($request),
+            'prompt' => 'Tạo ảnh phong cảnh',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/result.png',
+        ]);
+
+        $editor->publish($image, $request);
+
+        ImageReviewAgent::assertPrompted(fn ($prompt): bool => $prompt->attachments->first() instanceof Base64Image);
+        ImageMetadataAgent::assertPrompted(fn ($prompt): bool => $prompt->attachments->first() instanceof Base64Image);
+    }
+
     public function test_publish_allows_missing_review_tags(): void
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([$this->publishReview('other', [])]);
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        ImageMetadataAgent::fake([$this->publishReview('other', [])]);
 
         $editor = app(AiImageEditor::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -538,7 +640,8 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
         $prompt = '{"render_goal":"Narrative điện ảnh fashion chân dung","subject":{"pose":"female seated in the back seat"}}';
-        ImageReviewAgent::fake([$this->publishReview('other', [], $prompt)]);
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        ImageMetadataAgent::fake([$this->publishReview('other', [], $prompt)]);
 
         $editor = app(AiImageEditor::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -566,19 +669,25 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
         Setting::putValue('ai.image_review_model', 'tss-2');
+        Setting::putValue('ai.tag_model', 'tss-metadata');
         $category = Category::create(['name' => 'Meme nội bộ', 'slug' => 'internal-meme', 'sort_order' => 5, 'status' => 'active']);
-        Http::fake([
-            '42.112.31.227:22150/v1/chat/completions' => Http::response([
+        Http::fakeSequence('42.112.31.227:22150/v1/chat/completions')
+            ->push([
                 'model' => 'tss-2',
                 'choices' => [[
-                    'message' => [
-                        'content' => json_encode($this->publishReview('internal-meme')),
-                    ],
+                    'message' => ['content' => json_encode($this->allowedReview())],
                     'finish_reason' => 'stop',
                 ]],
                 'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
-            ]),
-        ]);
+            ])
+            ->push([
+                'model' => 'tss-metadata',
+                'choices' => [[
+                    'message' => ['content' => json_encode($this->publishReview('internal-meme'))],
+                    'finish_reason' => 'stop',
+                ]],
+                'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
+            ]);
 
         $editor = app(AiImageEditor::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -600,8 +709,69 @@ class AiImageEditorTest extends TestCase
         $this->assertTrue($published->is_published);
         $this->assertTrue($published->category->is($category));
         Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'http://42.112.31.227:22150/v1/chat/completions'
-            && $request['model'] === 'tss-2'
+            && in_array($request['model'], ['tss-2', 'tss-metadata'], true)
             && ($request['response_format']['type'] ?? null) === 'json_schema');
+        $this->assertSame(2, count(Http::recorded()));
+    }
+
+    public function test_image_to_prompt_agent_requests_advanced_visual_analysis(): void
+    {
+        $instructions = (new ImageToPromptAgent)->instructions();
+
+        $this->assertStringContainsString('Viết prompt bằng tiếng Việt', $instructions);
+        $this->assertStringContainsString('Máy ảnh và quang học', $instructions);
+        $this->assertStringContainsString('Chất liệu và rendering', $instructions);
+        $this->assertStringContainsString('* **Phong cách:**', $instructions);
+        $this->assertStringContainsString('* **Máy ảnh:**', $instructions);
+        $this->assertStringContainsString('* **Cần giữ:**', $instructions);
+    }
+
+    public function test_image_to_prompt_uses_processed_attachment_and_separate_model(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_to_prompt_model', 'gpt-5.5-vision');
+        ImageToPromptAgent::fake([['prompt' => 'A cinematic portrait with soft window light.']]);
+
+        $prompt = app(AiImageEditor::class)->promptFromImage(UploadedFile::fake()->image('source.png', 1600, 900));
+
+        $this->assertSame('A cinematic portrait with soft window light.', $prompt);
+        ImageToPromptAgent::assertPrompted(function ($prompt): bool {
+            $attachment = $prompt->attachments->first();
+
+            $size = $attachment instanceof Base64Image
+                ? getimagesizefromstring($attachment->content())
+                : false;
+
+            return $prompt->model === 'gpt-5.5-vision'
+                && $attachment instanceof Base64Image
+                && $attachment->mimeType() === 'image/jpeg'
+                && is_array($size)
+                && [$size[0], $size[1]] === [1024, 576];
+        });
+    }
+
+    public function test_image_to_prompt_does_not_truncate_advanced_output(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        $advancedPrompt = str_repeat('Chi tiết thị giác chuyên sâu. ', 150);
+        ImageToPromptAgent::fake([['prompt' => $advancedPrompt]]);
+
+        $prompt = app(AiImageEditor::class)->promptFromImage(UploadedFile::fake()->image('source.jpg'));
+
+        $this->assertGreaterThan(2000, mb_strlen($prompt));
+        $this->assertSame(trim($advancedPrompt), $prompt);
+    }
+
+    public function test_image_to_prompt_inherits_default_text_model(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.text_model', 'gpt-5.5-default-text');
+        Setting::putValue('ai.image_to_prompt_model', '');
+        ImageToPromptAgent::fake([['prompt' => 'A detailed image prompt.']]);
+
+        app(AiImageEditor::class)->promptFromImage(UploadedFile::fake()->image('source.jpg'));
+
+        ImageToPromptAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-default-text');
     }
 
     public function test_prompt_rewrite_uses_separate_agent_and_model_setting(): void
@@ -616,6 +786,18 @@ class AiImageEditorTest extends TestCase
         PromptRewriteAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-rewrite'
             && str_contains($prompt->prompt, 'cat with hat')
             && str_contains($prompt->prompt, 'make it cinematic'));
+    }
+
+    public function test_prompt_rewrite_inherits_default_text_model(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.text_model', 'gpt-5.5-default-text');
+        Setting::putValue('ai.prompt_rewrite_model', '');
+        PromptRewriteAgent::fake([['prompt' => 'A cinematic portrait of a cat wearing a tiny hat.']]);
+
+        app(AiImageEditor::class)->rewritePrompt('cat with hat');
+
+        PromptRewriteAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-default-text');
     }
 
     public function test_prompt_rewrite_accepts_instruction_without_current_prompt(): void
@@ -656,8 +838,48 @@ class AiImageEditorTest extends TestCase
         try {
             $editor->publish($image, $request);
         } finally {
-            $this->assertFalse($image->fresh()->is_published);
+            $image->refresh();
+            $this->assertFalse($image->is_published);
+            $this->assertSame('Prompt không phù hợp để tạo hoặc publish ảnh.', data_get($image->response_meta, 'publish_error'));
         }
+    }
+
+    public function test_non_admin_cannot_retry_rejected_publish_but_admin_can(): void
+    {
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageMetadataAgent::fake([$this->publishReview('other', [])]);
+        $admin = User::factory()->create(['id' => 1]);
+        $user = User::factory()->create();
+        $image = AiImage::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'visitor-a',
+            'prompt' => 'Tạo ảnh phong cảnh',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/result.png',
+            'response_meta' => ['publish_error' => 'Prompt không phù hợp để tạo hoặc publish ảnh.'],
+        ]);
+        $request = Request::create('/', 'POST');
+
+        $this->actingAs($user);
+
+        try {
+            app(AiImageEditor::class)->publish($image, $request);
+            $this->fail('Non-admin publish retry should be blocked.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertSame('Prompt không phù hợp để tạo hoặc publish ảnh.', $e->getMessage());
+        }
+
+        ImageReviewAgent::assertNeverPrompted();
+
+        $this->actingAs($admin);
+        $published = app(AiImageEditor::class)->publish($image, $request, requireOwner: false);
+
+        $this->assertTrue($published->is_published);
+        $this->assertNull(data_get($published->response_meta, 'publish_error'));
     }
 
     public function test_related_images_are_ranked_by_shared_tags(): void
@@ -703,6 +925,133 @@ class AiImageEditorTest extends TestCase
         $this->assertTrue($featured->fresh()->is_featured);
     }
 
+    public function test_gpt_image_options_map_aspect_and_resolution_to_valid_sizes(): void
+    {
+        $this->assertSame('1024x1024', GptImageOptions::size('auto', '1k'));
+        $this->assertSame('2048x2048', GptImageOptions::size('1:1', '2k'));
+        $this->assertSame('2880x2880', GptImageOptions::size('1:1', '4k'));
+        $this->assertSame('1024x1536', GptImageOptions::size('2:3', '1k'));
+        $this->assertSame('1536x1024', GptImageOptions::size('3:2', '1k'));
+        $this->assertSame('2448x3264', GptImageOptions::size('3:4', '4k'));
+        $this->assertSame('3840x2160', GptImageOptions::size('16:9', '4k'));
+
+        foreach (GptImageOptions::ASPECT_RATIOS as $aspect) {
+            foreach (GptImageOptions::RESOLUTIONS as $resolution) {
+                $size = GptImageOptions::size($aspect, $resolution);
+                $this->assertMatchesRegularExpression('/^\d+x\d+$/', $size);
+                [$width, $height] = array_map('intval', explode('x', $size));
+                $this->assertSame(0, $width % 16);
+                $this->assertSame(0, $height % 16);
+                $this->assertLessThanOrEqual(3840, max($width, $height));
+                $this->assertLessThanOrEqual(8294400, $width * $height);
+                $this->assertGreaterThanOrEqual(655360, $width * $height);
+                $this->assertLessThanOrEqual(3.0, max($width, $height) / min($width, $height));
+            }
+        }
+
+        $this->assertSame(
+            ['aspect_ratio' => '2:3', 'resolution' => '1k'],
+            GptImageOptions::defaultsFromSettings('1024x1536'),
+        );
+        $this->assertSame(
+            ['aspect_ratio' => 'auto', 'resolution' => '1k'],
+            GptImageOptions::defaultsFromSettings('auto'),
+        );
+    }
+
+    public function test_pending_generation_uses_request_meta_size_and_image_detail_overrides(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_reference_field', 'input_image');
+        Setting::putValue('ai.image_size', '1024x1024');
+        Setting::putValue('ai.image_quality', 'hd');
+        Setting::putValue('ai.image_detail', 'low');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+        $this->actingAs(User::factory()->create());
+
+        $image = app(AiImageEditor::class)->createPending(
+            $request,
+            [UploadedFile::fake()->image('source.png', 2000, 1000)],
+            'A cute cat wearing a hat',
+            size: GptImageOptions::size('16:9', '2k'),
+            imageDetail: 'original',
+            aspectRatio: '16:9',
+            resolution: '2k',
+        );
+
+        $storedImage = AiImage::findOrFail($image->id);
+        $this->assertSame('16:9', data_get($storedImage->request_meta, 'aspect_ratio'));
+        $this->assertSame('2k', data_get($storedImage->request_meta, 'resolution'));
+        $this->assertSame('2048x1152', data_get($storedImage->request_meta, 'size'));
+        $this->assertSame('original', data_get($storedImage->request_meta, 'image_detail'));
+
+        $image = app(AiImageEditor::class)->completePending($image);
+
+        Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
+            && $request['size'] === '2048x1152'
+            && $request['image_detail'] === 'original'
+            && $request['quality'] === 'hd');
+        $this->assertSame('succeeded', $image->status);
+        $this->assertSame('16:9', data_get($image->request_meta, 'aspect_ratio'));
+        $this->assertSame('2k', data_get($image->request_meta, 'resolution'));
+        $this->assertSame('2048x1152', data_get($image->request_meta, 'size'));
+        $this->assertSame('original', data_get($image->request_meta, 'image_detail'));
+
+        $image->update(['status' => 'failed']);
+        $retried = app(AiImageEditor::class)->retryFailed($image->refresh(), $request);
+        $this->assertSame('16:9', data_get($retried->request_meta, 'aspect_ratio'));
+        $this->assertSame('2k', data_get($retried->request_meta, 'resolution'));
+        $this->assertSame('2048x1152', data_get($retried->request_meta, 'size'));
+        $this->assertSame('original', data_get($retried->request_meta, 'image_detail'));
+    }
+
+    public function test_pending_generation_falls_back_to_settings_without_overrides(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_size', '1024x1536');
+        Setting::putValue('ai.image_quality', 'medium');
+        Setting::putValue('ai.image_detail', 'high');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+        $this->actingAs(User::factory()->create());
+
+        $image = app(AiImageEditor::class)->createPending($request, [], 'Landscape portrait');
+        $this->assertNull(data_get($image->request_meta, 'size'));
+        $this->assertNull(data_get($image->request_meta, 'image_detail'));
+
+        $image = app(AiImageEditor::class)->completePending($image);
+
+        Http::assertSent(fn (HttpRequest $request) => $request['size'] === '1024x1536'
+            && $request['image_detail'] === 'high'
+            && $request['quality'] === 'medium');
+        $this->assertSame('succeeded', $image->status);
+    }
+
     private function publishedImage(string $prompt, ?\DateTimeInterface $publishedAt = null): AiImage
     {
         return AiImage::create([
@@ -739,11 +1088,11 @@ class AiImageEditorTest extends TestCase
 
     /**
      * @param  list<string>  $tags
-     * @return array{allowed: bool, blocked_policy: string, title: string, category: string, tags: list<string>, reason: string}
+     * @return array{allowed: bool, blocked_policy: string, title: string, description: string, category: string, tags: list<string>, reason: string}
      */
-    private function publishReview(string $category, array $tags = ['nước hoa', 'banner ads', 'sản phẩm'], string $title = 'Banner nước hoa cao cấp'): array
+    private function publishReview(string $category, array $tags = ['nước hoa', 'banner ads', 'sản phẩm'], string $title = 'Banner nước hoa cao cấp', string $description = 'Banner nước hoa cao cấp cho quảng cáo sản phẩm, bố cục rõ chủ thể, phong cách thương mại hiện đại, phù hợp SEO gallery công khai.'): array
     {
-        return ['allowed' => true, 'blocked_policy' => 'none', 'title' => $title, 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
+        return ['allowed' => true, 'blocked_policy' => 'none', 'title' => $title, 'description' => $description, 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
     }
 
     private function encodedImageSizeIs(string $image, int $width, int $height): bool

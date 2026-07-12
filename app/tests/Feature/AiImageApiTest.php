@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
 use App\Models\AiApiKey;
 use App\Models\AiApiRequest;
@@ -77,10 +78,8 @@ class AiImageApiTest extends TestCase
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([
-            $this->allowedReview(),
-            $this->publishReview('portraits', ['avatar', 'studio']),
-        ]);
+        ImageReviewAgent::fake([$this->allowedReview(), $this->allowedReview()]);
+        ImageMetadataAgent::fake([$this->publishReview('portraits', ['avatar', 'studio'])]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
                 'data' => [['b64_json' => base64_encode('fake-png')]],
@@ -599,8 +598,10 @@ class AiImageApiTest extends TestCase
             ->set('registrationEnabled', false)
             ->set('emailVerificationRequired', false)
             ->set('memberRequestLimit', 250)
+            ->set('textModels', ['gpt-5.5', 'gpt-5.5-mini', 'gpt-5.5-rewrite', 'gpt-5.5-vision'])
             ->set('aiReviewModel', 'gpt-5.5-mini')
             ->set('promptRewriteModel', 'gpt-5.5-rewrite')
+            ->set('imageToPromptModel', 'gpt-5.5-vision')
             ->set('imageSize', '1536x1024')
             ->set('imageQuality', 'medium')
             ->set('imageDetail', 'original')
@@ -619,11 +620,170 @@ class AiImageApiTest extends TestCase
         $this->assertSame(20, $key->fresh()->quota_used);
         $this->assertSame('gpt-5.5-mini', Setting::getValue('ai.image_review_model'));
         $this->assertSame('gpt-5.5-rewrite', Setting::getValue('ai.prompt_rewrite_model'));
+        $this->assertSame('gpt-5.5-vision', Setting::getValue('ai.image_to_prompt_model'));
         $this->assertSame('1536x1024', Setting::getValue('ai.image_size'));
         $this->assertSame('medium', Setting::getValue('ai.image_quality'));
         $this->assertSame('original', Setting::getValue('ai.image_detail'));
         $this->assertSame('input_image', Setting::getValue('ai.image_reference_field'));
         $this->assertSame('secret-key', Setting::getValue('ai.openai_api_key'));
+    }
+
+    public function test_admin_manages_separate_image_and_text_models(): void
+    {
+        Http::fake([
+            '42.112.31.227:22150/v1/models' => Http::response(['data' => [
+                ['id' => 'cx/new-image-model'],
+                ['id' => 'gpt-new-text'],
+            ]]),
+        ]);
+        Setting::putValue('ai.openai_api_key', 'saved-key');
+        $admin = User::factory()->create(['id' => 1]);
+
+        $component = Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->call('openModelsModal', 'image', 'image')
+            ->set('newModelId', 'cx/new-image-model')
+            ->call('addModel')
+            ->assertSet('aiModel', 'cx/new-image-model')
+            ->assertSet('showModelsModal', true)
+            ->call('closeModelsModal')
+            ->call('openModelsModal', 'text', 'review')
+            ->set('newModelId', 'gpt-new-text')
+            ->call('addModel')
+            ->assertSet('aiReviewModel', 'gpt-new-text')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertContains('cx/new-image-model', Setting::getValue('ai.image_models'));
+        $this->assertNotContains('cx/new-image-model', Setting::getValue('ai.text_models'));
+        $this->assertContains('gpt-new-text', Setting::getValue('ai.text_models'));
+        $this->assertNotContains('gpt-new-text', Setting::getValue('ai.image_models'));
+        $this->assertSame('gpt-new-text', Setting::getValue('ai.image_review_model'));
+
+        $component
+            ->set('newModelId', 'gpt-new-text')
+            ->call('addModel')
+            ->assertHasErrors('newModelId');
+    }
+
+    public function test_admin_can_add_custom_model_not_in_endpoint_catalog(): void
+    {
+        Http::fake([
+            '42.112.31.227:22150/v1/models' => Http::response(['data' => [['id' => 'gpt-listed']]]),
+        ]);
+        Setting::putValue('ai.openai_api_key', 'saved-key');
+        $admin = User::factory()->create(['id' => 1]);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->call('openModelsModal', 'text', 'tag')
+            ->assertSet('useCustomModelId', false)
+            ->set('useCustomModelId', true)
+            ->set('newModelId', 'vendor/custom-metadata-model')
+            ->call('addModel')
+            ->assertSet('tagModel', 'vendor/custom-metadata-model')
+            ->assertSet('textModels', fn (array $models): bool => in_array('vendor/custom-metadata-model', $models, true))
+            ->assertHasNoErrors();
+    }
+
+    public function test_settings_reject_model_selected_from_wrong_registry(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->set('aiModel', 'gpt-5.5')
+            ->call('save')
+            ->assertHasErrors('aiModel');
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->set('imageToPromptModel', 'cx/gpt-5.5-image')
+            ->call('save')
+            ->assertHasErrors('imageToPromptModel');
+    }
+
+    public function test_models_modal_loads_and_filters_endpoint_catalog(): void
+    {
+        Http::fake([
+            '42.112.31.227:22150/v1/models' => Http::response(['data' => [
+                ['id' => 'gpt-5.5'],
+                ['id' => 'cx/gpt-5.5-image'],
+                ['id' => 'gpt-5.5-mini'],
+                ['bad' => 'ignored'],
+            ]]),
+        ]);
+        Setting::putValue('ai.openai_api_key', 'saved-key');
+        $admin = User::factory()->create(['id' => 1]);
+
+        $component = Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->call('openModelsModal', 'text', 'review')
+            ->assertSet('availableModels', ['cx/gpt-5.5-image', 'gpt-5.5', 'gpt-5.5-mini'])
+            ->set('modelSearch', 'mini')
+            ->assertSee('gpt-5.5-mini');
+
+        $this->assertSame(['gpt-5.5-mini'], $component->instance()->filteredAvailableModels());
+
+        Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'http://42.112.31.227:22150/v1/models'
+            && $request->hasHeader('Authorization', 'Bearer saved-key'));
+    }
+
+    public function test_models_modal_shows_catalog_error(): void
+    {
+        Http::fake([
+            '42.112.31.227:22150/v1/models' => Http::response(['error' => ['message' => 'Catalog unavailable']], 503),
+        ]);
+        Setting::putValue('ai.openai_api_key', 'saved-key');
+        $admin = User::factory()->create(['id' => 1]);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->call('openModelsModal', 'text')
+            ->assertSet('modelCatalogError', 'Không tải được danh sách model: Catalog unavailable')
+            ->assertSee('Không tải được danh sách model: Catalog unavailable');
+    }
+
+    public function test_admin_can_test_image_and_text_models(): void
+    {
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response(['data' => [['b64_json' => 'image']]]),
+            '42.112.31.227:22150/v1/chat/completions' => Http::response(['choices' => [['message' => ['content' => 'OK']]]]),
+        ]);
+        $admin = User::factory()->create(['id' => 1]);
+        Setting::putValue('ai.openai_api_key', 'saved-key');
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->call('testModel', 'image', 'cx/gpt-5.5-image')
+            ->assertSet('modelTestStatuses', fn (array $statuses): bool => ($statuses['image:cx/gpt-5.5-image'] ?? null) === 'success')
+            ->call('testModel', 'text', 'gpt-5.5')
+            ->assertSet('modelTestStatuses', fn (array $statuses): bool => ($statuses['text:gpt-5.5'] ?? null) === 'success')
+            ->assertSet('modelTestError', null);
+
+        Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
+            && $request['model'] === 'cx/gpt-5.5-image'
+            && $request->hasHeader('Authorization', 'Bearer saved-key'));
+        Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'http://42.112.31.227:22150/v1/chat/completions'
+            && $request['model'] === 'gpt-5.5');
+    }
+
+    public function test_failed_model_test_shows_safe_error(): void
+    {
+        Http::fake([
+            '42.112.31.227:22150/v1/chat/completions' => Http::response([
+                'error' => ['message' => 'Model is unavailable'],
+            ], 404),
+        ]);
+        $admin = User::factory()->create(['id' => 1]);
+        Setting::putValue('ai.openai_api_key', 'saved-key');
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->call('testModel', 'text', 'gpt-5.5')
+            ->assertSet('modelTestStatuses', fn (array $statuses): bool => ($statuses['text:gpt-5.5'] ?? null) === 'error')
+            ->assertSet('modelTestError', 'Test model thất bại: Model is unavailable')
+            ->assertSee('Test model thất bại: Model is unavailable');
     }
 
     public function test_admin_key_management_keeps_one_key_per_user(): void
@@ -742,13 +902,14 @@ class AiImageApiTest extends TestCase
      * @param  list<string>  $tags
      * @return array{allowed: bool, blocked_policy: string, reason: string, title: string, category: string, tags: list<string>}
      */
-    private function publishReview(string $category = 'portraits', array $tags = [], string $title = 'Public avatar portrait'): array
+    private function publishReview(string $category = 'portraits', array $tags = [], string $title = 'Public avatar portrait', string $description = 'Chân dung avatar studio công khai, ánh sáng mềm, nền sạch, phù hợp hồ sơ và gallery ảnh AI Việt Nam.'): array
     {
         return [
             'allowed' => true,
             'blocked_policy' => 'none',
             'reason' => 'An toàn.',
             'title' => $title,
+            'description' => $description,
             'category' => $category,
             'tags' => $tags,
         ];

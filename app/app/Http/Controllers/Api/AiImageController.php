@@ -170,6 +170,7 @@ class AiImageController extends Controller
         return [
             'id' => $image->id,
             'title' => $image->title,
+            'description' => $image->description,
             'prompt_preview' => Str::limit($image->prompt, 160),
             'url' => $editor->resultUrl($image),
             'public_url' => route('images.show', $image),
@@ -237,6 +238,7 @@ class AiImageController extends Controller
         return [
             ...$payload,
             'title' => $image->title,
+            'description' => $image->description,
             'public_url' => route('images.show', $image),
             'published' => $image->is_published,
             'category' => $image->category ? [
@@ -268,6 +270,7 @@ class AiImageController extends Controller
         return [
             ...$meta,
             'title' => $image->title,
+            'description' => $image->description,
             'published' => $image->is_published,
             'public_url' => route('images.show', $image),
             'category' => $image->category?->slug,
