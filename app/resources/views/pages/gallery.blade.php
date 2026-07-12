@@ -27,9 +27,10 @@ new #[Title('Trang chủ')] class extends Component {
 	{
 		$search = request()->routeIs('search.*') ? request()->query('q') : null;
 		$sort = request()->query('sort');
+		$tagSlug = $category ? request()->query('tag') : null;
 
 		$this->category = $category;
-		$this->tag = $tag;
+		$this->tag = $tag ?? (is_string($tagSlug) ? AiTag::query()->where('slug', $tagSlug)->first() : null);
 		$this->search = is_string($search) ? trim($search) : '';
 		$this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'new';
 	}
@@ -45,6 +46,13 @@ new #[Title('Trang chủ')] class extends Component {
 		$this->perPage += 36;
 
 		unset($this->images);
+	}
+
+	public function clearTag(): void
+	{
+		if ($this->category) {
+			$this->redirectRoute('categories.show', ['category' => $this->category], navigate: true);
+		}
 	}
 
 	public function selectImage(int $id): void
@@ -178,6 +186,9 @@ new #[Title('Trang chủ')] class extends Component {
 				<div class="mb-2 flex flex-wrap items-end justify-between gap-3 pl-2">
 					<div>
 						<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ request()->routeIs('search.*') ? __('Search results') : ($category?->name ?? ($tag?->name ? '#' . $tag->name : 'AI Gallery')) }}</h1>
+						@if ($category && $tag)
+							<flux:badge class="mt-2" rounded>#{{ $tag->name }} <flux:badge.close wire:click="clearTag" :aria-label="__('Clear tag filter')" /></flux:badge>
+						@endif
 					</div>
 				</div>
 			@endif

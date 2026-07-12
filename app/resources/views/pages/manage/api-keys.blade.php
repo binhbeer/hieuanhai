@@ -307,7 +307,7 @@ new #[Title('Manage API keys')] class extends Component
 	<flux:card class="space-y-3">
 		<flux:heading size="lg">{{ __('Curl example') }}</flux:heading>
 		<pre class="overflow-x-auto rounded-xl bg-black/40 p-4 text-sm text-zinc-100"><code>curl -X POST {{ url('/api/ai/images') }} \
-  -H "Authorization: Bearer {{ $newToken ?: 'hai_xxx' }}" \
+  -H "Authorization: Bearer {{ $newToken ?: 'genanh_xxx' }}" \
   -F "prompt=Turn the image into a modern comic while preserving identity and composition" \
   -F "images[]=@/path/to/image.jpg"</code></pre>
 	</flux:card>

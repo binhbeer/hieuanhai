@@ -33,6 +33,25 @@ class AiImageApiTest extends TestCase
             ->assertJson(['message' => 'API key không hợp lệ.']);
     }
 
+    public function test_legacy_hai_api_key_remains_valid(): void
+    {
+        $user = User::factory()->create();
+        $plain = 'hai_'.Str::random(48);
+        AiApiKey::create([
+            'user_id' => $user->id,
+            'token_hash' => AiApiKey::hashToken($plain),
+            'token_prefix' => substr($plain, 0, 12),
+            'quota_limit' => 1,
+            'quota_used' => 0,
+        ]);
+
+        $this
+            ->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('prompt');
+    }
+
     public function test_valid_api_key_creates_image_and_logs_request(): void
     {
         Storage::fake('public');
@@ -846,7 +865,7 @@ class AiImageApiTest extends TestCase
         $newPlain = $component->get('newToken');
 
         $this->assertIsString($newPlain);
-        $this->assertStringStartsWith('hai_', $newPlain);
+        $this->assertStringStartsWith('genanh_', $newPlain);
         $this->assertDatabaseMissing('ai_api_keys', [
             'id' => $targetKey->id,
             'token_hash' => AiApiKey::hashToken($oldPlain),
@@ -880,7 +899,7 @@ class AiImageApiTest extends TestCase
             ->assertSee('Hướng dẫn sử dụng API')
             ->assertSee('POST')
             ->assertSee('/api/ai/images')
-            ->assertSee('Authorization: Bearer hai_xxx')
+            ->assertSee('Authorization: Bearer genanh_xxx')
             ->assertSee('Còn lại')
             ->assertSee('3')
             ->assertSee('HTTP 201')

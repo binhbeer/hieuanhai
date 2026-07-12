@@ -54,6 +54,38 @@ class AiImageEditorTest extends TestCase
             ->assertDontSee(__('Load more images'));
     }
 
+    public function test_category_can_be_filtered_by_tag_without_changing_canonical(): void
+    {
+        $category = Category::create(['name' => 'Sản phẩm', 'slug' => 'san-pham', 'sort_order' => 1, 'status' => 'active']);
+        $otherCategory = Category::create(['name' => 'Chân dung', 'slug' => 'chan-dung', 'sort_order' => 2, 'status' => 'active']);
+        $tag = AiTag::create(['name' => '3D', 'slug' => '3d']);
+        $matching = $this->publishedImage('Matching category and tag');
+        $wrongTag = $this->publishedImage('Same category without tag');
+        $wrongCategory = $this->publishedImage('Same tag in another category');
+
+        $matching->update(['category_id' => $category->id]);
+        $matching->tags()->sync([$tag->id]);
+        $wrongTag->update(['category_id' => $category->id]);
+        $wrongCategory->update(['category_id' => $otherCategory->id]);
+        $wrongCategory->tags()->sync([$tag->id]);
+
+        $url = route('categories.show', ['category' => $category, 'tag' => $tag->slug]);
+
+        $this->get($url)
+            ->assertOk()
+            ->assertSee('Matching category and tag')
+            ->assertDontSee('Same category without tag')
+            ->assertDontSee('Same tag in another category')
+            ->assertSee('#3D')
+            ->assertSee(__('Clear tag filter'))
+            ->assertSee('href="'.route('categories.show', $category).'?tag=3d"', false)
+            ->assertSee('<link rel="canonical" href="'.route('categories.show', $category).'">', false);
+
+        Livewire::test('pages::gallery', ['category' => $category, 'tag' => $tag])
+            ->call('clearTag')
+            ->assertRedirect(route('categories.show', $category));
+    }
+
     public function test_guest_cannot_create_pending_image(): void
     {
         $editor = app(AiImageEditor::class);

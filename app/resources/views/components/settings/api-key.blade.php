@@ -215,7 +215,7 @@ new class extends Component {
 
             <flux:callout variant="secondary" icon="code-bracket">
                 <flux:callout.heading>POST {{ url('/api/ai/images') }}</flux:callout.heading>
-                <flux:callout.text><span class="font-mono text-xs">Authorization: Bearer hai_xxx</span></flux:callout.text>
+                <flux:callout.text><span class="font-mono text-xs">Authorization: Bearer genanh_xxx</span></flux:callout.text>
             </flux:callout>
 
             <div class="space-y-3">
@@ -236,7 +236,7 @@ new class extends Component {
             <div class="space-y-3">
                 <flux:heading size="lg">JSON</flux:heading>
                 <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST '{{ url('/api/ai/images') }}' \
-  -H 'Authorization: Bearer hai_xxx' \
+  -H 'Authorization: Bearer genanh_xxx' \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"Create a comic-style portrait"}'</code></pre>
             </div>
@@ -244,7 +244,7 @@ new class extends Component {
             <div class="space-y-3">
                 <flux:heading size="lg">Multipart</flux:heading>
                 <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST '{{ url('/api/ai/images') }}' \
-  -H 'Authorization: Bearer hai_xxx' \
+  -H 'Authorization: Bearer genanh_xxx' \
   -F 'prompt=Turn this image into a comic-style portrait' \
   -F 'images[]=@/path/to/source.jpg'</code></pre>
             </div>

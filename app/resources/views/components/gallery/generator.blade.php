@@ -443,51 +443,51 @@ new class extends Component {
             </div>
 
             @if ($resultUrl)
-                <div class="flex min-h-0 flex-1 flex-col">
-                    <div class="flex-1 space-y-4 overflow-y-auto p-4">
-                        @if ($errorMessage)
-                            <div class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-100">{{ $errorMessage }}</div>
+            <div class="flex min-h-0 flex-1 flex-col">
+                <div class="flex-1 space-y-4 overflow-y-auto p-4">
+                    @if ($errorMessage)
+                        <div class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-100">{{ $errorMessage }}</div>
+                    @endif
+
+                    @if ($publishMessage)
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100">{{ $publishMessage }}</div>
+                    @endif
+
+                    <button class="block w-full" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $resultImage->id }} })" aria-label="{{ __('View image details') }}">
+                        <img class="max-h-[58svh] w-full rounded-[1.75rem] bg-zinc-100 object-contain shadow-inner" src="{{ $resultThumbUrl }}" alt="{{ __('AI-generated image') }}" @if ($resultImageSize) width="{{ $resultImageSize['width'] }}" height="{{ $resultImageSize['height'] }}" @endif />
+                    </button>
+
+                    <div class="rounded-3xl bg-zinc-50 p-4">
+                        <p class="text-sm font-medium text-emerald-700">{{ __('Image created successfully.') }}</p>
+                        @if ($resultImage?->is_published)
+                            <p class="mt-1 text-sm text-zinc-500">{{ __('Published in :category.', ['category' => $resultImage->category?->name ?? __('Other')]) }}</p>
+                        @else
+                            <p class="mt-1 text-sm text-zinc-500">{{ __('Publish to make the image appear in the community gallery.') }}</p>
                         @endif
-
-                        @if ($publishMessage)
-                            <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100">{{ $publishMessage }}</div>
-                        @endif
-
-                        <button class="block w-full" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $resultImage->id }} })" aria-label="{{ __('View image details') }}">
-                            <img class="max-h-[58svh] w-full rounded-[1.75rem] bg-zinc-100 object-contain shadow-inner" src="{{ $resultThumbUrl }}" alt="{{ __('AI-generated image') }}" @if ($resultImageSize) width="{{ $resultImageSize['width'] }}" height="{{ $resultImageSize['height'] }}" @endif />
-                        </button>
-
-                        <div class="rounded-3xl bg-zinc-50 p-4">
-                            <p class="text-sm font-medium text-emerald-700">{{ __('Image created successfully.') }}</p>
-                            @if ($resultImage?->is_published)
-                                <p class="mt-1 text-sm text-zinc-500">{{ __('Published in :category.', ['category' => $resultImage->category?->name ?? __('Other')]) }}</p>
-                            @else
-                                <p class="mt-1 text-sm text-zinc-500">{{ __('Publish to make the image appear in the community gallery.') }}</p>
-                            @endif
-                        </div>
-                    </div>
-
-                    <div class="shrink-0 border-t border-zinc-200 p-4 dark:border-white/10">
-                        <div class="grid grid-cols-2 gap-2">
-                            <flux:button :href="$resultUrl" download="{{ $resultDownloadName }}">{{ __('Download') }}</flux:button>
-                            <flux:button type="button" variant="outline" wire:click="createNew">{{ __('Create new image') }}</flux:button>
-                            @php($publishError = is_string(data_get($resultImage?->response_meta, 'publish_error')) ? data_get($resultImage?->response_meta, 'publish_error') : null)
-                            @php($publishDisabled = $publishError && ! auth()->user()?->isAdmin())
-                            @if ($publishDisabled)
-                                <flux:tooltip class="col-span-2" :content="$publishError">
-                                    <div>
-                                        <flux:button class="w-full" type="button" variant="primary" disabled>{{ __('Publish image') }}</flux:button>
-                                    </div>
-                                </flux:tooltip>
-                            @else
-                                <flux:button class="col-span-2" type="button" variant="primary" wire:click="publishResult" :disabled="$resultImage?->is_published" wire:loading.attr="disabled" wire:target="publishResult">
-                                    {{ $resultImage?->is_published ? __('Published') : __('Publish image') }}
-                                </flux:button>
-                            @endif
-                        </div>
                     </div>
                 </div>
-            @else
+
+                <div class="shrink-0 border-t border-zinc-200 p-4 dark:border-white/10">
+                    <div class="grid grid-cols-2 gap-2">
+                        <flux:button :href="$resultUrl" download="{{ $resultDownloadName }}">{{ __('Download') }}</flux:button>
+                        <flux:button type="button" variant="outline" wire:click="createNew">{{ __('Create new image') }}</flux:button>
+                        @php($publishError = is_string(data_get($resultImage?->response_meta, 'publish_error')) ? data_get($resultImage?->response_meta, 'publish_error') : null)
+                        @php($publishDisabled = $publishError && !auth()->user()?->isAdmin())
+                                        @if ($publishDisabled)
+                                            <flux:tooltip class="col-span-2" :content="$publishError">
+                                                <div>
+                                                    <flux:button class="w-full" type="button" variant="primary" disabled>{{ __('Publish image') }}</flux:button>
+                                                </div>
+                                            </flux:tooltip>
+                                        @else
+                                            <flux:button class="col-span-2" type="button" variant="primary" wire:click="publishResult" :disabled="$resultImage?->is_published" wire:loading.attr="disabled" wire:target="publishResult">
+                                                {{ $resultImage?->is_published ? __('Published') : __('Publish image') }}
+                                            </flux:button>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        @else
             <form class="flex min-h-0 flex-1 flex-col" wire:submit="createImage">
                 <div class="flex-1 space-y-4 overflow-y-auto p-3">
                     @if ($errorMessage)
@@ -500,8 +500,7 @@ new class extends Component {
 
                     @php($isMultiple = $maxReferencePhotos > 1)
                     <flux:card class="p-3!">
-                        <div
-                            x-data="{
+                        <div x-data="{
                                 pasteError(text) {
                                     Flux.toast({ text, variant: 'danger' })
                                 },
@@ -541,8 +540,7 @@ new class extends Component {
                                         this.pasteError(@js(__('Could not read clipboard. Please allow clipboard access.')))
                                     }
                                 },
-                            }"
-                        >
+                            }">
                             <div class="flex items-center justify-between gap-3 mb-3">
                                 <div class="flex items-center gap-2 flex-1">
                                     <flux:text class="text-sm" variant="subtle">{{ $referenceCount }}/{{ $maxReferencePhotos }}</flux:text>
@@ -590,11 +588,11 @@ new class extends Component {
                             @endif
 
                             @if ($referenceCount < $maxReferencePhotos)
-                            <div class="space-y-2">
-                                <flux:file-upload wire:model="newPhotos" accept="image/jpeg,image/png,image/webp,image/avif" :multiple="$isMultiple">
-                                    <flux:file-upload.dropzone :heading="$referenceCount > 0 ? __('Add image') : __('Upload optional image')" :text="__('Drop images here or click to browse')" with-progress inline />
-                                </flux:file-upload>
-                            </div>
+                                <div class="space-y-2">
+                                    <flux:file-upload wire:model="newPhotos" accept="image/jpeg,image/png,image/webp,image/avif" :multiple="$isMultiple">
+                                        <flux:file-upload.dropzone :heading="$referenceCount > 0 ? __('Add image') : __('Upload optional image')" :text="__('Drop images here or click to browse')" with-progress inline />
+                                    </flux:file-upload>
+                                </div>
                             @endif
                             <div class="mt-2 text-sm text-zinc-500" wire:loading wire:target="newPhotos">{{ __('Uploading image...') }}</div>
                         </div>
@@ -667,25 +665,22 @@ new class extends Component {
                                             </flux:button>
                                         </flux:tooltip>
                                     </flux:file-upload>
-                                    <flux:tooltip content="{{ __('Rewrite prompt') }}" position="top">
-                                        <flux:dropdown x-ref="rewriteDropdown" position="bottom" align="end">
-                                            <flux:button type="button" size="sm" variant="filled">
-                                                <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
-                                                {{ __('Rewrite prompt') }}
+                                    <flux:dropdown x-ref="rewriteDropdown" position="bottom" align="end">
+                                        <flux:button type="button" size="sm" variant="filled" tooltip="{{ __('Rewrite prompt') }}" tooltip:position="top">
+                                            <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+                                        </flux:button>
+                                        <flux:popover class="w-80 space-y-3">
+                                            <div>
+                                                <flux:heading size="sm">{{ __('Rewrite prompt') }}</flux:heading>
+                                                <flux:text variant="subtle">{{ __('Tell AI how to rewrite your current prompt.') }}</flux:text>
+                                            </div>
+                                            <flux:textarea wire:model="rewriteInstruction" rows="4" resize="vertical" :label="__('Rewrite instruction')" :placeholder="__('e.g. Make it more cinematic, add product lighting, keep the same subject...')" />
+                                            <flux:button class="w-full" type="button" size="sm" variant="primary" wire:click="rewritePrompt" wire:loading.attr="disabled" wire:target="rewritePrompt">
+                                                <span wire:loading.remove wire:target="rewritePrompt">{{ __('Rewrite prompt') }}</span>
+                                                <span wire:loading wire:target="rewritePrompt">{{ __('Rewriting prompt...') }}</span>
                                             </flux:button>
-                                            <flux:popover class="w-80 space-y-3">
-                                                <div>
-                                                    <flux:heading size="sm">{{ __('Rewrite prompt') }}</flux:heading>
-                                                    <flux:text variant="subtle">{{ __('Tell AI how to rewrite your current prompt.') }}</flux:text>
-                                                </div>
-                                                <flux:textarea wire:model="rewriteInstruction" rows="4" resize="vertical" :label="__('Rewrite instruction')" :placeholder="__('e.g. Make it more cinematic, add product lighting, keep the same subject...')" />
-                                                <flux:button class="w-full" type="button" size="sm" variant="primary" wire:click="rewritePrompt" wire:loading.attr="disabled" wire:target="rewritePrompt">
-                                                    <span wire:loading.remove wire:target="rewritePrompt">{{ __('Rewrite prompt') }}</span>
-                                                    <span wire:loading wire:target="rewritePrompt">{{ __('Rewriting prompt...') }}</span>
-                                                </flux:button>
-                                            </flux:popover>
-                                        </flux:dropdown>
-                                    </flux:tooltip>
+                                        </flux:popover>
+                                    </flux:dropdown>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400" role="status" aria-live="polite" x-show="uploadingPromptImage" x-cloak>

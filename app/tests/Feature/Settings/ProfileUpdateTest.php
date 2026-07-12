@@ -96,7 +96,7 @@ class ProfileUpdateTest extends TestCase
         $key = AiApiKey::query()->where('user_id', $user->id)->firstOrFail();
 
         $this->assertIsString($firstPlain);
-        $this->assertStringStartsWith('hai_', $firstPlain);
+        $this->assertStringStartsWith('genanh_', $firstPlain);
         $this->assertSame(100, $key->quota_limit);
 
         $key->update(['quota_used' => 1]);

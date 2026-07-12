@@ -31,15 +31,15 @@ new class extends Component {
     #[Computed]
     public function tags(): Collection
     {
+        $recentImages = fn($query) => $query
+            ->publiclyVisible()
+            ->where('ai_images.created_at', '>=', now()->subDay())
+            ->when($this->category, fn($query, Category $category) => $query->where('ai_images.category_id', (string) $category->id));
+
         return AiTag::query()
-            ->withCount([
-                'images as recent_images_count' => fn($query) => $query
-                    ->publiclyVisible()
-                    ->where('ai_images.created_at', '>=', now()->subDay())
-                    ->when($this->category, fn($query, Category $category) => $query->where('ai_images.category_id', (string) $category->id)),
-            ])
+            ->withCount(['images as recent_images_count' => $recentImages])
             ->when($this->mode === 'popular', fn($query) => $query
-                ->having('recent_images_count', '>', '0')
+                ->whereHas('images', $recentImages)
                 ->orderByDesc('recent_images_count'))
             ->orderBy('name')
             ->limit(20)
@@ -49,7 +49,7 @@ new class extends Component {
 
 <nav class="mb-5 flex flex-nowrap gap-2 overflow-x-auto pb-1" aria-label="{{ __('Popular tags') }}">
     @foreach ($this->tags as $popularTag)
-        <flux:button :href="route('tags.show', $popularTag)" size="xs" variant="ghost" wire:navigate wire:key="popular-tag-{{ $popularTag->id }}">
+        <flux:button :href="$category ? route('categories.show', ['category' => $category, 'tag' => $popularTag->slug]) : route('tags.show', $popularTag)" size="xs" variant="ghost" wire:navigate wire:key="popular-tag-{{ $popularTag->id }}">
             #{{ $popularTag->name }}
         </flux:button>
     @endforeach

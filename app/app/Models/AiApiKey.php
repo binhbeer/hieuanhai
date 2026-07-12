@@ -41,7 +41,7 @@ class AiApiKey extends BaseModel
      */
     public static function newToken(): array
     {
-        $plain = 'hai_'.Str::random(48);
+        $plain = 'genanh_'.Str::random(48);
 
         return [
             'plain' => $plain,
