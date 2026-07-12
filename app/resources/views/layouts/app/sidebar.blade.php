@@ -20,49 +20,89 @@
 		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch, 'sort' => $sort === 'new' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
 
 		<div class="min-h-0 flex-1 overflow-y-auto">
-			<flux:sidebar.nav>
-				<flux:sidebar.group class="grid">
-					<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
-						<x-slot name="icon"><x-iconsax-bul-home class="size-5" /></x-slot>
-						{{ __('Home') }}
-					</flux:sidebar.item>
-					@auth
-						<flux:sidebar.item :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
-							<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
-							{{ __('Search') }}
+			@if (auth()->user()?->isAdmin() && request()->routeIs('manage.*'))
+				<flux:sidebar.nav>
+					<flux:sidebar.group class="grid">
+						<flux:sidebar.item :href="route('home')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-arrow-left class="size-5" /></x-slot>
+							{{ __('Home') }}
 						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
-							<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
-							{{ __('Favorite images') }}
-						</flux:sidebar.item>
-					@else
-						<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
-							<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
-							{{ __('Search') }}
-						</flux:sidebar.item>
-						<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
-							<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
-							{{ __('Favorite images') }}
-						</flux:sidebar.item>
-					@endauth
-					@auth
-						<livewire:gallery.usage :button-only="true" />
-					@endauth
-				</flux:sidebar.group>
-			</flux:sidebar.nav>
+					</flux:sidebar.group>
+				</flux:sidebar.nav>
 
-			<flux:sidebar.nav>
-				<flux:sidebar.group class="grid" expandable heading="{{ __('Categories') }}">
-					<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
-						{{ __('All') }}
-					</flux:sidebar.item>
-					@foreach ($sidebarCategories as $category)
-						<flux:sidebar.item :href="route('categories.show', $category)" :current="$selectedSidebarCategory instanceof \App\Models\Category && $selectedSidebarCategory->is($category)" wire:navigate>
-							{{ $category->name }}
+				<flux:sidebar.nav>
+					<flux:sidebar.group class="grid">
+						<flux:sidebar.item :href="route('manage.index')" :current="request()->routeIs('manage.index')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-chart class="size-5" /></x-slot>
+							{{ __('Overview') }}
 						</flux:sidebar.item>
-					@endforeach
-				</flux:sidebar.group>
-			</flux:sidebar.nav>
+						<flux:sidebar.item :href="route('manage.users.index')" :current="request()->routeIs('manage.users.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-people class="size-5" /></x-slot>
+							{{ __('Users') }}
+						</flux:sidebar.item>
+						<flux:sidebar.item :href="route('manage.api-keys.index')" :current="request()->routeIs('manage.api-keys.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-key class="size-5" /></x-slot>
+							{{ __('API keys') }}
+						</flux:sidebar.item>
+						<flux:sidebar.item :href="route('manage.images.index')" :current="request()->routeIs('manage.images.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-gallery class="size-5" /></x-slot>
+							{{ __('Images') }}
+						</flux:sidebar.item>
+						<flux:sidebar.item :href="route('manage.categories.index')" :current="request()->routeIs('manage.categories.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-category class="size-5" /></x-slot>
+							{{ __('Categories') }}
+						</flux:sidebar.item>
+						<flux:sidebar.item :href="route('manage.settings.index')" :current="request()->routeIs('manage.settings.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-setting-2 class="size-5" /></x-slot>
+							{{ __('Settings') }}
+						</flux:sidebar.item>
+					</flux:sidebar.group>
+				</flux:sidebar.nav>
+			@else
+				<flux:sidebar.nav>
+					<flux:sidebar.group class="grid">
+						<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-home class="size-5" /></x-slot>
+							{{ __('Home') }}
+						</flux:sidebar.item>
+						@auth
+							<flux:sidebar.item :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
+								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
+								{{ __('Search') }}
+							</flux:sidebar.item>
+							<flux:sidebar.item :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
+								<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
+								{{ __('Favorite images') }}
+							</flux:sidebar.item>
+						@else
+							<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
+								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
+								{{ __('Search') }}
+							</flux:sidebar.item>
+							<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
+								<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
+								{{ __('Favorite images') }}
+							</flux:sidebar.item>
+						@endauth
+						@auth
+							<livewire:gallery.usage :button-only="true" />
+						@endauth
+					</flux:sidebar.group>
+				</flux:sidebar.nav>
+
+				<flux:sidebar.nav>
+					<flux:sidebar.group class="grid" expandable heading="{{ __('Categories') }}">
+						<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+							{{ __('All') }}
+						</flux:sidebar.item>
+						@foreach ($sidebarCategories as $category)
+							<flux:sidebar.item :href="route('categories.show', $category)" :current="$selectedSidebarCategory instanceof \App\Models\Category && $selectedSidebarCategory->is($category)" wire:navigate>
+								{{ $category->name }}
+							</flux:sidebar.item>
+						@endforeach
+					</flux:sidebar.group>
+				</flux:sidebar.nav>
+			@endif
 		</div>
 
 		<div class="shrink-0 space-y-3">

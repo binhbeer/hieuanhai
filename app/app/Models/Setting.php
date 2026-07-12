@@ -22,6 +22,8 @@ class Setting extends BaseModel
         'analytics.google_measurement_id' => null,
         'auth.registration_enabled' => true,
         'auth.email_verification_required' => true,
+        'auth.auto_verify_email' => false,
+        'auth.member_request_limit' => 100,
         'ai.image_provider' => 'openai',
         'ai.image_model' => 'cx/gpt-5.5-image',
         'ai.image_review_model' => 'gpt-5.5',

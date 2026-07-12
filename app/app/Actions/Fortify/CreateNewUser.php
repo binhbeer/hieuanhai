@@ -30,11 +30,17 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
-        // @phpstan-ignore-next-line Fortify documents Illuminate\Foundation\Auth\User, app model implements its auth contracts directly.
-        return User::create([
+        $user = User::create([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],
         ]);
+
+        if (AppSettings::bool('auth.auto_verify_email', false)) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
+
+        // @phpstan-ignore-next-line Fortify documents Illuminate\Foundation\Auth\User, app model implements its auth contracts directly.
+        return $user;
     }
 }

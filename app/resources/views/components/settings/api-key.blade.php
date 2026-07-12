@@ -37,7 +37,7 @@ new class extends Component {
                 'token_hash' => $token['hash'],
                 'token_prefix' => $token['prefix'],
                 'token' => $token['plain'],
-                'quota_limit' => 100,
+                'quota_limit' => AppSettings::int('auth.member_request_limit', 100),
                 'quota_used' => 0,
                 'last_used_at' => null,
             ]);

@@ -159,6 +159,77 @@ new class extends Component {
         }
     }
 
+    public function cancelPending(int $id, AiImageEditor $editor): void
+    {
+        if (!Auth::check()) {
+            $this->dispatch('open-account-modal', component: 'auth.login');
+
+            return;
+        }
+
+        $image = AiImage::query()
+            ->where('user_id', Auth::id())
+            ->where('status', 'pending')
+            ->whereKey($id)
+            ->first();
+
+        if (!$image || !$editor->cancelPending($image)) {
+            return;
+        }
+
+        unset($this->selectedImage, $this->relatedImages);
+        $this->dispatch('image-usage-updated');
+        $this->dispatch('gallery-updated');
+        Flux::toast(text: __('Image creation cancelled.'));
+    }
+
+    public function retryImage(int $id, AiImageEditor $editor): void
+    {
+        if (!Auth::check()) {
+            $this->dispatch('open-account-modal', component: 'auth.login');
+
+            return;
+        }
+
+        $image = AiImage::query()
+            ->where('user_id', Auth::id())
+            ->whereKey($id)
+            ->first();
+
+        if (!$image || $image->status !== 'failed') {
+            return;
+        }
+
+        try {
+            $image = $editor->retryFailed($image, request());
+        } catch (InvalidArgumentException $e) {
+            Flux::toast(variant: 'danger', text: $e->getMessage());
+
+            return;
+        } catch (Throwable $e) {
+            report($e);
+            Flux::toast(variant: 'danger', text: __('Could not create an image right now. Please try again later.'));
+
+            return;
+        }
+
+        try {
+            CreateAiImage::dispatch($image->id, $image->user_id)->afterCommit();
+        } catch (Throwable $e) {
+            report($e);
+            (new CreateAiImage($image->id, $image->user_id))->failed(
+                new RuntimeException('Không thể đưa tác vụ tạo ảnh vào hàng đợi.'),
+            );
+            Flux::toast(variant: 'danger', text: __('Could not create an image right now. Please try again later.'));
+
+            return;
+        }
+
+        unset($this->selectedImage, $this->relatedImages);
+        $this->dispatch('image-usage-updated');
+        $this->dispatch('gallery-updated');
+    }
+
     public function toggleFeatured(int $id): void
     {
         if (!$this->canManageFeatured()) {
@@ -207,6 +278,26 @@ new class extends Component {
             ->where('user_id', (int) Auth::id())
             ->pluck('ai_image_id')
             ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function referenceImageUrls(AiImage $image): array
+    {
+        if (! $this->canEdit($image) && ! $this->canManageFeatured()) {
+            return [];
+        }
+
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        return array_values(array_filter(
+            array_map(
+                fn (string $path): ?string => $disk->exists($path) ? $disk->url($path) : null,
+                app(AiImageEditor::class)->referenceSourcePaths($image),
+            ),
+        ));
     }
 
     public function imageUrl(AiImage $image, string $size = 'original'): ?string
@@ -437,6 +528,9 @@ new class extends Component {
                                 <div class="h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="{{ $progressStep }}" aria-label="{{ $this->progressLabel($selected) }}">
                                     <div class="h-full animate-pulse rounded-full bg-zinc-900 transition-[width] dark:bg-white" style="width: {{ $progressStep * 25 }}%"></div>
                                 </div>
+                                @if ($this->canEdit($selected))
+                                    <flux:button class="w-full" type="button" size="sm" variant="danger" icon="stop" wire:click="cancelPending({{ $selected->id }})" wire:confirm="{{ __('Cancel image creation?') }}" wire:loading.attr="disabled" wire:target="cancelPending">{{ __('Stop') }}</flux:button>
+                                @endif
                             </div>
                         </div>
                     @else
@@ -508,6 +602,20 @@ new class extends Component {
                     @endif
                 </div>
 
+                @php($referenceImageUrls = $this->referenceImageUrls($selected))
+                @if ($referenceImageUrls !== [])
+                <div class="mt-7">
+                    <div class="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Reference images') }}</div>
+                    <div class="grid grid-cols-3 gap-2">
+                        @foreach ($referenceImageUrls as $refUrl)
+                            <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $refUrl }}" data-lightbox wire:key="reference-image-{{ $selected->id }}-{{ $loop->index }}" aria-label="{{ __('Reference image :number', ['number' => $loop->iteration]) }}">
+                                <img class="aspect-square size-full object-cover" src="{{ $refUrl }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" loading="lazy" />
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+
                 @if ($this->relatedImages->isNotEmpty())
                 <div class="mt-7">
                     <div class="mb-3 text-lg font-semibold">{{ __('Similar images') }}</div>
@@ -527,6 +635,7 @@ new class extends Component {
                 @endif
             </div>
 
+            @php($isFailed = $selected->status === 'failed')
             <footer class="sticky bottom-0 z-10 shrink-0 border-t border-zinc-200 bg-white p-2 dark:border-white/10 dark:bg-zinc-950 md:static">
                 <div class="grid gap-2 {{ $this->canEdit($selected) && $selectedUrl ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-2' }}">
                     @if ($selectedUrl)
@@ -536,17 +645,21 @@ new class extends Component {
                         </flux:button>
                     @endif
 
-                    @auth
-                        <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">
-                            <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
-                            {{ __('Create similar image') }}
-                        </flux:button>
-                    @else
-                        <flux:button type="button" variant="primary" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
-                            <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
-                            {{ __('Create similar image') }}
-                        </flux:button>
-                    @endauth
+                    @if ($isFailed && $this->canEdit($selected))
+                        <flux:button type="button" variant="primary" icon="arrow-path" wire:click="retryImage({{ $selected->id }})">{{ __('Retry') }}</flux:button>
+                    @elseif (!$isFailed)
+                        @auth
+                            <flux:button type="button" variant="primary" wire:click="useAsPrompt({{ $selected->id }})">
+                                <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+                                {{ __('Create similar image') }}
+                            </flux:button>
+                        @else
+                            <flux:button type="button" variant="primary" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
+                                <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+                                {{ __('Create similar image') }}
+                            </flux:button>
+                        @endauth
+                    @endif
 
                     @if ($this->canEdit($selected))
                         <flux:button type="button" variant="filled" wire:click="editImage({{ $selected->id }})">{{ __('Edit image') }}</flux:button>

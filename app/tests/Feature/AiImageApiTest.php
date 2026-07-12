@@ -588,6 +588,8 @@ class AiImageApiTest extends TestCase
     public function test_admin_can_update_settings(): void
     {
         $admin = User::factory()->create(['id' => 1]);
+        $member = User::factory()->create();
+        $key = $this->apiKey($member, quotaLimit: 100, quotaUsed: 20)[1];
 
         Livewire::actingAs($admin)
             ->test('pages::manage.settings')
@@ -596,6 +598,7 @@ class AiImageApiTest extends TestCase
             ->set('googleMeasurementId', 'G-SZ9BZEKLZ1')
             ->set('registrationEnabled', false)
             ->set('emailVerificationRequired', false)
+            ->set('memberRequestLimit', 250)
             ->set('aiReviewModel', 'gpt-5.5-mini')
             ->set('promptRewriteModel', 'gpt-5.5-rewrite')
             ->set('imageSize', '1536x1024')
@@ -611,6 +614,9 @@ class AiImageApiTest extends TestCase
         $this->assertSame('G-SZ9BZEKLZ1', Setting::getValue('analytics.google_measurement_id'));
         $this->assertFalse((bool) Setting::getValue('auth.registration_enabled'));
         $this->assertFalse((bool) Setting::getValue('auth.email_verification_required'));
+        $this->assertSame(250, Setting::getValue('auth.member_request_limit'));
+        $this->assertSame(250, $key->fresh()->quota_limit);
+        $this->assertSame(20, $key->fresh()->quota_used);
         $this->assertSame('gpt-5.5-mini', Setting::getValue('ai.image_review_model'));
         $this->assertSame('gpt-5.5-rewrite', Setting::getValue('ai.prompt_rewrite_model'));
         $this->assertSame('1536x1024', Setting::getValue('ai.image_size'));

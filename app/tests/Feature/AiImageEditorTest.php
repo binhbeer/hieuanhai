@@ -221,7 +221,7 @@ class AiImageEditorTest extends TestCase
 
         Storage::disk('public')->assertExists($image->result_path);
         $this->assertMatchesRegularExpression('#^ai-images/\d{6}/\d{2}/#', (string) $image->result_path);
-        $this->assertMatchesRegularExpression('#^ai-image-sources/\d{6}/\d{2}/#', (string) $image->source_path);
+        $this->assertMatchesRegularExpression('#^ai-image-sources/\d{6}/\d{2}/#', (string) ($image->response_meta['source_paths'][0] ?? ''));
         $this->assertSame('succeeded', $image->status);
     }
 

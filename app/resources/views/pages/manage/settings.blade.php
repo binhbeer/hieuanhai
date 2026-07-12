@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AiApiKey;
 use App\Models\Setting;
 use App\Support\AppSettings;
 use Flux\Flux;
@@ -21,6 +22,10 @@ new #[Title('Settings')] class extends Component
     public bool $registrationEnabled = true;
 
     public bool $emailVerificationRequired = true;
+
+    public bool $autoVerifyEmail = false;
+
+    public int $memberRequestLimit = 100;
 
     public string $aiProvider = 'openai';
 
@@ -61,6 +66,8 @@ new #[Title('Settings')] class extends Component
         $this->googleMeasurementId = (string) $settings['analytics.google_measurement_id'];
         $this->registrationEnabled = (bool) $settings['auth.registration_enabled'];
         $this->emailVerificationRequired = (bool) $settings['auth.email_verification_required'];
+        $this->autoVerifyEmail = (bool) $settings['auth.auto_verify_email'];
+        $this->memberRequestLimit = (int) $settings['auth.member_request_limit'];
         $this->aiProvider = (string) $settings['ai.image_provider'];
         $this->aiModel = (string) $settings['ai.image_model'];
         $this->aiReviewModel = (string) $settings['ai.image_review_model'];
@@ -86,6 +93,8 @@ new #[Title('Settings')] class extends Component
             'googleMeasurementId' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9-]+$/'],
             'registrationEnabled' => ['boolean'],
             'emailVerificationRequired' => ['boolean'],
+            'autoVerifyEmail' => ['boolean'],
+            'memberRequestLimit' => ['required', 'integer', 'min:0', 'max:1000000000'],
             'aiProvider' => ['required', 'string', 'in:openai'],
             'aiModel' => ['required', 'string', 'max:120'],
             'aiReviewModel' => ['required', 'string', 'max:120'],
@@ -109,6 +118,8 @@ new #[Title('Settings')] class extends Component
             'analytics.google_measurement_id' => $validated['googleMeasurementId'] ?? '',
             'auth.registration_enabled' => (bool) $validated['registrationEnabled'],
             'auth.email_verification_required' => (bool) $validated['emailVerificationRequired'],
+            'auth.auto_verify_email' => (bool) $validated['autoVerifyEmail'],
+            'auth.member_request_limit' => (int) $validated['memberRequestLimit'],
             'ai.image_provider' => $validated['aiProvider'],
             'ai.image_model' => $validated['aiModel'],
             'ai.image_review_model' => $validated['aiReviewModel'],
@@ -126,6 +137,9 @@ new #[Title('Settings')] class extends Component
         foreach ($pairs as $key => $value) {
             Setting::putValue($key, $value);
         }
+
+        AiApiKey::query()->update(['quota_limit' => $validated['memberRequestLimit']]);
+        (new AiApiKey)->flushCache();
 
         if (filled($validated['openaiApiKey'] ?? null)) {
             Setting::putValue('ai.openai_api_key', $validated['openaiApiKey']);
@@ -171,6 +185,11 @@ new #[Title('Settings')] class extends Component
 			<flux:checkbox wire:model="registrationEnabled" :label="__('Allow new user registration')" />
 			<flux:checkbox wire:model="emailVerificationRequired" :label="__('Require email verification after registration')"
 				:description="__('Turn off to let new users log in immediately after registration.')" />
+			<flux:checkbox wire:model="autoVerifyEmail" :label="__('Automatically verify email on registration')"
+				:description="__('Mark new accounts as verified immediately without sending a verification email.')" />
+			<flux:input wire:model="memberRequestLimit" type="number" min="0" max="1000000000"
+				:label="__('Requests per member')"
+				:description="__('Saving applies this lifetime request limit to all existing and future members.')" required />
 		</flux:card>
 
 		<flux:card class="space-y-4">

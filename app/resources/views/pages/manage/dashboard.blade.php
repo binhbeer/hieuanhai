@@ -8,88 +8,59 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Manage')] class extends Component
-{
-    public function mount(): void
-    {
-        abort_unless(auth()->user()?->isAdmin(), 403);
-    }
+new #[Title('Manage')] class extends Component {
+	public function mount(): void
+	{
+		abort_unless(auth()->user()?->isAdmin(), 403);
+	}
 
-    #[Computed]
-    public function stats(): array
-    {
-        return [
-            'users' => User::query()->count(),
-            'banned_users' => User::query()->whereNotNull('banned_at')->count(),
-            'api_keys' => AiApiKey::query()->count(),
-            'categories' => Category::query()->count(),
-            'published_images' => AiImage::query()->where('is_published', true)->count(),
-            'unpublished_images' => AiImage::query()->where('is_published', false)->where('status', 'succeeded')->whereNotNull('result_path')->count(),
-        ];
-    }
+	#[Computed]
+	public function stats(): array
+	{
+		return [
+			'users' => User::query()->count(),
+			'banned_users' => User::query()->whereNotNull('banned_at')->count(),
+			'api_keys' => AiApiKey::query()->count(),
+			'categories' => Category::query()->count(),
+			'published_images' => AiImage::query()->where('is_published', true)->count(),
+			'unpublished_images' => AiImage::query()->where('is_published', false)->where('status', 'succeeded')->whereNotNull('result_path')->count(),
+		];
+	}
 
-    #[Computed]
-    public function dailyStats(): array
-    {
-        $from = today()->subDays(29);
-        $users = User::query()
-            ->where('created_at', '>=', $from)
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as total, SUM(email_verified_at IS NOT NULL) as verified')
-            ->groupByRaw('DATE(created_at)')
-            ->get()
-            ->keyBy('date');
-        $images = AiImage::query()
-            ->where('created_at', '>=', $from)
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as total, SUM(is_published = 1) as published')
-            ->groupByRaw('DATE(created_at)')
-            ->get()
-            ->keyBy('date');
+	#[Computed]
+	public function dailyStats(): array
+	{
+		$from = today()->subDays(29);
+		$users = User::query()
+			->where('created_at', '>=', $from)
+			->selectRaw('DATE(created_at) as date, COUNT(*) as total, SUM(email_verified_at IS NOT NULL) as verified')
+			->groupByRaw('DATE(created_at)')
+			->get()
+			->keyBy('date');
+		$images = AiImage::query()
+			->where('created_at', '>=', $from)
+			->selectRaw('DATE(created_at) as date, COUNT(*) as total, SUM(is_published = 1) as published')
+			->groupByRaw('DATE(created_at)')
+			->get()
+			->keyBy('date');
 
-        return collect(range(0, 29))->map(function (int $offset) use ($from, $users, $images): array {
-            $date = $from->copy()->addDays($offset);
-            $user = $users->get($date->toDateString());
-            $image = $images->get($date->toDateString());
+		return collect(range(0, 29))->map(function (int $offset) use ($from, $users, $images): array {
+			$date = $from->copy()->addDays($offset);
+			$user = $users->get($date->toDateString());
+			$image = $images->get($date->toDateString());
 
-            return [
-                'date' => $date,
-                'users' => (int) ($user->total ?? 0),
-                'verified_users' => (int) ($user->verified ?? 0),
-                'images' => (int) ($image->total ?? 0),
-                'published_images' => (int) ($image->published ?? 0),
-            ];
-        })->all();
-    }
+			return [
+				'date' => $date,
+				'users' => (int) ($user->total ?? 0),
+				'verified_users' => (int) ($user->verified ?? 0),
+				'images' => (int) ($image->total ?? 0),
+				'published_images' => (int) ($image->published ?? 0),
+			];
+		})->all();
+	}
 }; ?>
 
 <section class="mx-auto w-full max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
-	<header class="relative overflow-hidden rounded-3xl border border-zinc-200 bg-linear-to-br from-white via-white to-violet-50 p-6 shadow-sm dark:border-white/10 dark:from-zinc-950 dark:via-zinc-900 dark:to-violet-950 sm:p-8">
-		<div class="pointer-events-none absolute -inset-e-20 -top-24 size-72 rounded-full bg-violet-500/15 blur-3xl" aria-hidden="true"></div>
-		<div class="pointer-events-none absolute -bottom-28 inset-s-1/3 size-64 rounded-full bg-blue-500/10 blur-3xl" aria-hidden="true"></div>
-
-		<div class="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-			<div class="max-w-2xl space-y-3">
-				<flux:badge color="violet" :icon="svg('iconsax-two-setting-2', 'size-5')" rounded>{{ __('Admin workspace') }}</flux:badge>
-				<div class="space-y-2">
-					<flux:heading class="text-3xl! font-bold tracking-tight sm:text-4xl!" level="1">{{ __('Control center') }}</flux:heading>
-					<flux:text class="max-w-xl text-base!" variant="subtle">{{ __('Monitor activity and jump straight to common admin tasks.') }}</flux:text>
-				</div>
-			</div>
-
-			<div class="flex flex-wrap gap-3">
-				<flux:button :href="route('home')" :icon="svg('iconsax-two-export-1', 'size-5')" variant="filled" wire:navigate>{{ __('Open gallery') }}</flux:button>
-				<flux:button :href="route('manage.images.index')" :icon="svg('iconsax-two-gallery', 'size-5')" variant="primary" wire:navigate>{{ __('Review images') }}</flux:button>
-			</div>
-		</div>
-
-		<flux:tabs class="relative mt-6" scrollable scrollable:fade size="sm" variant="pills">
-			<flux:tab :href="route('manage.index')" :selected="true" :icon="svg('iconsax-bul-chart', 'size-5')" wire:navigate>{{ __('Overview') }}</flux:tab>
-			<flux:tab :href="route('manage.users.index')" :icon="svg('iconsax-bul-people', 'size-5')" wire:navigate>{{ __('Users') }}</flux:tab>
-			<flux:tab :href="route('manage.api-keys.index')" :icon="svg('iconsax-bul-key', 'size-5')" wire:navigate>{{ __('API keys') }}</flux:tab>
-			<flux:tab :href="route('manage.images.index')" :icon="svg('iconsax-bul-gallery', 'size-5')" wire:navigate>{{ __('Images') }}</flux:tab>
-			<flux:tab :href="route('manage.categories.index')" :icon="svg('iconsax-bul-category', 'size-5')" wire:navigate>{{ __('Categories') }}</flux:tab>
-			<flux:tab :href="route('manage.settings.index')" :icon="svg('iconsax-bul-setting-2', 'size-5')" wire:navigate>{{ __('Settings') }}</flux:tab>
-		</flux:tabs>
-	</header>
 
 	<div class="space-y-4">
 		<div class="flex flex-wrap items-end justify-between gap-2">
@@ -97,7 +68,7 @@ new #[Title('Manage')] class extends Component
 				<flux:heading size="lg">{{ __('Overall stats') }}</flux:heading>
 				<flux:text variant="subtle">{{ __('Current system snapshot.') }}</flux:text>
 			</div>
-			<flux:badge color="zinc" :icon="svg('iconsax-two-lock', 'size-5')" rounded>{{ __('Admin access') }}</flux:badge>
+			<flux:badge color="zinc" :icon="svg('iconsax-two-lock', 'size-5')" rounded> {{ __('Admin access') }}</flux:badge>
 		</div>
 
 		<div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -202,16 +173,16 @@ new #[Title('Manage')] class extends Component
 
 			<div class="flex h-40 items-end gap-1 border-b border-zinc-200 dark:border-white/10" role="img" aria-label="{{ __('Daily registered and verified users for the last 30 days') }}">
 				@foreach ($dailyStats as $day)
-					@php($userHeight = $day['users'] / $maxDailyUsers * 100)
-					@php($verifiedHeight = $day['users'] > 0 ? $day['verified_users'] / $day['users'] * 100 : 0)
-					<div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="daily-users-{{ $day['date']->toDateString() }}">
-						<div class="flex w-full flex-col-reverse overflow-hidden rounded-t bg-violet-200 dark:bg-violet-950" style="height: {{ $day['users'] > 0 ? max(4, $userHeight) : 0 }}%">
-							<div class="bg-violet-500" style="height: {{ $verifiedHeight }}%"></div>
-						</div>
-						<div class="pointer-events-none absolute bottom-full inset-s-1/2 z-10 mb-2 hidden w-max max-w-40 -translate-x-1/2 rounded-lg bg-zinc-950 px-2 py-1.5 text-xs text-white shadow-lg group-hover:block group-focus-within:block">
-							{{ $day['date']->format('d/m') }} · {{ __(':total registered, :part verified', ['total' => number_format($day['users']), 'part' => number_format($day['verified_users'])]) }}
-						</div>
+				@php($userHeight = $day['users'] / $maxDailyUsers * 100)
+				@php($verifiedHeight = $day['users'] > 0 ? $day['verified_users'] / $day['users'] * 100 : 0)
+				<div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="daily-users-{{ $day['date']->toDateString() }}">
+					<div class="flex w-full flex-col-reverse overflow-hidden rounded-t bg-violet-200 dark:bg-violet-950" style="height: {{ $day['users'] > 0 ? max(4, $userHeight) : 0 }}%">
+						<div class="bg-violet-500" style="height: {{ $verifiedHeight }}%"></div>
 					</div>
+					<div class="pointer-events-none absolute bottom-full inset-s-1/2 z-10 mb-2 hidden w-max max-w-40 -translate-x-1/2 rounded-lg bg-zinc-950 px-2 py-1.5 text-xs text-white shadow-lg group-hover:block group-focus-within:block">
+						{{ $day['date']->format('d/m') }} · {{ __(':total registered, :part verified', ['total' => number_format($day['users']), 'part' => number_format($day['verified_users'])]) }}
+					</div>
+				</div>
 				@endforeach
 			</div>
 
@@ -240,16 +211,16 @@ new #[Title('Manage')] class extends Component
 
 			<div class="flex h-40 items-end gap-1 border-b border-zinc-200 dark:border-white/10" role="img" aria-label="{{ __('Daily created and published images for the last 30 days') }}">
 				@foreach ($dailyStats as $day)
-					@php($imageHeight = $day['images'] / $maxDailyImages * 100)
-					@php($publishedHeight = $day['images'] > 0 ? $day['published_images'] / $day['images'] * 100 : 0)
-					<div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="daily-images-{{ $day['date']->toDateString() }}">
-						<div class="flex w-full flex-col-reverse overflow-hidden rounded-t bg-emerald-200 dark:bg-emerald-950" style="height: {{ $day['images'] > 0 ? max(4, $imageHeight) : 0 }}%">
-							<div class="bg-emerald-500" style="height: {{ $publishedHeight }}%"></div>
-						</div>
-						<div class="pointer-events-none absolute bottom-full inset-s-1/2 z-10 mb-2 hidden w-max max-w-40 -translate-x-1/2 rounded-lg bg-zinc-950 px-2 py-1.5 text-xs text-white shadow-lg group-hover:block group-focus-within:block">
-							{{ $day['date']->format('d/m') }} · {{ __(':total created, :part published', ['total' => number_format($day['images']), 'part' => number_format($day['published_images'])]) }}
-						</div>
+				@php($imageHeight = $day['images'] / $maxDailyImages * 100)
+				@php($publishedHeight = $day['images'] > 0 ? $day['published_images'] / $day['images'] * 100 : 0)
+				<div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="daily-images-{{ $day['date']->toDateString() }}">
+					<div class="flex w-full flex-col-reverse overflow-hidden rounded-t bg-emerald-200 dark:bg-emerald-950" style="height: {{ $day['images'] > 0 ? max(4, $imageHeight) : 0 }}%">
+						<div class="bg-emerald-500" style="height: {{ $publishedHeight }}%"></div>
 					</div>
+					<div class="pointer-events-none absolute bottom-full inset-s-1/2 z-10 mb-2 hidden w-max max-w-40 -translate-x-1/2 rounded-lg bg-zinc-950 px-2 py-1.5 text-xs text-white shadow-lg group-hover:block group-focus-within:block">
+						{{ $day['date']->format('d/m') }} · {{ __(':total created, :part published', ['total' => number_format($day['images']), 'part' => number_format($day['published_images'])]) }}
+					</div>
+				</div>
 				@endforeach
 			</div>
 

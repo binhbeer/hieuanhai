@@ -3,6 +3,7 @@
 use App\Models\AiApiKey;
 use App\Models\AiApiRequest;
 use App\Models\User;
+use App\Support\AppSettings;
 use Flux\Flux;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -104,7 +105,7 @@ new #[Title('Edit user')] class extends Component
                 'token_hash' => $token['hash'],
                 'token_prefix' => $token['prefix'],
                 'token' => $token['plain'],
-                'quota_limit' => 100,
+                'quota_limit' => AppSettings::int('auth.member_request_limit', 100),
                 'quota_used' => 0,
                 'last_used_at' => null,
             ]);

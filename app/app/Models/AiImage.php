@@ -22,7 +22,6 @@ use Illuminate\Support\Str;
  * @property string $prompt
  * @property string|null $custom_prompt
  * @property string|null $source
- * @property string|null $source_path
  * @property string|null $result_path
  * @property string $provider
  * @property string $model
@@ -48,7 +47,6 @@ use Illuminate\Support\Str;
     'prompt',
     'custom_prompt',
     'source',
-    'source_path',
     'result_path',
     'provider',
     'model',

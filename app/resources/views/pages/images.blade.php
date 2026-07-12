@@ -52,28 +52,19 @@ new #[Title('Ảnh của bạn')] class extends Component {
         }
     }
 
-    public function cancelPending(int $id): void
+    public function cancelPending(int $id, AiImageEditor $editor): void
     {
         $query = AiImage::query();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
-            : $query->where('visitor_key', app(AiImageEditor::class)->visitorKey(request()));
+            : $query->where('visitor_key', $editor->visitorKey(request()));
 
         $image = $query->where('status', 'pending')->find($id);
 
-        if (!$image) {
+        if (!$image || !$editor->cancelPending($image)) {
             return;
         }
-
-        $requestMeta = is_array($image->request_meta) ? $image->request_meta : [];
-        $requestMeta['progress'] = 'cancelled';
-
-        $image->update([
-            'status' => 'failed',
-            'error' => 'Đã hủy tạo ảnh.',
-            'request_meta' => $requestMeta,
-        ]);
 
         $this->refreshImages();
         Flux::toast(text: __('Image creation cancelled.'));
@@ -172,7 +163,10 @@ new #[Title('Ảnh của bạn')] class extends Component {
         @php($thumbUrl = $this->imageUrl($image, 'sm'))
         @php($imageSize = $this->imageSize($image, 'sm'))
         @php($progressStep = $this->progressStep($image))
-        <flux:card class="overflow-hidden p-0" wire:key="created-image-{{ $image->id }}">
+        <flux:card class="relative overflow-hidden p-0" wire:key="created-image-{{ $image->id }}">
+            @if ($image->status === 'pending')
+                <flux:button class="absolute right-2 top-2 z-10" type="button" size="sm" variant="danger" icon="stop" wire:click="cancelPending({{ $image->id }})" wire:confirm="{{ __('Cancel image creation?') }}" wire:loading.attr="disabled" wire:target="cancelPending({{ $image->id }})" :aria-label="__('Stop')" />
+            @endif
             <button class="block w-full text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
                 @if ($thumbUrl)
                     <img class="aspect-square w-full bg-zinc-100 object-cover dark:bg-white/10" src="{{ $thumbUrl }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif loading="lazy" />
@@ -225,11 +219,6 @@ new #[Title('Ảnh của bạn')] class extends Component {
                     @if ($image->status === 'succeeded' && $image->result_path)
                         <flux:button type="button" size="sm" :variant="$image->is_published ? 'danger' : 'primary'" wire:click="togglePublish({{ $image->id }})">
                             {{ $image->is_published ? __('Unpublish') : __('Publish image') }}
-                        </flux:button>
-                    @endif
-                    @if ($image->status === 'pending')
-                        <flux:button class="col-span-2" type="button" size="sm" variant="ghost" wire:click="cancelPending({{ $image->id }})" wire:confirm="{{ __('Cancel image creation?') }}">
-                            {{ __('Cancel') }}
                         </flux:button>
                     @endif
                 </div>

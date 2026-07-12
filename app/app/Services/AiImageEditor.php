@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
+use Laravel\Ai\Files\Base64Image;
 use Throwable;
 
 class AiImageEditor
@@ -98,7 +99,6 @@ class AiImageEditor
             }
 
             $image->update([
-                'source_path' => $result['source_path'],
                 'result_path' => $storedPath,
                 'status' => 'succeeded',
                 'response_meta' => [
@@ -201,6 +201,76 @@ class AiImageEditor
         });
     }
 
+    public function cancelPending(AiImage $image): bool
+    {
+        if ($image->status !== 'pending') {
+            return false;
+        }
+
+        $requestMeta = is_array($image->request_meta) ? $image->request_meta : [];
+        $pendingUploads = $requestMeta['pending_uploads'] ?? [];
+        unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads']);
+        $requestMeta['progress'] = 'cancelled';
+
+        $updated = AiImage::query()
+            ->whereKey($image->id)
+            ->where('status', 'pending')
+            ->update([
+                'status' => 'failed',
+                'error' => 'Đã hủy tạo ảnh.',
+                'request_meta' => $requestMeta,
+            ]);
+
+        if ($updated === 0) {
+            return false;
+        }
+
+        $this->deletePendingUploads($pendingUploads);
+        $image->refresh();
+
+        return true;
+    }
+
+    public function retryFailed(AiImage $image, Request $request): AiImage
+    {
+        if ($image->status !== 'failed') {
+            return $image->refresh();
+        }
+
+        $userId = (int) $image->user_id;
+
+        return DB::transaction(function () use ($image, $request, $userId) {
+            User::query()->whereKey($userId)->lockForUpdate()->first();
+
+            if (AiImage::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
+                throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
+            }
+
+            if ($this->isLimitExceeded($request)) {
+                throw new \InvalidArgumentException('Bạn đã dùng hết lượt tạo ảnh hôm nay.');
+            }
+
+            $requestMeta = is_array($image->request_meta) ? $image->request_meta : [];
+            $requestMeta['pending_uploads'] = $this->storeParentReferenceUploads($image, array_keys($this->referenceSourcePaths($image)));
+            $requestMeta['progress'] = 'queued';
+            $requestMeta['upload_count'] = count($requestMeta['pending_uploads']);
+
+            if ($image->parent_id) {
+                $requestMeta['parent_prompt'] = $image->parent?->prompt;
+            } else {
+                unset($requestMeta['parent_prompt']);
+            }
+
+            $image->update([
+                'status' => 'pending',
+                'error' => null,
+                'request_meta' => $requestMeta,
+            ]);
+
+            return $image->refresh();
+        });
+    }
+
     public function completePending(AiImage $image): AiImage
     {
         if ($image->status !== 'pending') {
@@ -209,6 +279,7 @@ class AiImageEditor
 
         $requestMeta = is_array($image->request_meta) ? $image->request_meta : [];
         $pendingUploads = $requestMeta['pending_uploads'] ?? [];
+        $sourcePaths = [];
 
         try {
             $photos = $this->pendingUploadedFiles($pendingUploads);
@@ -219,11 +290,46 @@ class AiImageEditor
                 $image->parent_id ? 'Edit instructions: '.$image->prompt : $image->prompt,
             ])));
 
-            $this->updateImageProgress($image, $requestMeta, 'reviewing');
+            if (! $this->updateImageProgress($image, $requestMeta, 'reviewing')) {
+                return $image->refresh();
+            }
+
             $this->reviewForCreation($finalPrompt);
-            $this->updateImageProgress($image, $requestMeta, 'generating');
-            $result = $this->generateImage($photos, $finalPrompt, $image->provider, $image->model);
-            $this->updateImageProgress($image, $requestMeta, 'saving');
+
+            if (! $this->updateImageProgress($image, $requestMeta, 'generating')) {
+                return $image->refresh();
+            }
+
+            $result = $this->generateImage($photos, $finalPrompt, $image->provider, $image->model, $sourcePaths);
+
+            if ($image->fresh()->status !== 'pending') {
+                if ($sourcePaths !== []) {
+                    $image->update([
+                        'response_meta' => [
+                            'provider' => $image->provider,
+                            'model' => $image->model,
+                            'source_paths' => $sourcePaths,
+                        ],
+                    ]);
+                }
+
+                return $image->refresh();
+            }
+
+            if (! $this->updateImageProgress($image, $requestMeta, 'saving')) {
+                if ($sourcePaths !== []) {
+                    $image->update([
+                        'response_meta' => [
+                            'provider' => $image->provider,
+                            'model' => $image->model,
+                            'source_paths' => $sourcePaths,
+                        ],
+                    ]);
+                }
+
+                return $image->refresh();
+            }
+
             $storedPath = $this->datedPath('ai-images', Str::uuid().$this->extensionFor($result['mime']));
             $content = base64_decode($result['base64'], true);
 
@@ -237,19 +343,49 @@ class AiImageEditor
 
             unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads'], $requestMeta['progress']);
 
-            $image->update([
-                'source_path' => $result['source_path'],
-                'result_path' => $storedPath,
-                'status' => 'succeeded',
-                'request_meta' => $requestMeta,
-                'response_meta' => [
-                    'provider' => $image->provider,
-                    'model' => $image->model,
-                    'usage' => $result['usage'],
-                    'source_paths' => $result['source_paths'],
-                ],
-            ]);
+            $updated = AiImage::query()
+                ->whereKey($image->id)
+                ->where('status', 'pending')
+                ->update([
+                    'result_path' => $storedPath,
+                    'status' => 'succeeded',
+                    'request_meta' => $requestMeta,
+                    'response_meta' => [
+                        'provider' => $image->provider,
+                        'model' => $image->model,
+                        'usage' => $result['usage'],
+                        'source_paths' => $result['source_paths'],
+                    ],
+                ]);
+
+            if ($updated === 0) {
+                Storage::disk('public')->delete($storedPath);
+
+                if ($sourcePaths !== []) {
+                    $image->update([
+                        'response_meta' => [
+                            'provider' => $image->provider,
+                            'model' => $image->model,
+                            'source_paths' => $sourcePaths,
+                        ],
+                    ]);
+                }
+            }
         } catch (Throwable $e) {
+            if ($image->fresh()->status !== 'pending') {
+                if ($sourcePaths !== []) {
+                    $image->update([
+                        'response_meta' => [
+                            'provider' => $image->provider,
+                            'model' => $image->model,
+                            'source_paths' => $sourcePaths,
+                        ],
+                    ]);
+                }
+
+                return $image->refresh();
+            }
+
             if (! $e instanceof \InvalidArgumentException) {
                 report($e);
             }
@@ -257,11 +393,19 @@ class AiImageEditor
             unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads']);
             $requestMeta['progress'] = 'failed';
 
-            $image->update([
-                'status' => 'failed',
-                'error' => Str::limit($e->getMessage(), 2000, ''),
-                'request_meta' => $requestMeta,
-            ]);
+            AiImage::query()
+                ->whereKey($image->id)
+                ->where('status', 'pending')
+                ->update([
+                    'status' => 'failed',
+                    'error' => Str::limit($e->getMessage(), 2000, ''),
+                    'request_meta' => $requestMeta,
+                    'response_meta' => $sourcePaths === [] ? $image->response_meta : [
+                        'provider' => $image->provider,
+                        'model' => $image->model,
+                        'source_paths' => $sourcePaths,
+                    ],
+                ]);
         } finally {
             $this->deletePendingUploads($pendingUploads);
         }
@@ -272,12 +416,22 @@ class AiImageEditor
     /**
      * @param  array<string, mixed>  $requestMeta
      */
-    private function updateImageProgress(AiImage $image, array &$requestMeta, string $progress): void
+    private function updateImageProgress(AiImage $image, array &$requestMeta, string $progress): bool
     {
         $requestMeta['progress'] = $progress;
 
-        $image->update(['request_meta' => $requestMeta]);
+        $updated = AiImage::query()
+            ->whereKey($image->id)
+            ->where('status', 'pending')
+            ->update(['request_meta' => $requestMeta]);
+
+        if ($updated === 0) {
+            return false;
+        }
+
         AiImageCompleted::dispatch($image->refresh());
+
+        return true;
     }
 
     public function publish(AiImage $image, Request $request, bool $requireOwner = true): AiImage
@@ -290,7 +444,7 @@ class AiImageEditor
             throw new \InvalidArgumentException('Chỉ publish được ảnh đã tạo xong.');
         }
 
-        $review = $this->reviewForPublish($image->prompt);
+        $review = $this->reviewForPublish($image);
 
         DB::transaction(function () use ($image, $review): void {
             $image->update([
@@ -493,7 +647,7 @@ class AiImageEditor
 
         $sourcePaths = is_array($image->response_meta) ? ($image->response_meta['source_paths'] ?? []) : [];
 
-        Storage::disk('public')->delete(array_values(array_filter([...$sourcePaths, $image->source_path, $image->result_path])));
+        Storage::disk('public')->delete(array_values(array_filter([...$sourcePaths, $image->result_path])));
         $image->delete();
     }
 
@@ -765,9 +919,10 @@ class AiImageEditor
 
     /**
      * @param  array<int, mixed>  $photos
-     * @return array{base64: string, mime: string, source_path: string|null, source_paths: array<int, string>, usage: array<string, mixed>}
+     * @param  array<int, string>  $sourcePaths
+     * @return array{base64: string, mime: string, source_paths: array<int, string>, usage: array<string, mixed>}
      */
-    private function generateImage(array $photos, string $prompt, string $provider, string $model): array
+    private function generateImage(array $photos, string $prompt, string $provider, string $model, array &$sourcePaths = []): array
     {
         $sourcePaths = [];
         $referenceImages = [];
@@ -840,7 +995,6 @@ class AiImageEditor
         return [
             'base64' => Str::after($base64, ','),
             'mime' => 'image/png',
-            'source_path' => $sourcePaths[0] ?? null,
             'source_paths' => $sourcePaths,
             'usage' => is_array($usage) ? $usage : [],
         ];
@@ -912,9 +1066,10 @@ class AiImageEditor
     /**
      * @return array{allowed: bool, title: string, category: string, tags: list<string>, reason: string}
      */
-    private function reviewForPublish(string $prompt): array
+    private function reviewForPublish(AiImage $image): array
     {
-        $review = $this->reviewPrompt($prompt, publish: true);
+        $prompt = (string) $image->prompt;
+        $review = $this->reviewPrompt($prompt, publish: true, image: $image);
         $title = $this->imageTitle($review['title'] ?? null, $prompt);
         $category = is_string($review['category'] ?? null) ? $review['category'] : 'other';
         $reason = is_string($review['reason'] ?? null) ? $review['reason'] : '';
@@ -934,16 +1089,24 @@ class AiImageEditor
     /**
      * @return array<string, mixed>
      */
-    private function reviewPrompt(string $prompt, bool $publish): array
+    private function reviewPrompt(string $prompt, bool $publish, ?AiImage $image = null): array
     {
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
         $model = AppSettings::string('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
 
         $this->configureReviewProvider($provider);
 
+        $attachments = $image ? $this->reviewImageAttachments($image) : [];
+        $prefix = $publish
+            ? ($attachments === []
+                ? "Duyệt prompt để publish ảnh, tạo title, chọn danh mục và tags phù hợp.\n\nPrompt:\n"
+                : "Duyệt ảnh kèm để publish, tạo title, chọn danh mục và tags phù hợp.\n\nPrompt:\n")
+            : "Duyệt prompt tạo ảnh sau.\n\nPrompt:\n";
+
         try {
             $response = ImageReviewAgent::make(publish: $publish)->prompt(
-                ($publish ? "Duyệt prompt để publish ảnh, tạo title, chọn danh mục và tags phù hợp.\n\nPrompt:\n" : "Duyệt prompt tạo ảnh sau.\n\nPrompt:\n").$prompt,
+                $prefix.$prompt,
+                attachments: $attachments,
                 provider: $provider,
                 model: $model,
                 timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
@@ -964,6 +1127,39 @@ class AiImageEditor
         $review['allowed'] = true;
 
         return $review;
+    }
+
+    /**
+     * @return list<Base64Image>
+     */
+    private function reviewImageAttachments(AiImage $image): array
+    {
+        $path = $image->result_path;
+
+        if (! is_string($path) || $path === '') {
+            return [];
+        }
+
+        $disk = Storage::disk('public');
+
+        if (! $disk->exists($path)) {
+            return [];
+        }
+
+        $content = $disk->get($path);
+
+        if (! is_string($content) || $content === '') {
+            return [];
+        }
+
+        $mime = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            'avif' => 'image/avif',
+            default => 'image/png',
+        };
+
+        return [new Base64Image(base64_encode($content), $mime)];
     }
 
     private function configureReviewProvider(string $provider): void
