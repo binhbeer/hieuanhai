@@ -47,12 +47,10 @@ new class extends Component {
     }
 }; ?>
 
-@if ($this->tags->isNotEmpty())
-    <nav class="mb-5 flex flex-nowrap gap-2 overflow-x-auto pb-1" aria-label="{{ __('Popular tags') }}">
-        @foreach ($this->tags as $popularTag)
-            <flux:button :href="route('tags.show', $popularTag)" size="xs" variant="ghost" wire:navigate wire:key="popular-tag-{{ $popularTag->id }}">
-                #{{ $popularTag->name }}
-            </flux:button>
-        @endforeach
-    </nav>
-@endif
+<nav class="mb-5 flex flex-nowrap gap-2 overflow-x-auto pb-1" aria-label="{{ __('Popular tags') }}">
+    @foreach ($this->tags as $popularTag)
+        <flux:button :href="route('tags.show', $popularTag)" size="xs" variant="ghost" wire:navigate wire:key="popular-tag-{{ $popularTag->id }}">
+            #{{ $popularTag->name }}
+        </flux:button>
+    @endforeach
+</nav>
