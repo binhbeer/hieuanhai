@@ -490,5 +490,14 @@
     "Maximum resolution": "Độ phân giải tối đa",
     "Image settings": "Thiết lập ảnh",
     "Aspect ratio": "Tỷ lệ",
-    "Resolution": "Độ phân giải"
+    "Resolution": "Độ phân giải",
+    "API key usage": "Usage API key",
+    "Daily API key requests for the last 30 days": "Request API key theo ngày trong 30 ngày gần nhất",
+    ":total requests, :part charged": ":total request, :part tính quota",
+    "Quota charged": "Tính quota",
+    "Not charged": "Không tính quota",
+    "Search logs": "Tìm log",
+    "Search by status, HTTP code, IP, error, or log ID.": "Tìm theo status, mã HTTP, IP, lỗi hoặc ID log.",
+    "status, 429, charged...": "status, 429, charged...",
+    "No matching logs.": "Không có log khớp."
 }

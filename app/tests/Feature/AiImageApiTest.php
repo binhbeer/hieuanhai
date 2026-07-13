@@ -576,6 +576,85 @@ class AiImageApiTest extends TestCase
         $this->assertSame(18, $key->quotaRemaining());
     }
 
+    public function test_manage_users_list_shows_api_key_usage(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+        $user = User::factory()->create(['name' => 'Usage User', 'email' => 'usage-user@example.com']);
+        $this->apiKey($user, quotaLimit: 50, quotaUsed: 12);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.users')
+            ->assertSee(__('API key usage'))
+            ->assertSee('12 / 50')
+            ->assertSee('Usage User');
+    }
+
+    public function test_admin_can_update_user_avatar_from_user_edit(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->create(['id' => 1]);
+        $user = User::factory()->create();
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.user-edit', ['user' => $user])
+            ->set('avatar', UploadedFile::fake()->image('avatar.jpg'))
+            ->call('updateAvatar')
+            ->assertHasNoErrors();
+
+        $path = $user->refresh()->avatar_path;
+        $this->assertNotNull($path);
+        Storage::disk('public')->assertExists($path);
+    }
+
+    public function test_user_edit_shows_daily_api_usage_chart(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+        $user = User::factory()->create();
+        [, $key] = $this->apiKey($user, quotaLimit: 20, quotaUsed: 3);
+
+        foreach ([
+            [now(), true],
+            [now()->subDay(), true],
+            [now()->subDay(), false],
+            [now()->subDays(30), true],
+        ] as [$createdAt, $charged]) {
+            AiApiRequest::create([
+                'ai_api_key_id' => $key->id,
+                'user_id' => $user->id,
+                'ai_image_id' => null,
+                'ip_address' => '127.0.0.1',
+                'status_code' => $charged ? 200 : 422,
+                'status' => $charged ? 'succeeded' : 'failed',
+                'duration_ms' => 10,
+                'quota_charged' => $charged,
+                'error' => $charged ? null : 'validation',
+                'request_meta' => [],
+                'response_meta' => [],
+            ])->forceFill(['created_at' => $createdAt])->save();
+        }
+
+        $component = Livewire::actingAs($admin)
+            ->test('pages::manage.user-edit', ['user' => $user]);
+
+        $dailyApiUsage = $component->get('dailyApiUsage');
+
+        $this->assertCount(30, $dailyApiUsage);
+        $this->assertSame(3, collect($dailyApiUsage)->sum('total'));
+        $this->assertSame(2, collect($dailyApiUsage)->sum('charged'));
+        $this->assertSame(0, $dailyApiUsage[0]['total']);
+        $this->assertSame(2, $dailyApiUsage[28]['total']);
+        $this->assertSame(1, $dailyApiUsage[29]['total']);
+        $component
+            ->assertSee(__('API key usage'))
+            ->assertSee(__('Last 30 days'))
+            ->assertSee(__('Quota charged'))
+            ->assertSee(__('Latest logs'))
+            ->assertSee('validation')
+            ->set('logSearch', 'validation')
+            ->assertSee('HTTP 422')
+            ->assertDontSee('HTTP 200', false);
+    }
+
     public function test_admin_can_verify_and_change_user_password(): void
     {
         $admin = User::factory()->create(['id' => 1]);

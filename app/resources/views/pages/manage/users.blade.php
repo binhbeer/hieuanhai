@@ -83,6 +83,7 @@ new #[Title('Manage users')] class extends Component
     {
         return User::query()
             ->withCount('apiKeys')
+            ->with(['apiKeys' => fn ($query) => $query->latest()])
             ->when($this->search !== '', function ($query): void {
                 $query->where(function ($query): void {
                     $query->where('name', 'like', '%'.$this->search.'%')
@@ -162,6 +163,7 @@ new #[Title('Manage users')] class extends Component
 						<th class="px-3 py-2 font-medium">User</th>
 						<th class="px-3 py-2 font-medium">Role</th>
 						<th class="px-3 py-2 font-medium">API key</th>
+						<th class="px-3 py-2 font-medium">{{ __('API key usage') }}</th>
 						<th class="px-3 py-2 font-medium">{{ __('Status') }}</th>
 						<th class="px-3 py-2 font-medium">{{ __('Created date') }}</th>
 						<th class="px-3 py-2 font-medium">{{ __('Actions') }}</th>
@@ -169,6 +171,7 @@ new #[Title('Manage users')] class extends Component
 				</thead>
 				<tbody>
 					@forelse ($this->users as $user)
+						@php($apiKey = $user->apiKeys->first())
 						<tr class="border-b border-white/10" wire:key="manage-user-{{ $user->id }}">
 							<td class="px-3 py-3 align-top">
 								<div class="font-medium">{{ $user->name }}</div>
@@ -176,6 +179,14 @@ new #[Title('Manage users')] class extends Component
 							</td>
 							<td class="px-3 py-3 align-top">{{ $this->roleLabel($user->role) }}</td>
 							<td class="px-3 py-3 align-top tabular-nums">{{ number_format($user->api_keys_count) }}</td>
+							<td class="px-3 py-3 align-top">
+								@if ($apiKey)
+									<div class="tabular-nums">{{ number_format($apiKey->quota_used) }} / {{ number_format($apiKey->quota_limit) }}</div>
+									<flux:text class="text-xs" variant="subtle">{{ __('Remaining :count', ['count' => number_format($apiKey->quotaRemaining())]) }}</flux:text>
+								@else
+									<flux:text variant="subtle">—</flux:text>
+								@endif
+							</td>
 							<td class="px-3 py-3 align-top">
 								@if ($user->banned_at)
 									<flux:badge size="sm">{{ __('Banned') }}</flux:badge>
@@ -193,7 +204,7 @@ new #[Title('Manage users')] class extends Component
 						</tr>
 					@empty
 						<tr>
-							<td class="px-3 py-6 text-center text-zinc-400" colspan="6">{{ __('No users.') }}</td>
+							<td class="px-3 py-6 text-center text-zinc-400" colspan="7">{{ __('No users.') }}</td>
 						</tr>
 					@endforelse
 				</tbody>
