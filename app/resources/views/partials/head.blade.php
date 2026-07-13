@@ -8,6 +8,7 @@
     $siteDescription = \App\Support\AppSettings::string('site.description', '');
     $siteKeywords = \App\Support\AppSettings::string('site.keywords', '');
     $googleMeasurementId = trim(\App\Support\AppSettings::string('analytics.google_measurement_id', ''));
+    $assetVersion = is_file(public_path('build/manifest.json')) ? filemtime(public_path('build/manifest.json')) : filemtime(public_path('logo.png'));
     $routeImage = request()->route('image');
     $routeCategory = request()->route('category');
     $routeTag = request()->route('tag');
@@ -166,10 +167,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="{{ $siteName }}">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="/icons/manifest.json">
-<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
-<link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png">
-<link rel="preload" as="image" href="{{ asset('logo.png') }}" fetchpriority="high">
+<link rel="manifest" href="/icons/manifest.json?v={{ $assetVersion }}">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v={{ $assetVersion }}">
+<link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png?v={{ $assetVersion }}">
+<link rel="preload" as="image" href="{{ asset('logo.png') }}?v={{ $assetVersion }}" fetchpriority="high">
 
 @fonts
 
