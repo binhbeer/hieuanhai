@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\AiApiKey;
 use App\Models\Setting;
 use App\Support\AppSettings;
 use Flux\Flux;
@@ -411,11 +410,7 @@ new #[Title('Settings')] class extends Component
             if (filled($validated['openaiApiKey'] ?? null)) {
                 Setting::putValue('ai.openai_api_key', $validated['openaiApiKey']);
             }
-
-            AiApiKey::query()->update(['quota_limit' => $validated['memberRequestLimit']]);
         });
-
-        (new AiApiKey)->flushCache();
         $this->openaiApiKey = '';
         Flux::toast(variant: 'success', text: __('Settings saved.'));
     }
@@ -515,7 +510,7 @@ new #[Title('Settings')] class extends Component
 					<flux:checkbox wire:model="autoVerifyEmail" :label="__('Automatically verify email on registration')" :description="__('Mark new accounts as verified immediately without sending a verification email.')" />
 				</div>
 				<div class="space-y-4">
-					<flux:input wire:model="memberRequestLimit" type="number" min="0" max="1000000000" :label="__('Requests per member')" :description="__('Saving applies this lifetime request limit to all existing and future members.')" required />
+					<flux:input wire:model="memberRequestLimit" type="number" min="0" max="1000000000" :label="__('Requests per member')" :description="__('Default lifetime quota for newly created member API keys. Existing keys keep their own quota.')" required />
 					<flux:input wire:model="verifiedDailyImageLimit" type="number" min="0" max="1000" :label="__('Free images per day')" :description="__('Daily free web image generations for logged-in members (verified, or on registration day). Admins are unlimited.')" required />
 				</div>
 			</div>

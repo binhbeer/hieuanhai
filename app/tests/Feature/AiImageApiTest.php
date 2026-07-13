@@ -751,7 +751,7 @@ class AiImageApiTest extends TestCase
         $this->assertFalse((bool) Setting::getValue('auth.email_verification_required'));
         $this->assertSame(250, Setting::getValue('auth.member_request_limit'));
         $this->assertSame(12, Setting::getValue('auth.verified_daily_image_limit'));
-        $this->assertSame(250, $key->fresh()->quota_limit);
+        $this->assertSame(100, $key->fresh()->quota_limit);
         $this->assertSame(20, $key->fresh()->quota_used);
         $this->assertSame('gpt-5.5-mini', Setting::getValue('ai.image_review_model'));
         $this->assertFalse((bool) Setting::getValue('ai.prompt_translation_enabled'));
