@@ -150,9 +150,21 @@ class AiImageController extends Controller
 
             return response()->json($this->responsePayload($image, $editor, $key, $publish), 201);
         } catch (\InvalidArgumentException $e) {
-            $this->logRequest($key, $request, $startedAt, 422, 'validation_failed', false, $image?->id, $e->getMessage());
+            $errorCode = match ($e->getCode()) {
+                AiImageEditor::ERROR_IMAGE_REVIEW_SEXUAL => 'IMAGE_REVIEW_BLOCKED_SEXUAL',
+                AiImageEditor::ERROR_IMAGE_REVIEW_POLITICAL => 'IMAGE_REVIEW_BLOCKED_POLITICAL',
+                AiImageEditor::ERROR_IMAGE_REVIEW_UNAVAILABLE => 'IMAGE_REVIEW_UNAVAILABLE',
+                default => null,
+            };
+            $statusCode = $errorCode === 'IMAGE_REVIEW_UNAVAILABLE' ? 503 : 422;
+            $status = $statusCode === 503 ? 'failed' : 'validation_failed';
+            $responseMeta = $errorCode ? ['error_code' => $errorCode] : [];
+            $this->logRequest($key, $request, $startedAt, $statusCode, $status, false, $image?->id, $e->getMessage(), $responseMeta);
 
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json(array_filter([
+                'message' => $e->getMessage(),
+                'error_code' => $errorCode,
+            ]), $statusCode);
         } catch (Throwable $e) {
             report($e);
 

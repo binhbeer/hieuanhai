@@ -32,6 +32,12 @@ use Throwable;
 
 class AiImageEditor
 {
+    public const ERROR_IMAGE_REVIEW_SEXUAL = 1001;
+
+    public const ERROR_IMAGE_REVIEW_POLITICAL = 1002;
+
+    public const ERROR_IMAGE_REVIEW_UNAVAILABLE = 1003;
+
     private const REFERENCE_MAX_WIDTH = 1024;
 
     private const REFERENCE_JPEG_QUALITY = 88;
@@ -474,7 +480,7 @@ class AiImageEditor
         try {
             $review = $this->reviewForPublish($image);
         } catch (\InvalidArgumentException $e) {
-            if ($e->getMessage() === 'Prompt không phù hợp để tạo hoặc publish ảnh.') {
+            if (in_array($e->getCode(), [self::ERROR_IMAGE_REVIEW_SEXUAL, self::ERROR_IMAGE_REVIEW_POLITICAL], true)) {
                 $image->update(['response_meta' => [...$responseMeta, 'publish_error' => $e->getMessage()]]);
             }
 
@@ -1311,14 +1317,19 @@ class AiImageEditor
         } catch (Throwable $e) {
             report($e);
 
-            throw new \InvalidArgumentException('Không duyệt được prompt ảnh. Vui lòng thử lại sau.');
+            throw new \InvalidArgumentException('Không duyệt được prompt ảnh. Vui lòng thử lại sau.', self::ERROR_IMAGE_REVIEW_UNAVAILABLE);
         }
 
         $review = $response instanceof Arrayable ? $response->toArray() : [];
         $blockedPolicy = is_string($review['blocked_policy'] ?? null) ? $review['blocked_policy'] : 'none';
+        $errorCode = match ($blockedPolicy) {
+            'sexual' => self::ERROR_IMAGE_REVIEW_SEXUAL,
+            'political' => self::ERROR_IMAGE_REVIEW_POLITICAL,
+            default => null,
+        };
 
-        if (in_array($blockedPolicy, ['sexual', 'political'], true)) {
-            throw new \InvalidArgumentException('Prompt không phù hợp để tạo hoặc publish ảnh.');
+        if ($errorCode !== null) {
+            throw new \InvalidArgumentException('Prompt không phù hợp để tạo hoặc publish ảnh.', $errorCode);
         }
 
         $review['allowed'] = true;
@@ -1663,7 +1674,6 @@ class AiImageEditor
 
         return $image;
     }
-
 
     /**
      * @return array{width: ?int, height: ?int, mime: ?string, target_width: ?int, target_height: ?int, meets_width_or_height: bool, ratio_delta: ?float}

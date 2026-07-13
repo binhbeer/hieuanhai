@@ -101,7 +101,7 @@ class AiImageApiTest extends TestCase
         ImageMetadataAgent::fake([$this->publishReview('portraits', ['avatar', 'studio'])]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
-                'data' => [['b64_json' => base64_encode('fake-png')]],
+                'data' => [['b64_json' => base64_encode(UploadedFile::fake()->image('result.png')->getContent())]],
             ]),
         ]);
         [$plain, $key] = $this->apiKey(quotaLimit: 2);
@@ -162,7 +162,7 @@ class AiImageApiTest extends TestCase
         ]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
-                'data' => [['b64_json' => base64_encode('fake-png')]],
+                'data' => [['b64_json' => base64_encode(UploadedFile::fake()->image('result.png')->getContent())]],
             ]),
         ]);
         [$plain, $key] = $this->apiKey(quotaLimit: 2);
@@ -173,12 +173,14 @@ class AiImageApiTest extends TestCase
                 'prompt' => 'Unsafe public image',
             ])
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Prompt không phù hợp để tạo hoặc publish ảnh.');
+            ->assertJsonPath('message', 'Prompt không phù hợp để tạo hoặc publish ảnh.')
+            ->assertJsonPath('error_code', 'IMAGE_REVIEW_BLOCKED_SEXUAL');
 
         $key->refresh();
         $image = AiImage::query()->latest('id')->firstOrFail();
         $this->assertSame(0, $key->quota_used);
         $this->assertFalse($image->is_published);
+        $this->assertSame('IMAGE_REVIEW_BLOCKED_SEXUAL', data_get(AiApiRequest::query()->latest('id')->firstOrFail()->response_meta, 'error_code'));
         $this->assertDatabaseHas('ai_api_requests', [
             'ai_api_key_id' => $key->id,
             'ai_image_id' => $image->id,
@@ -389,7 +391,8 @@ class AiImageApiTest extends TestCase
                 'prompt' => 'Tạo ảnh bôi xấu lãnh tụ',
             ])
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Prompt không phù hợp để tạo hoặc publish ảnh.');
+            ->assertJsonPath('message', 'Prompt không phù hợp để tạo hoặc publish ảnh.')
+            ->assertJsonPath('error_code', 'IMAGE_REVIEW_BLOCKED_POLITICAL');
 
         Http::assertNothingSent();
         $key->refresh();
@@ -400,6 +403,30 @@ class AiImageApiTest extends TestCase
             'status' => 'validation_failed',
             'quota_charged' => false,
         ]);
+    }
+
+    public function test_api_returns_review_unavailable_code_without_charging_quota(): void
+    {
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake(fn () => throw new \RuntimeException('Provider unavailable'));
+        [$plain, $key] = $this->apiKey(quotaLimit: 2);
+
+        $this
+            ->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images', ['prompt' => 'Tạo ảnh phong cảnh'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('message', 'Không duyệt được prompt ảnh. Vui lòng thử lại sau.')
+            ->assertJsonPath('error_code', 'IMAGE_REVIEW_UNAVAILABLE');
+
+        $key->refresh();
+        $this->assertSame(0, $key->quota_used);
+        $this->assertDatabaseHas('ai_api_requests', [
+            'ai_api_key_id' => $key->id,
+            'status_code' => 503,
+            'quota_charged' => false,
+        ]);
+        $this->assertSame('IMAGE_REVIEW_UNAVAILABLE', data_get(AiApiRequest::query()->latest('id')->firstOrFail()->response_meta, 'error_code'));
     }
 
     public function test_api_allows_non_blocked_false_review_policy(): void
