@@ -144,6 +144,12 @@ new class extends Component {
 
     public function updatedPromptSourcePhoto(): void
     {
+        if (!AppSettings::bool('ai.image_to_prompt_enabled', true)) {
+            $this->promptSourcePhoto = null;
+
+            return;
+        }
+
         if (!Auth::check()) {
             $this->promptSourcePhoto = null;
             $this->dispatch('open-account-modal', component: 'auth.login');
@@ -160,7 +166,7 @@ new class extends Component {
 
     public function analyzePromptSourcePhoto(AiImageEditor $editor): void
     {
-        if (!Auth::check() || !$this->promptSourcePhoto) {
+        if (!AppSettings::bool('ai.image_to_prompt_enabled', true) || !Auth::check() || !$this->promptSourcePhoto) {
             return;
         }
 
@@ -292,6 +298,10 @@ new class extends Component {
 
     public function rewritePrompt(AiImageEditor $editor): void
     {
+        if (!AppSettings::bool('ai.prompt_rewrite_enabled', true)) {
+            return;
+        }
+
         if (!Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
@@ -314,6 +324,32 @@ new class extends Component {
             report($e);
 
             $this->errorMessage = __('Could not rewrite the prompt right now. Please try again later.');
+        }
+    }
+
+    public function translatePrompt(AiImageEditor $editor): void
+    {
+        if (!AppSettings::bool('ai.prompt_translation_enabled', true)) {
+            return;
+        }
+
+        if (!Auth::check()) {
+            $this->dispatch('open-account-modal', component: 'auth.login');
+
+            return;
+        }
+
+        $this->validate(['prompt' => $this->promptRules()]);
+
+        try {
+            $this->prompt = $editor->translatePrompt($this->prompt);
+            $this->errorMessage = null;
+        } catch (InvalidArgumentException $e) {
+            $this->errorMessage = $e->getMessage();
+        } catch (Throwable $e) {
+            report($e);
+
+            $this->errorMessage = __('Could not translate the prompt right now. Please try again later.');
         }
     }
 
@@ -654,33 +690,43 @@ new class extends Component {
                             <div class="flex items-center justify-between gap-2">
                                 <span class="text-sm font-medium text-zinc-800 dark:text-white">{{ __('Prompt') }}</span>
                                 <div class="flex items-center gap-2">
-                                    <flux:file-upload wire:model="promptSourcePhoto" accept="image/jpeg,image/png,image/webp,image/avif">
-                                        <flux:tooltip content="{{ __('Image to prompt') }}" position="top">
-                                            <flux:button type="button" size="sm" variant="filled" :loading="false" x-bind:disabled="uploadingPromptImage" wire:loading.attr="disabled" wire:target="promptSourcePhoto,analyzePromptSourcePhoto" :aria-label="__('Image to prompt')">
+                                    @if (AppSettings::bool('ai.prompt_translation_enabled', true))
+                                        <flux:button type="button" size="sm" variant="ghost" :disabled="blank($prompt)" :loading="false" wire:click="translatePrompt" wire:loading.attr="disabled" wire:target="translatePrompt" tooltip="{{ __('Translate prompt to Vietnamese') }}" tooltip:position="top" :aria-label="__('Translate prompt to Vietnamese')">
+                                            <x-slot name="icon">
+                                                <flux:icon.language class="size-5" wire:loading.remove wire:target="translatePrompt" />
+                                                <flux:icon.loading class="size-5" wire:loading wire:target="translatePrompt" />
+                                            </x-slot>
+                                        </flux:button>
+                                    @endif
+                                    @if (AppSettings::bool('ai.image_to_prompt_enabled', true))
+                                        <flux:file-upload wire:model="promptSourcePhoto" accept="image/jpeg,image/png,image/webp,image/avif">
+                                            <flux:button type="button" size="sm" variant="ghost" :loading="false" x-bind:disabled="uploadingPromptImage" wire:loading.attr="disabled" wire:target="promptSourcePhoto,analyzePromptSourcePhoto" tooltip="{{ __('Image to prompt') }}" tooltip:position="top" :aria-label="__('Image to prompt')">
                                                 <x-slot name="icon">
                                                     <flux:icon.photo class="size-5" x-show="! uploadingPromptImage" wire:loading.remove wire:target="promptSourcePhoto,analyzePromptSourcePhoto" />
                                                     <flux:icon.loading class="size-5" x-show="uploadingPromptImage" x-cloak />
                                                     <flux:icon.loading class="size-5" x-show="! uploadingPromptImage" wire:loading wire:target="promptSourcePhoto,analyzePromptSourcePhoto" x-cloak />
                                                 </x-slot>
                                             </flux:button>
-                                        </flux:tooltip>
-                                    </flux:file-upload>
-                                    <flux:dropdown x-ref="rewriteDropdown" position="bottom" align="end">
-                                        <flux:button type="button" size="sm" variant="filled" tooltip="{{ __('Rewrite prompt') }}" tooltip:position="top">
-                                            <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
-                                        </flux:button>
-                                        <flux:popover class="w-80 space-y-3">
-                                            <div>
-                                                <flux:heading size="sm">{{ __('Rewrite prompt') }}</flux:heading>
-                                                <flux:text variant="subtle">{{ __('Tell AI how to rewrite your current prompt.') }}</flux:text>
-                                            </div>
-                                            <flux:textarea wire:model="rewriteInstruction" rows="4" resize="vertical" :label="__('Rewrite instruction')" :placeholder="__('e.g. Make it more cinematic, add product lighting, keep the same subject...')" />
-                                            <flux:button class="w-full" type="button" size="sm" variant="primary" wire:click="rewritePrompt" wire:loading.attr="disabled" wire:target="rewritePrompt">
-                                                <span wire:loading.remove wire:target="rewritePrompt">{{ __('Rewrite prompt') }}</span>
-                                                <span wire:loading wire:target="rewritePrompt">{{ __('Rewriting prompt...') }}</span>
+                                        </flux:file-upload>
+                                    @endif
+                                    @if (AppSettings::bool('ai.prompt_rewrite_enabled', true))
+                                        <flux:dropdown x-ref="rewriteDropdown" position="bottom" align="end">
+                                            <flux:button type="button" size="sm" variant="ghost" tooltip="{{ __('Rewrite prompt') }}" tooltip:position="top" :aria-label="__('Rewrite prompt')">
+                                                <x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
                                             </flux:button>
-                                        </flux:popover>
-                                    </flux:dropdown>
+                                            <flux:popover class="w-80 space-y-3">
+                                                <div>
+                                                    <flux:heading size="sm">{{ __('Rewrite prompt') }}</flux:heading>
+                                                    <flux:text variant="subtle">{{ __('Tell AI how to rewrite your current prompt.') }}</flux:text>
+                                                </div>
+                                                <flux:textarea wire:model="rewriteInstruction" rows="4" resize="vertical" :label="__('Rewrite instruction')" :placeholder="__('e.g. Make it more cinematic, add product lighting, keep the same subject...')" />
+                                                <flux:button class="w-full" type="button" size="sm" variant="primary" wire:click="rewritePrompt" wire:loading.attr="disabled" wire:target="rewritePrompt">
+                                                    <span wire:loading.remove wire:target="rewritePrompt">{{ __('Rewrite prompt') }}</span>
+                                                    <span wire:loading wire:target="rewritePrompt">{{ __('Rewriting prompt...') }}</span>
+                                                </flux:button>
+                                            </flux:popover>
+                                        </flux:dropdown>
+                                    @endif
                                 </div>
                             </div>
                             <div class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400" role="status" aria-live="polite" x-show="uploadingPromptImage" x-cloak>
@@ -690,6 +736,10 @@ new class extends Component {
                             <div class="items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400" role="status" aria-live="polite" x-show="! uploadingPromptImage" wire:loading.flex wire:target="analyzePromptSourcePhoto" x-cloak>
                                 <flux:icon.loading class="size-4" />
                                 <span>{{ __('Analyzing image...') }}</span>
+                            </div>
+                            <div class="items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400" role="status" aria-live="polite" wire:loading.flex wire:target="translatePrompt">
+                                <flux:icon.loading class="size-4" />
+                                <span>{{ __('Translating prompt...') }}</span>
                             </div>
                             <flux:textarea class="max-h-[400px] overflow-y-auto [&_textarea]:max-h-[400px] [&_textarea]:overflow-y-auto" wire:model.live.debounce.300ms="prompt" rows="auto" :placeholder="__('Describe the image you want to create...')" x-ref="prompt" x-on:input="handlePromptInput($event)" required />
                         </div>

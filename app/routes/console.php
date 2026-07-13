@@ -100,7 +100,7 @@ Artisan::command('sitemap:generate', function (): void {
 
     $publicImages()
         ->orderByRaw('COALESCE(published_at, created_at) desc')
-        ->limit(1000)
+        ->limit(100)
         ->get()
         ->each(function (AiImage $image) use ($latestImages, $maxDate, $url, &$latestImagesLastModified): void {
             $lastModified = $image->updated_at ?? $image->published_at ?? $image->created_at;

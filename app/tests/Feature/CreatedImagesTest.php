@@ -6,6 +6,7 @@ use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
 use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
+use App\Ai\PromptTranslationAgent;
 use App\Events\AiImageCompleted;
 use App\Jobs\CreateAiImage;
 use App\Models\AiImage;
@@ -31,6 +32,56 @@ class CreatedImagesTest extends TestCase
     {
         $this->get(route('images.index'))
             ->assertRedirect(route('login', absolute: false));
+    }
+
+    public function test_usage_card_navigates_to_created_images(): void
+    {
+        Livewire::actingAs(User::factory()->create())
+            ->test('gallery.usage')
+            ->assertSee(route('images.index'), false)
+            ->assertSee('wire:navigate', false);
+    }
+
+    public function test_created_images_show_thirty_day_usage_for_current_user(): void
+    {
+        User::factory()->create(['id' => 1]);
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        Setting::putValue('contact.zalo_url', 'https://zalo.me/0123456789');
+
+        foreach ([
+            [$user->id, 'succeeded', now()],
+            [$user->id, 'pending', now()->subDay()],
+            [$user->id, 'failed', now()->subDay()],
+            [$user->id, 'succeeded', now()->subDays(30)],
+            [$other->id, 'succeeded', now()],
+        ] as [$userId, $status, $createdAt]) {
+            $image = AiImage::create([
+                'user_id' => $userId,
+                'visitor_key' => 'usage-'.$userId.'-'.$status.'-'.$createdAt->timestamp,
+                'prompt' => 'Usage chart image',
+                'provider' => 'openai',
+                'model' => 'cx/gpt-5.5-image',
+                'status' => $status,
+                'result_path' => $status === 'succeeded' ? 'ai-images/usage.png' : null,
+            ]);
+            $image->forceFill(['created_at' => $createdAt])->save();
+        }
+
+        $component = Livewire::actingAs($user)->test('pages::images');
+        $dailyUsage = $component->get('dailyUsage');
+
+        $this->assertCount(30, $dailyUsage);
+        $this->assertSame(2, collect($dailyUsage)->sum('total'));
+        $this->assertSame(0, $dailyUsage[0]['total']);
+        $this->assertSame(1, $dailyUsage[28]['total']);
+        $this->assertSame(1, $dailyUsage[29]['total']);
+        $component
+            ->assertSee(__('Image usage'))
+            ->assertSee('https://zalo.me/0123456789', false)
+            ->assertSee('target="_blank"', false)
+            ->assertSee('rel="noopener noreferrer"', false)
+            ->assertSee(__('Upgrade'));
     }
 
     public function test_guest_create_image_action_opens_login_modal(): void
@@ -373,6 +424,53 @@ class CreatedImagesTest extends TestCase
         PromptRewriteAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-rewrite'
             && str_contains($prompt->prompt, 'small cat')
             && str_contains($prompt->prompt, 'make it cinematic'));
+    }
+
+    public function test_user_can_translate_current_composer_prompt_to_vietnamese(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        PromptTranslationAgent::fake([['prompt' => 'Một bức ảnh sản phẩm điện ảnh về một chú mèo nhỏ.']]);
+
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test('gallery.generator')
+            ->set('showComposer', true)
+            ->set('prompt', 'A cinematic product photo of a small cat.')
+            ->call('translatePrompt')
+            ->assertSet('prompt', 'Một bức ảnh sản phẩm điện ảnh về một chú mèo nhỏ.')
+            ->assertHasNoErrors();
+
+        PromptTranslationAgent::assertPrompted(fn ($prompt): bool => str_contains($prompt->prompt, 'A cinematic product photo of a small cat.'));
+    }
+
+    public function test_disabled_prompt_tools_are_hidden_and_do_not_call_agents(): void
+    {
+        Setting::putValue('ai.prompt_translation_enabled', false);
+        Setting::putValue('ai.prompt_rewrite_enabled', false);
+        Setting::putValue('ai.image_to_prompt_enabled', false);
+        PromptTranslationAgent::fake();
+        PromptRewriteAgent::fake();
+        ImageToPromptAgent::fake();
+
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test('gallery.generator')
+            ->set('showComposer', true)
+            ->assertDontSee(__('Translate prompt to Vietnamese'))
+            ->assertDontSee(__('Rewrite prompt'))
+            ->assertDontSee(__('Image to prompt'))
+            ->set('prompt', 'A cinematic cat.')
+            ->set('rewriteInstruction', 'Make it dramatic')
+            ->set('promptSourcePhoto', UploadedFile::fake()->image('source.png'))
+            ->call('translatePrompt')
+            ->call('rewritePrompt')
+            ->call('analyzePromptSourcePhoto')
+            ->assertSet('prompt', 'A cinematic cat.')
+            ->assertSet('promptSourcePhoto', null);
+
+        PromptTranslationAgent::assertNeverPrompted();
+        PromptRewriteAgent::assertNeverPrompted();
+        ImageToPromptAgent::assertNeverPrompted();
     }
 
     public function test_user_can_write_prompt_from_instruction_without_current_prompt(): void

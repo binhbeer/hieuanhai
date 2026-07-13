@@ -3,6 +3,7 @@
 use App\Jobs\CreateAiImage;
 use App\Models\AiImage;
 use App\Services\AiImageEditor;
+use App\Support\AppSettings;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
@@ -119,6 +120,46 @@ new #[Title('Ảnh của bạn')] class extends Component {
         $this->refreshImages();
         $this->dispatch('gallery-updated');
         Flux::toast(variant: 'success', text: __('Image deleted.'));
+    }
+
+    #[Computed]
+    public function usage(): array
+    {
+        $editor = app(AiImageEditor::class);
+
+        return [
+            'limit' => $editor->dailyLimit(),
+            'remaining' => $editor->remainingToday(request()),
+            'used' => $editor->countToday(request()),
+        ];
+    }
+
+    #[Computed]
+    public function dailyUsage(): array
+    {
+        $from = today()->subDays(29);
+        $counts = AiImage::query()
+            ->where('user_id', Auth::id())
+            ->whereIn('status', ['pending', 'succeeded'])
+            ->where('created_at', '>=', $from)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as total')
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('total', 'date');
+
+        return collect(range(0, 29))->map(function (int $offset) use ($from, $counts): array {
+            $date = $from->copy()->addDays($offset);
+
+            return [
+                'date' => $date,
+                'total' => (int) ($counts[$date->toDateString()] ?? 0),
+            ];
+        })->all();
+    }
+
+    #[Computed]
+    public function upgradeUrl(): string
+    {
+        return trim(AppSettings::string('contact.zalo_url'));
     }
 
     #[Computed]
@@ -243,7 +284,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
 
     private function refreshImages(): void
     {
-        unset($this->images);
+        unset($this->images, $this->usage, $this->dailyUsage);
         $this->dispatch('image-usage-updated');
     }
 }; ?>
@@ -256,6 +297,62 @@ new #[Title('Ảnh của bạn')] class extends Component {
         </div>
         <flux:text variant="subtle">{{ __(':count images', ['count' => number_format($this->images->total())]) }}</flux:text>
     </div>
+
+    @php($usage = $this->usage)
+    @php($dailyUsage = $this->dailyUsage)
+    @php($maxDailyUsage = max(1, collect($dailyUsage)->max('total')))
+    @php($periodUsage = collect($dailyUsage)->sum('total'))
+
+    <flux:card class="space-y-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <flux:heading size="lg">{{ __('Image usage') }}</flux:heading>
+                <flux:text variant="subtle">{{ __('Daily generations counted toward your image quota.') }}</flux:text>
+            </div>
+            @if (! auth()->user()?->isAdmin() && $this->upgradeUrl !== '')
+                <flux:button :href="$this->upgradeUrl" target="_blank" rel="noopener noreferrer" variant="primary">
+                    {{ __('Upgrade') }}
+                </flux:button>
+            @endif
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-3">
+            <div class="rounded-xl bg-zinc-100 p-4 dark:bg-white/5">
+                <flux:text variant="subtle">{{ __('Used today') }}</flux:text>
+                <div class="mt-1 text-2xl font-semibold tabular-nums">{{ number_format($usage['used']) }}</div>
+            </div>
+            <div class="rounded-xl bg-zinc-100 p-4 dark:bg-white/5">
+                <flux:text variant="subtle">{{ __('Remaining today') }}</flux:text>
+                <div class="mt-1 text-2xl font-semibold tabular-nums">{{ $usage['remaining'] === null ? '∞' : number_format($usage['remaining']) . '/' . number_format($usage['limit']) }}</div>
+            </div>
+            <div class="rounded-xl bg-zinc-100 p-4 dark:bg-white/5">
+                <flux:text variant="subtle">{{ __('Last 30 days') }}</flux:text>
+                <div class="mt-1 text-2xl font-semibold tabular-nums">{{ number_format($periodUsage) }}</div>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto pb-1">
+            <div class="min-w-2xl">
+                <div class="flex h-36 items-end gap-1 border-b border-zinc-200 dark:border-white/10" role="img" aria-label="{{ __('Daily image generations for the last 30 days') }}">
+                    @foreach ($dailyUsage as $day)
+                        @php($height = $day['total'] > 0 ? max(6, $day['total'] / $maxDailyUsage * 100) : 0)
+                        <div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="image-usage-{{ $day['date']->toDateString() }}">
+                            <div class="w-full rounded-t bg-violet-500 transition hover:bg-violet-400" style="height: {{ $height }}%"></div>
+                            <div class="pointer-events-none absolute bottom-full inset-s-1/2 z-10 mb-2 hidden w-max -translate-x-1/2 rounded-lg bg-zinc-950 px-2 py-1.5 text-xs text-white shadow-lg group-hover:block">
+                                {{ $day['date']->format('d/m') }} · {{ __(':count generations', ['count' => number_format($day['total'])]) }}
+                            </div>
+                            <span class="sr-only">{{ $day['date']->format('d/m/Y') }}: {{ __(':count generations', ['count' => number_format($day['total'])]) }}</span>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="mt-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>{{ $dailyUsage[0]['date']->format('d/m') }}</span>
+                    <span>{{ __('30 days') }}</span>
+                    <span>{{ $dailyUsage[29]['date']->format('d/m') }}</span>
+                </div>
+            </div>
+        </div>
+    </flux:card>
 
     <div class="flex flex-wrap items-end gap-3">
         <flux:select class="min-w-40" wire:model.live="status" :label="__('Status')">

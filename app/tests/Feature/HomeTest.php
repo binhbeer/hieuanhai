@@ -104,7 +104,7 @@ class HomeTest extends TestCase
         $this->actingAs($admin)->get(route('home'))
             ->assertOk()
             ->assertSee(__('Remaining today'))
-            ->assertSee(__('Unlimited'))
+            ->assertSee('∞')
             ->assertSee(__('Admin accounts are not limited by daily image quota.'));
     }
 

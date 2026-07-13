@@ -6,6 +6,7 @@ use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
 use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
+use App\Ai\PromptTranslationAgent;
 use App\Models\AiImage;
 use App\Models\AiTag;
 use App\Models\Category;
@@ -129,6 +130,37 @@ class AiImageEditorTest extends TestCase
         $this->assertTrue($editor->isLimitExceeded($request));
     }
 
+    public function test_verified_daily_image_limit_uses_setting(): void
+    {
+        Setting::putValue('auth.verified_daily_image_limit', 3);
+
+        $user = User::factory()->create(['id' => 2]);
+        $this->actingAs($user);
+
+        $editor = app(AiImageEditor::class);
+        $request = Request::create('/', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+
+        $this->assertSame(3, $editor->dailyLimit());
+        $this->assertSame(3, $editor->remainingToday($request));
+
+        foreach (range(1, 3) as $i) {
+            AiImage::create([
+                'user_id' => $user->id,
+                'visitor_key' => $editor->visitorKey($request),
+                'prompt' => 'Prompt '.$i,
+                'provider' => 'openai',
+                'model' => 'cx/gpt-5.5-image',
+                'status' => 'succeeded',
+            ]);
+        }
+
+        $this->assertSame(0, $editor->remainingToday($request));
+        $this->assertTrue($editor->isLimitExceeded($request));
+    }
+
     public function test_unverified_users_keep_daily_quota_only_on_registration_day(): void
     {
         $user = User::factory()->unverified()->create(['id' => 2, 'created_at' => now()->subDay()]);
@@ -161,7 +193,8 @@ class AiImageEditorTest extends TestCase
         $request->setLaravelSession($session);
 
         $this->assertFalse($editor->requiresEmailVerificationForImageCreation());
-        $this->assertSame(5, $editor->remainingToday($request));
+        $this->assertSame($editor->dailyLimit(), $editor->remainingToday($request));
+        $this->assertSame(5, $editor->dailyLimit());
     }
 
     public function test_user_cannot_create_pending_image_while_another_is_pending(): void
@@ -564,7 +597,7 @@ class AiImageEditorTest extends TestCase
             'request_meta' => [
                 'aspect_ratio' => '16:9',
                 'resolution' => '2k',
-                'size' => '2048x1152',
+                'size' => '1536x864',
                 'image_detail' => 'original',
             ],
         ]);
@@ -575,9 +608,9 @@ class AiImageEditorTest extends TestCase
             ->assertSee('x-show="expanded"', false)
             ->assertSee('x-cloak', false)
             ->assertSee('Thiết lập ảnh')
-            ->assertSee('Tỷ lệ: 16:9')
-            ->assertSee('Độ phân giải: 2K')
-            ->assertSee('Chất lượng ảnh: Cao');
+            ->assertSee('16:9')
+            ->assertSee('2K')
+            ->assertSee('Chất lượng: Cao');
     }
 
     public function test_guest_image_detail_truncates_prompt_and_login_sees_full_prompt(): void
@@ -806,6 +839,31 @@ class AiImageEditorTest extends TestCase
         ImageToPromptAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-default-text');
     }
 
+    public function test_prompt_translation_uses_separate_agent_and_model_setting(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.prompt_translation_model', 'gpt-5.5-translation');
+        PromptTranslationAgent::fake([['prompt' => 'Một chú mèo đội chiếc mũ nhỏ.']]);
+
+        $prompt = app(AiImageEditor::class)->translatePrompt('A cat wearing a tiny hat.');
+
+        $this->assertSame('Một chú mèo đội chiếc mũ nhỏ.', $prompt);
+        PromptTranslationAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-translation'
+            && str_contains($prompt->prompt, 'A cat wearing a tiny hat.'));
+    }
+
+    public function test_prompt_translation_inherits_default_text_model(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.text_model', 'gpt-5.5-default-text');
+        Setting::putValue('ai.prompt_translation_model', '');
+        PromptTranslationAgent::fake([['prompt' => 'Một chú mèo.']]);
+
+        app(AiImageEditor::class)->translatePrompt('A cat.');
+
+        PromptTranslationAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-default-text');
+    }
+
     public function test_prompt_rewrite_uses_separate_agent_and_model_setting(): void
     {
         Setting::putValue('ai.openai_api_key', 'test-key');
@@ -960,12 +1018,13 @@ class AiImageEditorTest extends TestCase
     public function test_gpt_image_options_map_aspect_and_resolution_to_valid_sizes(): void
     {
         $this->assertSame('1024x1024', GptImageOptions::size('auto', '1k'));
-        $this->assertSame('2048x2048', GptImageOptions::size('1:1', '2k'));
-        $this->assertSame('2880x2880', GptImageOptions::size('1:1', '4k'));
-        $this->assertSame('1024x1536', GptImageOptions::size('2:3', '1k'));
-        $this->assertSame('1536x1024', GptImageOptions::size('3:2', '1k'));
-        $this->assertSame('2448x3264', GptImageOptions::size('3:4', '4k'));
-        $this->assertSame('3840x2160', GptImageOptions::size('16:9', '4k'));
+        $this->assertSame('1248x1248', GptImageOptions::size('1:1', '2k'));
+        $this->assertSame('1248x1248', GptImageOptions::size('1:1', '4k'));
+        $this->assertSame('688x1024', GptImageOptions::size('2:3', '1k'));
+        $this->assertSame('1024x688', GptImageOptions::size('3:2', '1k'));
+        $this->assertSame('1248x1664', GptImageOptions::size('3:4', '4k'));
+        $this->assertSame('1664x928', GptImageOptions::size('16:9', '4k'));
+        $this->assertSame('1536x864', GptImageOptions::size('16:9', '2k'));
 
         foreach (GptImageOptions::ASPECT_RATIOS as $aspect) {
             foreach (GptImageOptions::RESOLUTIONS as $resolution) {
@@ -974,15 +1033,13 @@ class AiImageEditorTest extends TestCase
                 [$width, $height] = array_map('intval', explode('x', $size));
                 $this->assertSame(0, $width % 16);
                 $this->assertSame(0, $height % 16);
-                $this->assertLessThanOrEqual(3840, max($width, $height));
-                $this->assertLessThanOrEqual(8294400, $width * $height);
-                $this->assertGreaterThanOrEqual(655360, $width * $height);
+                $this->assertLessThanOrEqual(1664, max($width, $height));
                 $this->assertLessThanOrEqual(3.0, max($width, $height) / min($width, $height));
             }
         }
 
         $this->assertSame(
-            ['aspect_ratio' => '2:3', 'resolution' => '1k'],
+            ['aspect_ratio' => '2:3', 'resolution' => '2k'],
             GptImageOptions::defaultsFromSettings('1024x1536'),
         );
         $this->assertSame(
@@ -1002,9 +1059,10 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.image_detail', 'low');
         ImageReviewAgent::fake([$this->allowedReview()]);
 
+        $providerPng = $this->pngBinary(1672, 941);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
-                'data' => [['b64_json' => base64_encode('fake-png')]],
+                'data' => [['b64_json' => base64_encode($providerPng)]],
             ]),
         ]);
 
@@ -1027,27 +1085,70 @@ class AiImageEditorTest extends TestCase
         $storedImage = AiImage::findOrFail($image->id);
         $this->assertSame('16:9', data_get($storedImage->request_meta, 'aspect_ratio'));
         $this->assertSame('2k', data_get($storedImage->request_meta, 'resolution'));
-        $this->assertSame('2048x1152', data_get($storedImage->request_meta, 'size'));
+        $this->assertSame('1536x864', data_get($storedImage->request_meta, 'size'));
         $this->assertSame('original', data_get($storedImage->request_meta, 'image_detail'));
 
         $image = app(AiImageEditor::class)->completePending($image);
 
         Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
-            && $request['size'] === '2048x1152'
+            && $request['size'] === '1536x864'
             && $request['image_detail'] === 'original'
             && $request['quality'] === 'hd');
         $this->assertSame('succeeded', $image->status);
         $this->assertSame('16:9', data_get($image->request_meta, 'aspect_ratio'));
         $this->assertSame('2k', data_get($image->request_meta, 'resolution'));
-        $this->assertSame('2048x1152', data_get($image->request_meta, 'size'));
+        $this->assertSame('1536x864', data_get($image->request_meta, 'size'));
         $this->assertSame('original', data_get($image->request_meta, 'image_detail'));
+        $this->assertSame(1672, data_get($image->response_meta, 'dimensions.width'));
+        $this->assertSame(941, data_get($image->response_meta, 'dimensions.height'));
+        $this->assertTrue((bool) data_get($image->response_meta, 'dimensions.meets_width_or_height'));
+        $this->assertFalse((bool) data_get($image->response_meta, 'dimensions.resized'));
+        $resultBinary = Storage::disk('public')->get($image->result_path);
+        $resultSize = getimagesizefromstring($resultBinary);
+        $this->assertSame(1672, $resultSize[0] ?? null);
+        $this->assertSame(941, $resultSize[1] ?? null);
 
         $image->update(['status' => 'failed']);
         $retried = app(AiImageEditor::class)->retryFailed($image->refresh(), $request);
         $this->assertSame('16:9', data_get($retried->request_meta, 'aspect_ratio'));
         $this->assertSame('2k', data_get($retried->request_meta, 'resolution'));
-        $this->assertSame('2048x1152', data_get($retried->request_meta, 'size'));
+        $this->assertSame('1536x864', data_get($retried->request_meta, 'size'));
         $this->assertSame('original', data_get($retried->request_meta, 'image_detail'));
+    }
+
+    public function test_pending_generation_rejects_provider_image_below_requested_size(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_quality', 'hd');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode($this->pngBinary(800, 600))]],
+            ]),
+        ]);
+
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+        $this->actingAs(User::factory()->create());
+
+        $image = app(AiImageEditor::class)->createPending(
+            $request,
+            [],
+            'Small provider output',
+            size: GptImageOptions::size('16:9', '2k'),
+            imageDetail: 'high',
+            aspectRatio: '16:9',
+            resolution: '2k',
+        );
+
+        $image = app(AiImageEditor::class)->completePending($image);
+        $this->assertSame('failed', $image->status);
+        $this->assertStringContainsString('nhỏ hơn cấu hình', (string) $image->error);
     }
 
     public function test_pending_generation_falls_back_to_settings_without_overrides(): void
@@ -1082,6 +1183,29 @@ class AiImageEditorTest extends TestCase
             && $request['image_detail'] === 'high'
             && $request['quality'] === 'medium');
         $this->assertSame('succeeded', $image->status);
+    }
+
+    public function test_generator_persists_aspect_resolution_and_image_quality(): void
+    {
+        \Illuminate\Support\Facades\Bus::fake();
+
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test('gallery.generator')
+            ->set('showComposer', true)
+            ->set('prompt', 'Wide landscape with correct options')
+            ->set('aspectRatio', '16:9')
+            ->set('resolution', '2k')
+            ->set('imageDetail', 'original')
+            ->call('createImage')
+            ->assertHasNoErrors();
+
+        $image = AiImage::query()->latest('id')->firstOrFail();
+        $this->assertSame('16:9', data_get($image->request_meta, 'aspect_ratio'));
+        $this->assertSame('2k', data_get($image->request_meta, 'resolution'));
+        $this->assertSame('1536x864', data_get($image->request_meta, 'size'));
+        $this->assertSame('original', data_get($image->request_meta, 'image_detail'));
+        $this->assertSame('1536x864', GptImageOptions::size('16:9', '2k'));
     }
 
     private function publishedImage(string $prompt, ?\DateTimeInterface $publishedAt = null): AiImage
@@ -1125,6 +1249,23 @@ class AiImageEditorTest extends TestCase
     private function publishReview(string $category, array $tags = ['nước hoa', 'banner ads', 'sản phẩm'], string $title = 'Banner nước hoa cao cấp', string $description = 'Banner nước hoa cao cấp cho quảng cáo sản phẩm, bố cục rõ chủ thể, phong cách thương mại hiện đại, phù hợp SEO gallery công khai.'): array
     {
         return ['allowed' => true, 'blocked_policy' => 'none', 'title' => $title, 'description' => $description, 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
+    }
+
+
+    private function pngBinary(int $width, int $height): string
+    {
+        $image = imagecreatetruecolor($width, $height);
+        $this->assertNotFalse($image);
+        $color = imagecolorallocate($image, 30, 120, 200);
+        imagefilledrectangle($image, 0, 0, $width, $height, $color);
+        ob_start();
+        imagepng($image);
+        imagedestroy($image);
+        $binary = ob_get_clean();
+        $this->assertIsString($binary);
+        $this->assertNotSame('', $binary);
+
+        return $binary;
     }
 
     private function encodedImageSizeIs(string $image, int $width, int $height): bool

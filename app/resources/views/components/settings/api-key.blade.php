@@ -86,6 +86,12 @@ new class extends Component {
         return $key ? $key->requests()->latest()->limit(10)->get() : collect();
     }
 
+    #[Computed]
+    public function upgradeUrl(): string
+    {
+        return trim(AppSettings::string('contact.zalo_url'));
+    }
+
     private function refreshApiKeyData(): void
     {
         unset($this->apiKey, $this->apiKeyStats, $this->apiKeyLogs);
@@ -122,9 +128,16 @@ new class extends Component {
                             <flux:text variant="subtle">Prefix: <span class="font-mono">{{ $this->apiKey->token_prefix }}...</span></flux:text>
                             <flux:text variant="subtle">{{ __('Last used:') }} {{ $this->apiKey->last_used_at?->diffForHumans() ?? __('Never used') }}</flux:text>
                         </div>
-                        <flux:button type="button" variant="danger" wire:click="generateApiKey" wire:confirm="{{ __('Regenerating will invalidate this key. Continue?') }}">
-                            {{ __('Regenerate API key') }}
-                        </flux:button>
+                        <div class="flex flex-wrap gap-2">
+                            @if ($this->upgradeUrl !== '')
+                                <flux:button :href="$this->upgradeUrl" target="_blank" rel="noopener noreferrer" variant="primary">
+                                    {{ __('Upgrade quota') }}
+                                </flux:button>
+                            @endif
+                            <flux:button type="button" variant="danger" wire:click="generateApiKey" wire:confirm="{{ __('Regenerating will invalidate this key. Continue?') }}">
+                                {{ __('Regenerate API key') }}
+                            </flux:button>
+                        </div>
                     </div>
 
                     @if ($visibleApiToken)
@@ -195,7 +208,14 @@ new class extends Component {
             @else
                 <flux:card class="space-y-4">
                     <flux:text variant="subtle">{{ __('No API key yet.') }}</flux:text>
-                    <flux:button type="button" variant="primary" wire:click="generateApiKey">{{ __('Generate API key') }}</flux:button>
+                    <div class="flex flex-wrap gap-2">
+                        <flux:button type="button" variant="primary" wire:click="generateApiKey">{{ __('Generate API key') }}</flux:button>
+                        @if ($this->upgradeUrl !== '')
+                            <flux:button :href="$this->upgradeUrl" target="_blank" rel="noopener noreferrer" variant="filled">
+                                {{ __('Upgrade quota') }}
+                            </flux:button>
+                        @endif
+                    </div>
                 </flux:card>
             @endif
         </div>

@@ -20,10 +20,12 @@ class Setting extends BaseModel
         'site.description' => 'Chỉnh ảnh AI chất lượng cao miễn phí không cần đăng ký.',
         'site.keywords' => 'chỉnh ảnh AI, tạo ảnh AI',
         'analytics.google_measurement_id' => null,
+        'contact.zalo_url' => 'http://zalo.me/0963559309',
         'auth.registration_enabled' => true,
         'auth.email_verification_required' => true,
         'auth.auto_verify_email' => false,
         'auth.member_request_limit' => 100,
+        'auth.verified_daily_image_limit' => 5,
         'ai.image_provider' => 'openai',
         'ai.image_models' => ['cx/gpt-5.5-image'],
         'ai.text_models' => ['gpt-5.5'],
@@ -31,6 +33,10 @@ class Setting extends BaseModel
         'ai.text_model' => 'gpt-5.5',
         'ai.image_review_model' => '',
         'ai.tag_model' => '',
+        'ai.prompt_translation_enabled' => true,
+        'ai.prompt_rewrite_enabled' => true,
+        'ai.image_to_prompt_enabled' => true,
+        'ai.prompt_translation_model' => '',
         'ai.prompt_rewrite_model' => '',
         'ai.image_to_prompt_model' => '',
         'ai.image_timeout' => 600,
@@ -59,7 +65,7 @@ class Setting extends BaseModel
     {
         $values = static::DEFAULTS;
 
-        foreach (static::query()->get(['key', 'value']) as $setting) {
+        foreach (static::query()->disableModelCaching()->get(['key', 'value']) as $setting) {
             if ($setting->value === null) {
                 continue;
             }
@@ -72,7 +78,7 @@ class Setting extends BaseModel
 
     public static function getValue(string $key, mixed $default = null): mixed
     {
-        $setting = static::query()->whereKey($key)->first(['key', 'value']);
+        $setting = static::query()->disableModelCaching()->whereKey($key)->first(['key', 'value']);
 
         if ($setting?->value !== null) {
             return self::decodeValue($key, $setting->value);

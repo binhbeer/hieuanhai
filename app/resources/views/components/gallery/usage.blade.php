@@ -45,7 +45,7 @@ new class extends Component {
             $dailyLimit = $this->dailyLimit;
         @endphp
 
-        <div class="space-y-3 rounded-md bg-zinc-200 p-3 dark:bg-white/10">
+        <a class="block space-y-3 rounded-md bg-zinc-200 p-3 transition hover:bg-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:bg-white/10 dark:hover:bg-white/15" href="{{ route('images.index') }}" wire:navigate>
             <flux:field>
                 <flux:label>
                     {{ __('Remaining today') }}
@@ -53,11 +53,11 @@ new class extends Component {
                         <span class="tabular-nums">{{ $remainingToday === null ? '∞' : $remainingToday . '/' . $dailyLimit }}</span>
                     </x-slot>
                 </flux:label>
-                <flux:progress max="{{ $dailyLimit }}" value="{{ $remainingToday ?? $dailyLimit }}" color="yellow" />
+                <flux:progress max="{{ max($dailyLimit, 1) }}" value="{{ $remainingToday ?? $dailyLimit }}" color="yellow" />
                 <flux:text class="text-xs" variant="subtle">
                     {{ $remainingToday === null ? __('Admin accounts are not limited by daily image quota.') : __(':remaining/:limit image generations left today.', ['remaining' => $remainingToday, 'limit' => $dailyLimit]) }}
                 </flux:text>
             </flux:field>
-        </div>
+        </a>
     @endif
 @endauth

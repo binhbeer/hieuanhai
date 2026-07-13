@@ -29,48 +29,53 @@ class GptImageOptions
     ];
 
     /**
+     * Provider-native size map (current gateway ignores large OpenAI sizes).
+     * Long-edge targets stay within observed provider output so width|height can meet config without crop/resize.
+     *
+     * Observed ceilings (runtime): ~1254 square, ~1672 long edge for non-square.
+     *
      * @var array<string, array{1k: string, 2k: string, 4k: string}>
      */
     private const SIZES = [
         'auto' => [
             '1k' => '1024x1024',
-            '2k' => '2048x2048',
-            '4k' => '2880x2880',
+            '2k' => '1248x1248',
+            '4k' => '1248x1248',
         ],
         '1:1' => [
             '1k' => '1024x1024',
-            '2k' => '2048x2048',
-            '4k' => '2880x2880',
+            '2k' => '1248x1248',
+            '4k' => '1248x1248',
         ],
         '3:4' => [
-            '1k' => '1024x1360',
-            '2k' => '1536x2048',
-            '4k' => '2448x3264',
+            '1k' => '768x1024',
+            '2k' => '1152x1536',
+            '4k' => '1248x1664',
         ],
         '2:3' => [
-            '1k' => '1024x1536',
-            '2k' => '1344x2016',
-            '4k' => '2336x3504',
+            '1k' => '688x1024',
+            '2k' => '1024x1536',
+            '4k' => '1104x1664',
         ],
         '9:16' => [
-            '1k' => '1008x1792',
-            '2k' => '1152x2048',
-            '4k' => '2160x3840',
+            '1k' => '576x1024',
+            '2k' => '864x1536',
+            '4k' => '928x1664',
         ],
         '4:3' => [
-            '1k' => '1360x1024',
-            '2k' => '2048x1536',
-            '4k' => '3264x2448',
+            '1k' => '1024x768',
+            '2k' => '1536x1152',
+            '4k' => '1664x1248',
         ],
         '3:2' => [
-            '1k' => '1536x1024',
-            '2k' => '2016x1344',
-            '4k' => '3504x2336',
+            '1k' => '1024x688',
+            '2k' => '1536x1024',
+            '4k' => '1664x1104',
         ],
         '16:9' => [
-            '1k' => '1792x1008',
-            '2k' => '2048x1152',
-            '4k' => '3840x2160',
+            '1k' => '1024x576',
+            '2k' => '1536x864',
+            '4k' => '1664x928',
         ],
     ];
 
@@ -84,10 +89,10 @@ class GptImageOptions
         return match ($size) {
             'auto' => ['aspect_ratio' => 'auto', 'resolution' => '1k'],
             '1024x1024' => ['aspect_ratio' => '1:1', 'resolution' => '1k'],
-            '1024x1536' => ['aspect_ratio' => '2:3', 'resolution' => '1k'],
-            '1536x1024' => ['aspect_ratio' => '3:2', 'resolution' => '1k'],
-            '1024x1792' => ['aspect_ratio' => '9:16', 'resolution' => '1k'],
-            '1792x1024' => ['aspect_ratio' => '16:9', 'resolution' => '1k'],
+            '1024x1536' => ['aspect_ratio' => '2:3', 'resolution' => '2k'],
+            '1536x1024' => ['aspect_ratio' => '3:2', 'resolution' => '2k'],
+            '1024x1792', '576x1024' => ['aspect_ratio' => '9:16', 'resolution' => '1k'],
+            '1792x1024', '1024x576' => ['aspect_ratio' => '16:9', 'resolution' => '1k'],
             default => self::nearestFromSize($size),
         };
     }
@@ -138,8 +143,8 @@ class GptImageOptions
         $ratio = $width / $height;
 
         $resolution = match (true) {
-            $longEdge >= 2560 => '4k',
-            $longEdge >= 1536 => '2k',
+            $longEdge >= 1600 => '4k',
+            $longEdge >= 1400 => '2k',
             default => '1k',
         };
 

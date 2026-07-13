@@ -6,6 +6,7 @@ use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
 use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
+use App\Ai\PromptTranslationAgent;
 use App\Events\AiImageCompleted;
 use App\Models\AiImage;
 use App\Models\AiTag;
@@ -34,8 +35,6 @@ class AiImageEditor
     private const REFERENCE_MAX_WIDTH = 1024;
 
     private const REFERENCE_JPEG_QUALITY = 88;
-
-    private const REGISTERED_DAILY_LIMIT = 5;
 
     /**
      * @var array<string, int|array{0: int, 1: int}|null>
@@ -371,12 +370,13 @@ class AiImageEditor
                     'result_path' => $storedPath,
                     'status' => 'succeeded',
                     'request_meta' => $requestMeta,
-                    'response_meta' => [
+                    'response_meta' => array_filter([
                         'provider' => $image->provider,
                         'model' => $image->model,
                         'usage' => $result['usage'],
                         'source_paths' => $result['source_paths'],
-                    ],
+                        'dimensions' => $result['dimensions'] ?? null,
+                    ], fn (mixed $value): bool => $value !== null),
                 ]);
 
             if ($updated === 0) {
@@ -635,7 +635,7 @@ class AiImageEditor
 
     public function countToday(Request $request): int
     {
-        $query = AiImage::query();
+        $query = AiImage::query()->disableModelCaching();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
@@ -1020,18 +1020,23 @@ class AiImageEditor
             throw new \RuntimeException("Provider AI [$provider] thiếu URL hoặc API key.");
         }
 
+        $resolvedSize = is_string($size) && ($size === 'auto' || GptImageOptions::isValidSize($size))
+            ? $size
+            : AppSettings::string('ai.image_size', (string) config('ai.image_size', 'auto'));
+        $resolvedDetail = is_string($imageDetail) && GptImageOptions::isValidImageDetail($imageDetail)
+            ? $imageDetail
+            : AppSettings::string('ai.image_detail', (string) config('ai.image_detail', 'high'));
+        $sizeHint = $this->providerSizePromptHint($resolvedSize);
+        $providerPrompt = $sizeHint === '' ? $prompt : rtrim($prompt)."\n\n".$sizeHint;
+
         $payload = [
             'model' => $model,
-            'prompt' => $prompt,
+            'prompt' => $providerPrompt,
             'n' => 1,
-            'size' => is_string($size) && ($size === 'auto' || GptImageOptions::isValidSize($size))
-                ? $size
-                : AppSettings::string('ai.image_size', (string) config('ai.image_size', 'auto')),
+            'size' => $resolvedSize,
             'quality' => AppSettings::string('ai.image_quality', (string) config('ai.image_quality', 'auto')),
             'background' => 'auto',
-            'image_detail' => is_string($imageDetail) && GptImageOptions::isValidImageDetail($imageDetail)
-                ? $imageDetail
-                : AppSettings::string('ai.image_detail', (string) config('ai.image_detail', 'high')),
+            'image_detail' => $resolvedDetail,
             'output_format' => 'png',
         ];
 
@@ -1060,17 +1065,46 @@ class AiImageEditor
             throw new \RuntimeException('API không trả về ảnh base64.');
         }
 
+        $decoded = base64_decode(Str::after($base64, ','), true);
+
+        if ($decoded === false || $decoded === '') {
+            throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
+        }
+
+        $requestedSize = is_string($payload['size'] ?? null) ? $payload['size'] : null;
+        $dimensions = $this->measureGeneratedImage($decoded, $requestedSize);
+
+        if ($dimensions['target_width'] !== null && $dimensions['target_height'] !== null && ! $dimensions['meets_width_or_height']) {
+            throw new \RuntimeException(sprintf(
+                'API trả về ảnh %sx%s nhỏ hơn cấu hình %s (cần width >= %s hoặc height >= %s).',
+                $dimensions['width'] ?? '?',
+                $dimensions['height'] ?? '?',
+                $requestedSize,
+                $dimensions['target_width'],
+                $dimensions['target_height'],
+            ));
+        }
+
         return [
             'base64' => Str::after($base64, ','),
-            'mime' => 'image/png',
+            'mime' => is_string($dimensions['mime']) && $dimensions['mime'] !== '' ? $dimensions['mime'] : 'image/png',
             'source_paths' => $sourcePaths,
             'usage' => is_array($usage) ? $usage : [],
+            'dimensions' => [
+                'requested_size' => $requestedSize,
+                'width' => $dimensions['width'],
+                'height' => $dimensions['height'],
+                'target_width' => $dimensions['target_width'],
+                'target_height' => $dimensions['target_height'],
+                'meets_width_or_height' => $dimensions['meets_width_or_height'],
+                'resized' => false,
+            ],
         ];
     }
 
     public function dailyLimit(): int
     {
-        return self::REGISTERED_DAILY_LIMIT;
+        return max(0, AppSettings::int('auth.verified_daily_image_limit', 5));
     }
 
     public function rewritePrompt(string $prompt, string $instruction = ''): string
@@ -1108,6 +1142,42 @@ class AiImageEditor
         }
 
         return Str::limit($rewritten, 2000, '');
+    }
+
+    public function translatePrompt(string $prompt): string
+    {
+        $prompt = trim($prompt);
+
+        if ($prompt === '') {
+            throw new \InvalidArgumentException('Prompt là bắt buộc.');
+        }
+
+        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
+        $model = $this->textModel('ai.prompt_translation_model', (string) config('ai.prompt_translation_model', 'gpt-5.5'));
+
+        $this->configureReviewProvider($provider);
+
+        try {
+            $response = PromptTranslationAgent::make()->prompt(
+                "Dịch prompt tạo ảnh sau sang tiếng Việt.\n\nPrompt:\n{$prompt}",
+                provider: $provider,
+                model: $model,
+                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            throw new \InvalidArgumentException('Không dịch được prompt. Vui lòng thử lại sau.');
+        }
+
+        $data = $response instanceof Arrayable ? $response->toArray() : [];
+        $translated = trim(is_string($data['prompt'] ?? null) ? $data['prompt'] : $response->text);
+
+        if ($translated === '') {
+            throw new \InvalidArgumentException('Không dịch được prompt. Vui lòng thử lại sau.');
+        }
+
+        return Str::limit($translated, 2000, '');
     }
 
     public function promptFromImage(UploadedFile $photo): string
@@ -1592,6 +1662,86 @@ class AiImageEditor
         }
 
         return $image;
+    }
+
+
+    /**
+     * @return array{width: ?int, height: ?int, mime: ?string, target_width: ?int, target_height: ?int, meets_width_or_height: bool, ratio_delta: ?float}
+     */
+    private function measureGeneratedImage(string $binary, ?string $requestedSize): array
+    {
+        $target = $this->parsePixelSize($requestedSize);
+        $info = @getimagesizefromstring($binary);
+        $width = is_array($info) ? (int) $info[0] : null;
+        $height = is_array($info) ? (int) $info[1] : null;
+        $mime = is_array($info) ? (string) ($info['mime'] ?? 'image/png') : 'image/png';
+        $targetWidth = $target[0] ?? null;
+        $targetHeight = $target[1] ?? null;
+        // Only enforce when provider returned a measurable image; never crop/resize.
+        $meets = $targetWidth === null || $targetHeight === null || $width === null || $height === null
+            || $width >= $targetWidth
+            || $height >= $targetHeight;
+        $ratioDelta = null;
+
+        if ($width && $height && $targetWidth && $targetHeight) {
+            $ratioDelta = abs(($width / $height) - ($targetWidth / $targetHeight));
+        }
+
+        return [
+            'width' => $width,
+            'height' => $height,
+            'mime' => $mime !== '' ? $mime : 'image/png',
+            'target_width' => $targetWidth,
+            'target_height' => $targetHeight,
+            'meets_width_or_height' => $meets,
+            'ratio_delta' => $ratioDelta,
+        ];
+    }
+
+    private function providerSizePromptHint(?string $size): string
+    {
+        $pixels = $this->parsePixelSize($size);
+
+        if ($pixels === null) {
+            if ($size === 'auto' || $size === null || $size === '') {
+                return '';
+            }
+
+            return 'Generate the final image at size '.$size.'. Do not change the creative subject.';
+        }
+
+        [$width, $height] = $pixels;
+        $ratio = round($width / max(1, $height), 4);
+        $orientation = $width === $height ? 'square' : ($width > $height ? 'landscape' : 'portrait');
+        $defaults = GptImageOptions::defaultsFromSettings(sprintf('%dx%d', $width, $height));
+        $aspect = $defaults['aspect_ratio'] === 'auto' ? sprintf('%d:%d', $width, $height) : $defaults['aspect_ratio'];
+        $resolution = strtoupper($defaults['resolution']);
+
+        return implode(' ', [
+            "Output canvas {$orientation} aspect ratio {$aspect} ({$width}x{$height} pixels, {$resolution}).",
+            "The rendered image width must be at least {$width}px or height at least {$height}px.",
+            'Prefer exact pixel size when the model supports it. Do not letterbox with empty borders.',
+            'Do not change the creative subject.',
+        ]);
+    }
+
+    /**
+     * @return array{0: int, 1: int}|null
+     */
+    private function parsePixelSize(?string $size): ?array
+    {
+        if (! is_string($size) || ! preg_match('/^(\d+)x(\d+)$/', $size, $matches)) {
+            return null;
+        }
+
+        $width = (int) $matches[1];
+        $height = (int) $matches[2];
+
+        if ($width < 1 || $height < 1) {
+            return null;
+        }
+
+        return [$width, $height];
     }
 
     private function extensionFor(string $mime): string

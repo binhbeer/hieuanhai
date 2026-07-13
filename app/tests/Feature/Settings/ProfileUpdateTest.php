@@ -4,6 +4,7 @@ namespace Tests\Feature\Settings;
 
 use App\Models\AiApiKey;
 use App\Models\AiApiRequest;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -80,6 +81,25 @@ class ProfileUpdateTest extends TestCase
         $this->actingAs(User::factory()->create());
 
         $this->get(route('api-key.edit'))->assertOk()->assertSee('API key');
+    }
+
+    public function test_api_key_settings_show_configured_upgrade_link(): void
+    {
+        $user = User::factory()->create();
+        Setting::putValue('contact.zalo_url', 'https://zalo.me/0123456789');
+
+        Livewire::actingAs($user)
+            ->test('settings.api-key')
+            ->assertSee(__('Upgrade quota'))
+            ->assertSee('https://zalo.me/0123456789', false)
+            ->assertSee('target="_blank"', false)
+            ->assertSee('rel="noopener noreferrer"', false);
+
+        Setting::putValue('contact.zalo_url', false);
+
+        Livewire::actingAs($user)
+            ->test('settings.api-key')
+            ->assertDontSee(__('Upgrade quota'));
     }
 
     public function test_user_can_generate_one_settings_api_key_and_view_stats(): void

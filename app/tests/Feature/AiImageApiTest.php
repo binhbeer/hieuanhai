@@ -611,14 +611,22 @@ class AiImageApiTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test('pages::manage.settings')
+            ->assertSee(__('Image creation tools'))
+            ->assertSeeHtml('md:grid-cols-2')
             ->set('siteName', 'GenAnh Pro')
             ->set('homeTitle', 'Chỉnh ảnh AI miễn phí')
             ->set('googleMeasurementId', 'G-SZ9BZEKLZ1')
+            ->set('zaloUrl', 'https://zalo.me/0123456789')
             ->set('registrationEnabled', false)
             ->set('emailVerificationRequired', false)
             ->set('memberRequestLimit', 250)
-            ->set('textModels', ['gpt-5.5', 'gpt-5.5-mini', 'gpt-5.5-rewrite', 'gpt-5.5-vision'])
+            ->set('verifiedDailyImageLimit', 12)
+            ->set('textModels', ['gpt-5.5', 'gpt-5.5-mini', 'gpt-5.5-translation', 'gpt-5.5-rewrite', 'gpt-5.5-vision'])
             ->set('aiReviewModel', 'gpt-5.5-mini')
+            ->set('promptTranslationEnabled', false)
+            ->set('promptRewriteEnabled', false)
+            ->set('imageToPromptEnabled', false)
+            ->set('promptTranslationModel', 'gpt-5.5-translation')
             ->set('promptRewriteModel', 'gpt-5.5-rewrite')
             ->set('imageToPromptModel', 'gpt-5.5-vision')
             ->set('imageSize', '1536x1024')
@@ -632,12 +640,18 @@ class AiImageApiTest extends TestCase
         $this->assertSame('GenAnh Pro', Setting::getValue('site.name'));
         $this->assertSame('Chỉnh ảnh AI miễn phí', Setting::getValue('site.home_title'));
         $this->assertSame('G-SZ9BZEKLZ1', Setting::getValue('analytics.google_measurement_id'));
+        $this->assertSame('https://zalo.me/0123456789', Setting::getValue('contact.zalo_url'));
         $this->assertFalse((bool) Setting::getValue('auth.registration_enabled'));
         $this->assertFalse((bool) Setting::getValue('auth.email_verification_required'));
         $this->assertSame(250, Setting::getValue('auth.member_request_limit'));
+        $this->assertSame(12, Setting::getValue('auth.verified_daily_image_limit'));
         $this->assertSame(250, $key->fresh()->quota_limit);
         $this->assertSame(20, $key->fresh()->quota_used);
         $this->assertSame('gpt-5.5-mini', Setting::getValue('ai.image_review_model'));
+        $this->assertFalse((bool) Setting::getValue('ai.prompt_translation_enabled'));
+        $this->assertFalse((bool) Setting::getValue('ai.prompt_rewrite_enabled'));
+        $this->assertFalse((bool) Setting::getValue('ai.image_to_prompt_enabled'));
+        $this->assertSame('gpt-5.5-translation', Setting::getValue('ai.prompt_translation_model'));
         $this->assertSame('gpt-5.5-rewrite', Setting::getValue('ai.prompt_rewrite_model'));
         $this->assertSame('gpt-5.5-vision', Setting::getValue('ai.image_to_prompt_model'));
         $this->assertSame('1536x1024', Setting::getValue('ai.image_size'));
@@ -645,6 +659,17 @@ class AiImageApiTest extends TestCase
         $this->assertSame('original', Setting::getValue('ai.image_detail'));
         $this->assertSame('input_image', Setting::getValue('ai.image_reference_field'));
         $this->assertSame('secret-key', Setting::getValue('ai.openai_api_key'));
+    }
+
+    public function test_settings_reject_invalid_zalo_url(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->set('zaloUrl', 'not-a-url')
+            ->call('save')
+            ->assertHasErrors('zaloUrl');
     }
 
     public function test_admin_manages_separate_image_and_text_models(): void

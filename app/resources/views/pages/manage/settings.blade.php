@@ -19,10 +19,12 @@ new #[Title('Settings')] class extends Component
     public string $siteDescription = '';
     public string $siteKeywords = '';
     public string $googleMeasurementId = '';
+    public string $zaloUrl = '';
     public bool $registrationEnabled = true;
     public bool $emailVerificationRequired = true;
     public bool $autoVerifyEmail = false;
     public int $memberRequestLimit = 100;
+    public int $verifiedDailyImageLimit = 5;
     public string $aiProvider = 'openai';
 
     /** @var list<string> */
@@ -35,6 +37,10 @@ new #[Title('Settings')] class extends Component
     public string $textModel = '';
     public string $aiReviewModel = '';
     public string $tagModel = '';
+    public bool $promptTranslationEnabled = true;
+    public bool $promptRewriteEnabled = true;
+    public bool $imageToPromptEnabled = true;
+    public string $promptTranslationModel = '';
     public string $promptRewriteModel = '';
     public string $imageToPromptModel = '';
     public int $aiTimeout = 600;
@@ -73,15 +79,21 @@ new #[Title('Settings')] class extends Component
         $this->siteDescription = (string) $settings['site.description'];
         $this->siteKeywords = (string) $settings['site.keywords'];
         $this->googleMeasurementId = (string) $settings['analytics.google_measurement_id'];
+        $this->zaloUrl = (string) $settings['contact.zalo_url'];
         $this->registrationEnabled = (bool) $settings['auth.registration_enabled'];
         $this->emailVerificationRequired = (bool) $settings['auth.email_verification_required'];
         $this->autoVerifyEmail = (bool) $settings['auth.auto_verify_email'];
         $this->memberRequestLimit = (int) $settings['auth.member_request_limit'];
+        $this->verifiedDailyImageLimit = (int) $settings['auth.verified_daily_image_limit'];
         $this->aiProvider = (string) $settings['ai.image_provider'];
         $this->aiModel = (string) $settings['ai.image_model'];
         $this->textModel = (string) $settings['ai.text_model'];
         $this->aiReviewModel = (string) $settings['ai.image_review_model'];
         $this->tagModel = (string) $settings['ai.tag_model'];
+        $this->promptTranslationEnabled = (bool) $settings['ai.prompt_translation_enabled'];
+        $this->promptRewriteEnabled = (bool) $settings['ai.prompt_rewrite_enabled'];
+        $this->imageToPromptEnabled = (bool) $settings['ai.image_to_prompt_enabled'];
+        $this->promptTranslationModel = (string) $settings['ai.prompt_translation_model'];
         $this->promptRewriteModel = (string) $settings['ai.prompt_rewrite_model'];
         $this->imageToPromptModel = (string) $settings['ai.image_to_prompt_model'];
         $this->imageModels = $this->normalizedModels($settings['ai.image_models'] ?? [], [$this->aiModel]);
@@ -89,6 +101,7 @@ new #[Title('Settings')] class extends Component
             $this->textModel,
             $this->aiReviewModel,
             $this->tagModel,
+            $this->promptTranslationModel,
             $this->promptRewriteModel,
             $this->imageToPromptModel,
         ]);
@@ -105,7 +118,7 @@ new #[Title('Settings')] class extends Component
     public function openModelsModal(string $type, ?string $target = null): void
     {
         abort_unless(in_array($type, ['image', 'text'], true), 404);
-        abort_unless($target === null || in_array($target, ['image', 'text_default', 'review', 'tag', 'rewrite', 'image_to_prompt'], true), 404);
+        abort_unless($target === null || in_array($target, ['image', 'text_default', 'review', 'tag', 'translation', 'rewrite', 'image_to_prompt'], true), 404);
 
         $this->modelsModalType = $type;
         $this->modelsModalTarget = $target;
@@ -307,6 +320,7 @@ new #[Title('Settings')] class extends Component
             $model === $this->textModel ? __('Default') : null,
             $model === $this->aiReviewModel ? __('Review') : null,
             $model === $this->tagModel ? __('Metadata and tags') : null,
+            $model === $this->promptTranslationModel ? __('Prompt translation') : null,
             $model === $this->promptRewriteModel ? __('Prompt rewrite') : null,
             $model === $this->imageToPromptModel ? __('Image to prompt') : null,
         ]));
@@ -320,10 +334,12 @@ new #[Title('Settings')] class extends Component
             'siteDescription' => ['nullable', 'string', 'max:500'],
             'siteKeywords' => ['nullable', 'string', 'max:500'],
             'googleMeasurementId' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9-]+$/'],
+            'zaloUrl' => ['nullable', 'url:http,https', 'max:255'],
             'registrationEnabled' => ['boolean'],
             'emailVerificationRequired' => ['boolean'],
             'autoVerifyEmail' => ['boolean'],
             'memberRequestLimit' => ['required', 'integer', 'min:0', 'max:1000000000'],
+            'verifiedDailyImageLimit' => ['required', 'integer', 'min:0', 'max:1000'],
             'aiProvider' => ['required', 'string', 'in:openai'],
             'imageModels' => ['required', 'array', 'min:1'],
             'imageModels.*' => ['required', 'string', 'max:120', 'distinct', 'regex:/^[^\p{C}]+$/u'],
@@ -333,6 +349,10 @@ new #[Title('Settings')] class extends Component
             'textModel' => ['required', 'string', 'max:120'],
             'aiReviewModel' => ['nullable', 'string', 'max:120'],
             'tagModel' => ['nullable', 'string', 'max:120'],
+            'promptTranslationEnabled' => ['boolean'],
+            'promptRewriteEnabled' => ['boolean'],
+            'imageToPromptEnabled' => ['boolean'],
+            'promptTranslationModel' => ['nullable', 'string', 'max:120'],
             'promptRewriteModel' => ['nullable', 'string', 'max:120'],
             'imageToPromptModel' => ['nullable', 'string', 'max:120'],
             'aiTimeout' => ['required', 'integer', 'min:10', 'max:1200'],
@@ -354,10 +374,12 @@ new #[Title('Settings')] class extends Component
             'site.description' => $validated['siteDescription'] ?? '',
             'site.keywords' => $validated['siteKeywords'] ?? '',
             'analytics.google_measurement_id' => $validated['googleMeasurementId'] ?? '',
+            'contact.zalo_url' => filled($validated['zaloUrl'] ?? null) ? $validated['zaloUrl'] : false,
             'auth.registration_enabled' => (bool) $validated['registrationEnabled'],
             'auth.email_verification_required' => (bool) $validated['emailVerificationRequired'],
             'auth.auto_verify_email' => (bool) $validated['autoVerifyEmail'],
             'auth.member_request_limit' => (int) $validated['memberRequestLimit'],
+            'auth.verified_daily_image_limit' => (int) $validated['verifiedDailyImageLimit'],
             'ai.image_provider' => $validated['aiProvider'],
             'ai.image_models' => array_values($validated['imageModels']),
             'ai.text_models' => array_values($validated['textModels']),
@@ -365,6 +387,10 @@ new #[Title('Settings')] class extends Component
             'ai.text_model' => $validated['textModel'],
             'ai.image_review_model' => $validated['aiReviewModel'] ?? '',
             'ai.tag_model' => $validated['tagModel'] ?? '',
+            'ai.prompt_translation_enabled' => (bool) $validated['promptTranslationEnabled'],
+            'ai.prompt_rewrite_enabled' => (bool) $validated['promptRewriteEnabled'],
+            'ai.image_to_prompt_enabled' => (bool) $validated['imageToPromptEnabled'],
+            'ai.prompt_translation_model' => $validated['promptTranslationModel'] ?? '',
             'ai.prompt_rewrite_model' => $validated['promptRewriteModel'] ?? '',
             'ai.image_to_prompt_model' => $validated['imageToPromptModel'] ?? '',
             'ai.image_timeout' => (int) $validated['aiTimeout'],
@@ -422,6 +448,7 @@ new #[Title('Settings')] class extends Component
             'text_default' => $this->textModel = $model,
             'review' => $this->aiReviewModel = $model,
             'tag' => $this->tagModel = $model,
+            'translation' => $this->promptTranslationModel = $model,
             'rewrite' => $this->promptRewriteModel = $model,
             'image_to_prompt' => $this->imageToPromptModel = $model,
             default => null,
@@ -441,7 +468,7 @@ new #[Title('Settings')] class extends Component
             $errors['textModel'] = __('Select a text model from the managed list.');
         }
 
-        foreach (['aiReviewModel', 'tagModel', 'promptRewriteModel', 'imageToPromptModel'] as $field) {
+        foreach (['aiReviewModel', 'tagModel', 'promptTranslationModel', 'promptRewriteModel', 'imageToPromptModel'] as $field) {
             if (filled($validated[$field] ?? null) && ! in_array($validated[$field], $validated['textModels'], true)) {
                 $errors[$field] = __('Select a text model from the managed list or inherit the default.');
             }
@@ -473,6 +500,7 @@ new #[Title('Settings')] class extends Component
 			<flux:textarea wire:model="siteDescription" rows="3" label="Description" />
 			<flux:textarea wire:model="siteKeywords" rows="2" label="Keywords" />
 			<flux:input wire:model="googleMeasurementId" :label="__('Google Analytics measurement ID')" placeholder="G-SZ9BZEKLZ1" />
+			<flux:input wire:model="zaloUrl" type="url" :label="__('Upgrade Zalo URL')" :description="__('Leave blank to hide upgrade buttons.')" placeholder="http://zalo.me/0963559309" />
 		</flux:card>
 
 		<flux:card class="space-y-4">
@@ -480,10 +508,17 @@ new #[Title('Settings')] class extends Component
 				<flux:heading size="lg">{{ __('Registration') }}</flux:heading>
 				<flux:text variant="subtle">{{ __('Turn off to disable the registration page and action.') }}</flux:text>
 			</div>
-			<flux:checkbox wire:model="registrationEnabled" :label="__('Allow new user registration')" />
-			<flux:checkbox wire:model="emailVerificationRequired" :label="__('Require email verification after registration')" :description="__('Turn off to let new users log in immediately after registration.')" />
-			<flux:checkbox wire:model="autoVerifyEmail" :label="__('Automatically verify email on registration')" :description="__('Mark new accounts as verified immediately without sending a verification email.')" />
-			<flux:input wire:model="memberRequestLimit" type="number" min="0" max="1000000000" :label="__('Requests per member')" :description="__('Saving applies this lifetime request limit to all existing and future members.')" required />
+			<div class="grid gap-4 md:grid-cols-2 md:items-start">
+				<div class="space-y-4">
+					<flux:checkbox wire:model="registrationEnabled" :label="__('Allow new user registration')" />
+					<flux:checkbox wire:model="emailVerificationRequired" :label="__('Require email verification after registration')" :description="__('Turn off to let new users log in immediately after registration.')" />
+					<flux:checkbox wire:model="autoVerifyEmail" :label="__('Automatically verify email on registration')" :description="__('Mark new accounts as verified immediately without sending a verification email.')" />
+				</div>
+				<div class="space-y-4">
+					<flux:input wire:model="memberRequestLimit" type="number" min="0" max="1000000000" :label="__('Requests per member')" :description="__('Saving applies this lifetime request limit to all existing and future members.')" required />
+					<flux:input wire:model="verifiedDailyImageLimit" type="number" min="0" max="1000" :label="__('Free images per day')" :description="__('Daily free web image generations for logged-in members (verified, or on registration day). Admins are unlimited.')" required />
+				</div>
+			</div>
 		</flux:card>
 
 		<flux:card class="space-y-6">
@@ -552,8 +587,6 @@ new #[Title('Settings')] class extends Component
 					['field' => 'textModel', 'label' => __('Default text model'), 'target' => 'text_default', 'inherit' => false],
 					['field' => 'aiReviewModel', 'label' => __('Review model'), 'target' => 'review', 'inherit' => true],
 					['field' => 'tagModel', 'label' => __('Metadata and tags model'), 'target' => 'tag', 'inherit' => true],
-					['field' => 'promptRewriteModel', 'label' => __('Prompt rewrite model'), 'target' => 'rewrite', 'inherit' => true],
-					['field' => 'imageToPromptModel', 'label' => __('Image to prompt model'), 'target' => 'image_to_prompt', 'inherit' => true],
 				] as $row)
 					<div class="flex items-end gap-2" wire:key="text-model-{{ $row['target'] }}">
 						<flux:select class="flex-1" wire:model="{{ $row['field'] }}" variant="listbox" :label="$row['label']" :required="! $row['inherit']">
@@ -565,6 +598,33 @@ new #[Title('Settings')] class extends Component
 							@endforeach
 						</flux:select>
 						<flux:button type="button" icon="plus" variant="ghost" wire:click="openModelsModal('text', '{{ $row['target'] }}')" :aria-label="__('Manage text models')" />
+					</div>
+				@endforeach
+			</div>
+		</flux:card>
+
+		<flux:card class="space-y-4">
+			<div>
+				<flux:heading size="lg">{{ __('Image creation tools') }}</flux:heading>
+				<flux:text variant="subtle">{{ __('Enable prompt tools and choose a text model for each one.') }}</flux:text>
+			</div>
+			<div class="grid gap-4 md:grid-cols-2">
+				@foreach ([
+					['enabled' => 'promptTranslationEnabled', 'field' => 'promptTranslationModel', 'label' => __('Prompt translation'), 'description' => __('Translate the current prompt to Vietnamese.'), 'modelLabel' => __('Prompt translation model'), 'target' => 'translation'],
+					['enabled' => 'promptRewriteEnabled', 'field' => 'promptRewriteModel', 'label' => __('Prompt rewrite'), 'description' => __('Rewrite the current prompt with AI instructions.'), 'modelLabel' => __('Prompt rewrite model'), 'target' => 'rewrite'],
+					['enabled' => 'imageToPromptEnabled', 'field' => 'imageToPromptModel', 'label' => __('Image to prompt'), 'description' => __('Create a prompt by analyzing an uploaded image.'), 'modelLabel' => __('Image to prompt model'), 'target' => 'image_to_prompt'],
+				] as $tool)
+					<div class="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700" wire:key="image-tool-{{ $tool['target'] }}">
+						<flux:checkbox wire:model="{{ $tool['enabled'] }}" :label="$tool['label']" :description="$tool['description']" />
+						<div class="flex items-end gap-2">
+							<flux:select class="flex-1" wire:model="{{ $tool['field'] }}" variant="listbox" :label="$tool['modelLabel']">
+								<flux:select.option value="">{{ __('Inherit default text model') }}</flux:select.option>
+								@foreach ($textModels as $model)
+									<flux:select.option :value="$model">{{ $model }}</flux:select.option>
+								@endforeach
+							</flux:select>
+							<flux:button type="button" icon="plus" variant="ghost" wire:click="openModelsModal('text', '{{ $tool['target'] }}')" :aria-label="__('Manage text models')" />
+						</div>
 					</div>
 				@endforeach
 			</div>
