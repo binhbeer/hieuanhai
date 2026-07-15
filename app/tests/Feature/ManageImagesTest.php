@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
-use App\Models\AiImage;
 use App\Models\Category;
+use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,7 +25,7 @@ class ManageImagesTest extends TestCase
 
         $this->actingAs(User::factory()->create(['id' => 1]));
         $category = Category::query()->where('slug', 'ads-product')->firstOrFail();
-        $published = AiImage::create([
+        $published = GeneratedMedia::create([
             'visitor_key' => 'visitor-a',
             'prompt' => 'Published product ad',
             'provider' => 'openai',
@@ -36,7 +36,7 @@ class ManageImagesTest extends TestCase
             'is_published' => true,
             'published_at' => now(),
         ]);
-        $unpublished = AiImage::create([
+        $unpublished = GeneratedMedia::create([
             'visitor_key' => 'visitor-b',
             'prompt' => 'Unpublished portrait',
             'provider' => 'openai',
@@ -73,7 +73,7 @@ class ManageImagesTest extends TestCase
         User::factory()->create(['created_at' => now()->subDays(30)]);
 
         foreach ([true, false] as $published) {
-            $image = AiImage::create([
+            $image = GeneratedMedia::create([
                 'visitor_key' => 'dashboard-'.$published,
                 'prompt' => 'Dashboard chart image',
                 'provider' => 'openai',
@@ -85,7 +85,7 @@ class ManageImagesTest extends TestCase
             $image->forceFill(['created_at' => now()->subDay()])->save();
         }
 
-        $oldImage = AiImage::create([
+        $oldImage = GeneratedMedia::create([
             'visitor_key' => 'dashboard-old',
             'prompt' => 'Old dashboard chart image',
             'provider' => 'openai',

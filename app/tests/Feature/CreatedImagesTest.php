@@ -9,7 +9,7 @@ use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
 use App\Events\AiImageCompleted;
 use App\Jobs\CreateAiImage;
-use App\Models\AiImage;
+use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\AiImageEditor;
@@ -56,7 +56,7 @@ class CreatedImagesTest extends TestCase
             [$user->id, 'succeeded', now()->subDays(30)],
             [$other->id, 'succeeded', now()],
         ] as [$userId, $status, $createdAt]) {
-            $image = AiImage::create([
+            $image = GeneratedMedia::create([
                 'user_id' => $userId,
                 'visitor_key' => 'usage-'.$userId.'-'.$status.'-'.$createdAt->timestamp,
                 'prompt' => 'Usage chart image',
@@ -95,7 +95,7 @@ class CreatedImagesTest extends TestCase
     public function test_user_can_view_pending_image_placeholder(): void
     {
         $user = User::factory()->create();
-        AiImage::create([
+        GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Pending portrait image',
@@ -116,7 +116,7 @@ class CreatedImagesTest extends TestCase
     public function test_stale_pending_image_shows_interrupted_instead_of_queued(): void
     {
         $user = User::factory()->create();
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Interrupted portrait image',
@@ -125,7 +125,7 @@ class CreatedImagesTest extends TestCase
             'status' => 'pending',
             'request_meta' => ['progress' => 'queued'],
         ]);
-        DB::table('ai_images')->where('id', $image->id)->update([
+        DB::table('generated_media')->where('id', $image->id)->update([
             'updated_at' => now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES + 1),
         ]);
 
@@ -163,7 +163,7 @@ class CreatedImagesTest extends TestCase
     {
         User::factory()->create(); // id 1 is always admin
         $user = User::factory()->create();
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Failed portrait image',
@@ -187,7 +187,7 @@ class CreatedImagesTest extends TestCase
     public function test_admin_sees_technical_image_error_in_detail(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $admin->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Admin failed portrait image',
@@ -209,7 +209,7 @@ class CreatedImagesTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Latest failed composer image',
@@ -250,7 +250,7 @@ class CreatedImagesTest extends TestCase
         Storage::fake('public');
         Storage::disk('public')->put('ai-image-sources/202607/09/source.jpg', 'fake-image');
         $user = User::factory()->create();
-        $parent = AiImage::create([
+        $parent = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Original parent prompt',
@@ -276,7 +276,7 @@ class CreatedImagesTest extends TestCase
     public function test_edit_button_is_only_visible_to_image_owner(): void
     {
         $owner = User::factory()->create();
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $owner->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Owned image prompt',
@@ -299,7 +299,7 @@ class CreatedImagesTest extends TestCase
 
     public function test_non_owner_cannot_load_image_for_editing(): void
     {
-        $parent = AiImage::create([
+        $parent = GeneratedMedia::create([
             'user_id' => User::factory()->create()->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Private parent prompt',
@@ -322,7 +322,7 @@ class CreatedImagesTest extends TestCase
         Storage::fake('public');
         Storage::disk('public')->put('ai-image-sources/202607/09/source.jpg', 'fake-image');
         $user = User::factory()->create();
-        $parent = AiImage::create([
+        $parent = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Original parent prompt',
@@ -340,7 +340,7 @@ class CreatedImagesTest extends TestCase
             ->call('createImage')
             ->assertSet('showComposer', false);
 
-        $child = AiImage::query()->where('parent_id', $parent->id)->firstOrFail();
+        $child = GeneratedMedia::query()->where('parent_id', $parent->id)->firstOrFail();
         $pendingPath = data_get($child->request_meta, 'pending_uploads.0.path');
 
         $component->assertRedirect(route('images.index', ['image' => $child->id], absolute: false));
@@ -352,7 +352,7 @@ class CreatedImagesTest extends TestCase
     public function test_edit_without_references_keeps_empty_reference_list(): void
     {
         $user = User::factory()->create();
-        $parent = AiImage::create([
+        $parent = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Prompt-only parent',
@@ -503,7 +503,7 @@ class CreatedImagesTest extends TestCase
             ->assertSet('showComposer', false)
             ->assertSet('prompt', 'Create a small cat');
 
-        $image = AiImage::query()->latest()->firstOrFail();
+        $image = GeneratedMedia::query()->latest()->firstOrFail();
         $component->assertRedirect(route('images.index', ['image' => $image->id], absolute: false));
         $this->assertSame('pending', $image->status);
         $this->assertSame('Create a small cat', $image->prompt);
@@ -531,7 +531,7 @@ class CreatedImagesTest extends TestCase
 
         $this->assertSame('image-creation-requires-verification', session('status'));
         $this->get(route('verification.notice'))->assertSee(__('Please verify your email to continue receiving daily image generations after your registration day.'));
-        $this->assertSame(0, AiImage::query()->count());
+        $this->assertSame(0, GeneratedMedia::query()->count());
         Bus::assertNotDispatched(CreateAiImage::class);
     }
 
@@ -546,7 +546,7 @@ class CreatedImagesTest extends TestCase
             'tags' => ['chân dung', 'studio', 'ánh sáng', 'avatar'],
         ]]);
 
-        $first = AiImage::create([
+        $first = GeneratedMedia::create([
             'visitor_key' => 'visitor-a',
             'prompt' => 'Old published portrait',
             'provider' => 'openai',
@@ -556,7 +556,7 @@ class CreatedImagesTest extends TestCase
             'is_published' => true,
             'published_at' => now(),
         ]);
-        $second = AiImage::create([
+        $second = GeneratedMedia::create([
             'visitor_key' => 'visitor-b',
             'prompt' => 'Second old published portrait',
             'provider' => 'openai',
@@ -566,7 +566,7 @@ class CreatedImagesTest extends TestCase
             'is_published' => true,
             'published_at' => now(),
         ]);
-        $existing = AiImage::create([
+        $existing = GeneratedMedia::create([
             'visitor_key' => 'visitor-c',
             'prompt' => 'Already described portrait',
             'description' => 'Keep this description.',
@@ -606,7 +606,7 @@ class CreatedImagesTest extends TestCase
         $user = User::factory()->create();
         $pendingPath = 'ai-image-pending/stale.jpg';
         Storage::disk('public')->put($pendingPath, 'pending');
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Stale portrait image',
@@ -618,7 +618,7 @@ class CreatedImagesTest extends TestCase
                 'pending_uploads' => [['path' => $pendingPath]],
             ],
         ]);
-        DB::table('ai_images')->where('id', $image->id)->update([
+        DB::table('generated_media')->where('id', $image->id)->update([
             'updated_at' => now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES + 1),
         ]);
 
@@ -637,7 +637,7 @@ class CreatedImagesTest extends TestCase
     public function test_recovery_leaves_recent_pending_images_queued(): void
     {
         $user = User::factory()->create();
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Recent portrait image',
@@ -667,7 +667,7 @@ class CreatedImagesTest extends TestCase
         ]);
 
         $user = User::factory()->create();
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Created portrait image',
@@ -692,7 +692,7 @@ class CreatedImagesTest extends TestCase
         ImageMetadataAgent::fake([['title' => 'Chân dung studio', 'description' => 'Chân dung studio chuyên nghiệp, ánh sáng mềm, nền sạch, phù hợp avatar và hồ sơ công khai.', 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar', 'chuyên nghiệp']]]);
 
         $user = User::factory()->create();
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Created portrait image',
@@ -731,7 +731,7 @@ class CreatedImagesTest extends TestCase
     {
         User::factory()->create(['id' => 1]);
         $user = User::factory()->create();
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Rejected image',
@@ -757,7 +757,7 @@ class CreatedImagesTest extends TestCase
 
         $user = User::factory()->create();
         $this->actingAs($user);
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Created portrait image',

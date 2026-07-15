@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\CreateAiImage;
-use App\Models\AiImage;
+use App\Models\GeneratedMedia;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -18,7 +18,7 @@ class RecoverStaleAiImages extends Command
     {
         $count = 0;
 
-        AiImage::query()
+        GeneratedMedia::query()
             ->where('status', 'pending')
             ->where('updated_at', '<', now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES))
             ->chunkById(100, function ($images) use (&$count): void {

@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\AiTag;
 use App\Models\Category;
+use App\Models\Tag;
 use Illuminate\Support\Facades\Route;
 
 Route::bind('category', fn (string $value): Category => Category::query()
@@ -9,7 +9,7 @@ Route::bind('category', fn (string $value): Category => Category::query()
     ->where('status', 'active')
     ->firstOrFail());
 
-Route::bind('tag', fn (string $value): AiTag => AiTag::query()
+Route::bind('tag', fn (string $value): Tag => Tag::query()
     ->where('slug', $value)
     ->firstOrFail());
 

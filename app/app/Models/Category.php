@@ -38,11 +38,11 @@ class Category extends BaseModel
     }
 
     /**
-     * @return HasMany<AiImage, $this>
+     * @return HasMany<GeneratedMedia, $this>
      */
-    public function images(): HasMany
+    public function media(): HasMany
     {
-        return $this->hasMany(AiImage::class);
+        return $this->hasMany(GeneratedMedia::class);
     }
 
     public function getRouteKeyName(): string

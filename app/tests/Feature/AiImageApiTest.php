@@ -4,12 +4,12 @@ namespace Tests\Feature;
 
 use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
-use App\Models\AiApiKey;
-use App\Models\AiApiRequest;
-use App\Models\AiImage;
-use App\Models\AiTag;
+use App\Models\ApiKey;
+use App\Models\ApiRequest;
 use App\Models\Category;
+use App\Models\GeneratedMedia;
 use App\Models\Setting;
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -37,9 +37,9 @@ class AiImageApiTest extends TestCase
     {
         $user = User::factory()->create();
         $plain = 'hai_'.Str::random(48);
-        AiApiKey::create([
+        ApiKey::create([
             'user_id' => $user->id,
-            'token_hash' => AiApiKey::hashToken($plain),
+            'token_hash' => ApiKey::hashToken($plain),
             'token_prefix' => substr($plain, 0, 12),
             'quota_limit' => 1,
             'quota_used' => 0,
@@ -83,9 +83,9 @@ class AiImageApiTest extends TestCase
 
         $key->refresh();
         $this->assertSame(1, $key->quota_used);
-        $this->assertFalse(AiImage::query()->latest('id')->firstOrFail()->is_published);
-        $this->assertDatabaseHas('ai_api_requests', [
-            'ai_api_key_id' => $key->id,
+        $this->assertFalse(GeneratedMedia::query()->latest('id')->firstOrFail()->is_published);
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
             'status_code' => 201,
             'status' => 'succeeded',
             'quota_charged' => true,
@@ -114,7 +114,7 @@ class AiImageApiTest extends TestCase
                 'images' => [UploadedFile::fake()->image('source.jpg', 800, 600)],
             ]);
 
-        $image = AiImage::query()->latest('id')->firstOrFail()->load(['category', 'tags']);
+        $image = GeneratedMedia::query()->latest('id')->firstOrFail()->load(['category', 'tags']);
 
         $response
             ->assertCreated()
@@ -142,9 +142,9 @@ class AiImageApiTest extends TestCase
         $this->assertSame('meigen-123', $image->source);
         $this->assertSame('portraits', $image->category?->slug);
         $this->assertSame(['avatar', 'studio'], $image->tags->pluck('name')->values()->all());
-        $this->assertDatabaseHas('ai_api_requests', [
-            'ai_api_key_id' => $key->id,
-            'ai_image_id' => $image->id,
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
+            'media_id' => $image->id,
             'status_code' => 201,
             'status' => 'succeeded',
             'quota_charged' => true,
@@ -177,13 +177,13 @@ class AiImageApiTest extends TestCase
             ->assertJsonPath('error_code', 'IMAGE_REVIEW_BLOCKED_SEXUAL');
 
         $key->refresh();
-        $image = AiImage::query()->latest('id')->firstOrFail();
+        $image = GeneratedMedia::query()->latest('id')->firstOrFail();
         $this->assertSame(0, $key->quota_used);
         $this->assertFalse($image->is_published);
-        $this->assertSame('IMAGE_REVIEW_BLOCKED_SEXUAL', data_get(AiApiRequest::query()->latest('id')->firstOrFail()->response_meta, 'error_code'));
-        $this->assertDatabaseHas('ai_api_requests', [
-            'ai_api_key_id' => $key->id,
-            'ai_image_id' => $image->id,
+        $this->assertSame('IMAGE_REVIEW_BLOCKED_SEXUAL', data_get(ApiRequest::query()->latest('id')->firstOrFail()->response_meta, 'error_code'));
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
+            'media_id' => $image->id,
             'status_code' => 422,
             'status' => 'validation_failed',
             'quota_charged' => false,
@@ -221,9 +221,9 @@ class AiImageApiTest extends TestCase
         $otherUser = User::factory()->create();
         $category = Category::create(['name' => 'Search Portraits', 'slug' => 'search-portraits', 'sort_order' => 1, 'status' => 'active']);
         $otherCategory = Category::create(['name' => 'Search Products', 'slug' => 'search-products', 'sort_order' => 2, 'status' => 'active']);
-        $tag = AiTag::create(['name' => 'Meigen Tag', 'slug' => 'meigen-tag']);
-        $otherTag = AiTag::create(['name' => 'Other Tag', 'slug' => 'other-tag']);
-        $image = AiImage::create([
+        $tag = Tag::create(['name' => 'Meigen Tag', 'slug' => 'meigen-tag']);
+        $otherTag = Tag::create(['name' => 'Other Tag', 'slug' => 'other-tag']);
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'category_id' => $category->id,
             'title' => 'Meigen portrait result',
@@ -238,7 +238,7 @@ class AiImageApiTest extends TestCase
             'published_at' => now(),
         ]);
         $image->tags()->sync([$tag->id]);
-        $other = AiImage::create([
+        $other = GeneratedMedia::create([
             'user_id' => $otherUser->id,
             'category_id' => $otherCategory->id,
             'title' => 'Other result',
@@ -253,7 +253,7 @@ class AiImageApiTest extends TestCase
             'published_at' => now()->subMinute(),
         ]);
         $other->tags()->sync([$otherTag->id]);
-        AiImage::create([
+        GeneratedMedia::create([
             'user_id' => $user->id,
             'category_id' => $category->id,
             'title' => 'Hidden meigen result',
@@ -347,8 +347,8 @@ class AiImageApiTest extends TestCase
 
         $key->refresh();
         $this->assertSame(0, $key->quota_used);
-        $this->assertDatabaseHas('ai_api_requests', [
-            'ai_api_key_id' => $key->id,
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
             'status_code' => 422,
             'status' => 'validation_failed',
             'quota_charged' => false,
@@ -369,8 +369,8 @@ class AiImageApiTest extends TestCase
 
         $key->refresh();
         $this->assertSame(0, $key->quota_used);
-        $this->assertDatabaseHas('ai_api_requests', [
-            'ai_api_key_id' => $key->id,
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
             'status_code' => 422,
             'status' => 'validation_failed',
             'quota_charged' => false,
@@ -397,8 +397,8 @@ class AiImageApiTest extends TestCase
         Http::assertNothingSent();
         $key->refresh();
         $this->assertSame(0, $key->quota_used);
-        $this->assertDatabaseHas('ai_api_requests', [
-            'ai_api_key_id' => $key->id,
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
             'status_code' => 422,
             'status' => 'validation_failed',
             'quota_charged' => false,
@@ -421,12 +421,12 @@ class AiImageApiTest extends TestCase
 
         $key->refresh();
         $this->assertSame(0, $key->quota_used);
-        $this->assertDatabaseHas('ai_api_requests', [
-            'ai_api_key_id' => $key->id,
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
             'status_code' => 503,
             'quota_charged' => false,
         ]);
-        $this->assertSame('IMAGE_REVIEW_UNAVAILABLE', data_get(AiApiRequest::query()->latest('id')->firstOrFail()->response_meta, 'error_code'));
+        $this->assertSame('IMAGE_REVIEW_UNAVAILABLE', data_get(ApiRequest::query()->latest('id')->firstOrFail()->response_meta, 'error_code'));
     }
 
     public function test_api_allows_non_blocked_false_review_policy(): void
@@ -489,8 +489,8 @@ class AiImageApiTest extends TestCase
         Http::assertNothingSent();
         $key->refresh();
         $this->assertSame(1, $key->quota_used);
-        $this->assertDatabaseHas('ai_api_requests', [
-            'ai_api_key_id' => $key->id,
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
             'status_code' => 429,
             'status' => 'quota_exceeded',
             'quota_charged' => false,
@@ -618,10 +618,10 @@ class AiImageApiTest extends TestCase
             [now()->subDay(), false],
             [now()->subDays(30), true],
         ] as [$createdAt, $charged]) {
-            AiApiRequest::create([
-                'ai_api_key_id' => $key->id,
+            ApiRequest::create([
+                'api_key_id' => $key->id,
                 'user_id' => $user->id,
-                'ai_image_id' => null,
+                'media_id' => null,
                 'ip_address' => '127.0.0.1',
                 'status_code' => $charged ? 200 : 422,
                 'status' => $charged ? 'succeeded' : 'failed',
@@ -683,11 +683,11 @@ class AiImageApiTest extends TestCase
             ->call('generateApiKey')
             ->assertHasNoErrors();
 
-        $key = AiApiKey::query()->whereBelongsTo($user)->sole();
+        $key = ApiKey::query()->whereBelongsTo($user)->sole();
         $plain = $component->get('newApiToken');
 
         $this->assertIsString($plain);
-        $this->assertSame($key->token_hash, AiApiKey::hashToken($plain));
+        $this->assertSame($key->token_hash, ApiKey::hashToken($plain));
         $this->assertSame(100, $key->quota_limit);
     }
 
@@ -946,7 +946,7 @@ class AiImageApiTest extends TestCase
             ->call('createKey');
 
         $firstPlain = $component->get('newToken');
-        $keyId = AiApiKey::query()->where('user_id', $admin->id)->firstOrFail()->id;
+        $keyId = ApiKey::query()->where('user_id', $admin->id)->firstOrFail()->id;
 
         $component
             ->set('quotaLimit', 25)
@@ -958,14 +958,14 @@ class AiImageApiTest extends TestCase
 
         $this->assertIsString($firstPlain);
         $this->assertIsString($secondPlain);
-        $this->assertSame(1, AiApiKey::query()->where('user_id', $admin->id)->count());
-        $this->assertDatabaseMissing('ai_api_keys', [
+        $this->assertSame(1, ApiKey::query()->where('user_id', $admin->id)->count());
+        $this->assertDatabaseMissing('api_keys', [
             'id' => $keyId,
-            'token_hash' => AiApiKey::hashToken($firstPlain),
+            'token_hash' => ApiKey::hashToken($firstPlain),
         ]);
-        $this->assertDatabaseHas('ai_api_keys', [
+        $this->assertDatabaseHas('api_keys', [
             'id' => $keyId,
-            'token_hash' => AiApiKey::hashToken($secondPlain),
+            'token_hash' => ApiKey::hashToken($secondPlain),
             'quota_limit' => 25,
         ]);
     }
@@ -997,25 +997,25 @@ class AiImageApiTest extends TestCase
 
         $this->assertIsString($newPlain);
         $this->assertStringStartsWith('genanh_', $newPlain);
-        $this->assertDatabaseMissing('ai_api_keys', [
+        $this->assertDatabaseMissing('api_keys', [
             'id' => $targetKey->id,
-            'token_hash' => AiApiKey::hashToken($oldPlain),
+            'token_hash' => ApiKey::hashToken($oldPlain),
         ]);
-        $this->assertDatabaseHas('ai_api_keys', [
+        $this->assertDatabaseHas('api_keys', [
             'id' => $targetKey->id,
-            'token_hash' => AiApiKey::hashToken($newPlain),
+            'token_hash' => ApiKey::hashToken($newPlain),
         ]);
-        $this->assertDatabaseHas('ai_api_keys', [
+        $this->assertDatabaseHas('api_keys', [
             'id' => $otherKey->id,
-            'token_hash' => AiApiKey::hashToken($otherPlain),
+            'token_hash' => ApiKey::hashToken($otherPlain),
         ]);
     }
 
     public function test_api_key_settings_shows_safe_summary_and_usage_guide(): void
     {
         [$plain, $key] = $this->apiKey(quotaLimit: 5, quotaUsed: 2);
-        AiApiRequest::create([
-            'ai_api_key_id' => $key->id,
+        ApiRequest::create([
+            'api_key_id' => $key->id,
             'user_id' => $key->user_id,
             'status_code' => 201,
             'status' => 'succeeded',
@@ -1066,13 +1066,13 @@ class AiImageApiTest extends TestCase
     }
 
     /**
-     * @return array{0: string, 1: AiApiKey}
+     * @return array{0: string, 1: ApiKey}
      */
     private function apiKey(?User $user = null, int $quotaLimit = 100, int $quotaUsed = 0): array
     {
         $user ??= User::factory()->create();
-        $token = AiApiKey::newToken();
-        $key = AiApiKey::create([
+        $token = ApiKey::newToken();
+        $key = ApiKey::create([
             'user_id' => $user->id,
             'token_hash' => $token['hash'],
             'token_prefix' => $token['prefix'],

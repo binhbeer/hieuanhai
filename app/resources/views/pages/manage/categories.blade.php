@@ -138,7 +138,7 @@ new #[Title('Manage categories')] class extends Component
     public function categories()
     {
         return Category::query()
-            ->withCount('images')
+            ->withCount(['media as images_count'])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();

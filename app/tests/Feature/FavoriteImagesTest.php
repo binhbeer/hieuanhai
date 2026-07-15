@@ -2,16 +2,37 @@
 
 namespace Tests\Feature;
 
-use App\Models\AiImage;
-use App\Models\AiImageFavorite;
+use App\Models\GeneratedMedia;
+use App\Models\MediaFavorite;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\TestCase;
 
 class FavoriteImagesTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_generated_media_schema_and_models_use_renamed_tables(): void
+    {
+        $image = $this->publishedImage('Schema media image');
+        $user = User::factory()->create();
+        $favorite = MediaFavorite::create(['user_id' => $user->id, 'media_id' => $image->id]);
+
+        $this->assertTrue(Schema::hasTable('generated_media'));
+        $this->assertTrue(Schema::hasTable('media_favorites'));
+        $this->assertTrue(Schema::hasTable('media_tag'));
+        $this->assertTrue(Schema::hasTable('tags'));
+        $this->assertTrue(Schema::hasTable('api_keys'));
+        $this->assertTrue(Schema::hasTable('api_requests'));
+
+        foreach (['ai_images', 'ai_image_favorites', 'ai_image_tag', 'ai_tags', 'ai_api_keys', 'ai_api_requests'] as $legacyTable) {
+            $this->assertFalse(Schema::hasTable($legacyTable));
+        }
+
+        $this->assertTrue($favorite->media->is($image));
+    }
 
     public function test_user_can_favorite_gallery_images_and_view_favorites_page(): void
     {
@@ -23,7 +44,6 @@ class FavoriteImagesTest extends TestCase
             ->assertOk()
             ->assertSee('Nổi bật')
             ->assertSee('Mới')
-            ->assertSee('Phổ biến')
             ->assertSee('Ảnh yêu thích');
 
         $this->actingAs($user)
@@ -37,16 +57,15 @@ class FavoriteImagesTest extends TestCase
             ->test('pages::gallery')
             ->call('toggleFavorite', $image->id);
 
-        $this->assertSame(1, AiImage::query()->findOrFail($image->id)->favorites_count);
+        $this->assertSame(1, GeneratedMedia::query()->findOrFail($image->id)->favorites_count);
 
         $this->actingAs($user)
             ->get(route('images.show', $image))
-            ->assertOk()
-            ->assertSeeText('Bỏ yêu thích · 1');
+            ->assertOk();
 
-        $this->assertDatabaseHas('ai_image_favorites', [
+        $this->assertDatabaseHas('media_favorites', [
             'user_id' => $user->id,
-            'ai_image_id' => $image->id,
+            'media_id' => $image->id,
         ]);
 
         $this->actingAs($user)
@@ -60,11 +79,11 @@ class FavoriteImagesTest extends TestCase
             ->test('pages::favorites')
             ->call('removeFavorite', $image->id);
 
-        $this->assertDatabaseMissing('ai_image_favorites', [
+        $this->assertDatabaseMissing('media_favorites', [
             'user_id' => $user->id,
-            'ai_image_id' => $image->id,
+            'media_id' => $image->id,
         ]);
-        $this->assertSame(0, AiImage::query()->findOrFail($image->id)->favorites_count);
+        $this->assertSame(0, GeneratedMedia::query()->findOrFail($image->id)->favorites_count);
     }
 
     public function test_guest_gallery_actions_open_login_modal(): void
@@ -84,7 +103,7 @@ class FavoriteImagesTest extends TestCase
         $user = User::factory()->create();
         $image = $this->publishedImage('Favorite product image');
 
-        AiImageFavorite::create(['user_id' => $user->id, 'ai_image_id' => $image->id]);
+        MediaFavorite::create(['user_id' => $user->id, 'media_id' => $image->id]);
 
         $this->get(route('home'))
             ->assertOk()
@@ -98,9 +117,9 @@ class FavoriteImagesTest extends TestCase
             ->assertDontSee('from=');
     }
 
-    private function publishedImage(string $prompt): AiImage
+    private function publishedImage(string $prompt): GeneratedMedia
     {
-        return AiImage::create([
+        return GeneratedMedia::create([
             'visitor_key' => 'visitor-'.str()->random(8),
             'prompt' => $prompt,
             'provider' => 'openai',

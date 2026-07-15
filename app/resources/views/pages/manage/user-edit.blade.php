@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\AiApiKey;
-use App\Models\AiApiRequest;
+use App\Models\ApiKey;
+use App\Models\ApiRequest;
 use App\Models\User;
 use App\Support\AppSettings;
 use Flux\Flux;
@@ -123,7 +123,7 @@ new #[Title('Edit user')] class extends Component
     {
         abort_unless(auth()->user()?->isAdmin(), 403);
 
-        $token = AiApiKey::newToken();
+        $token = ApiKey::newToken();
         $key = $this->apiKey;
 
         if ($key) {
@@ -134,7 +134,7 @@ new #[Title('Edit user')] class extends Component
                 'last_used_at' => null,
             ]);
         } else {
-            $key = AiApiKey::create([
+            $key = ApiKey::create([
                 'user_id' => $this->user->id,
                 'token_hash' => $token['hash'],
                 'token_prefix' => $token['prefix'],
@@ -185,9 +185,9 @@ new #[Title('Edit user')] class extends Component
     }
 
     #[Computed]
-    public function apiKey(): ?AiApiKey
+    public function apiKey(): ?ApiKey
     {
-        return AiApiKey::query()
+        return ApiKey::query()
             ->disableModelCaching()
             ->where('user_id', $this->user->id)
             ->latest()
@@ -203,7 +203,7 @@ new #[Title('Edit user')] class extends Component
             return ['total' => 0, 'success' => 0, 'failed' => 0];
         }
 
-        $query = AiApiRequest::query()->where('ai_api_key_id', $key->id);
+        $query = ApiRequest::query()->where('api_key_id', $key->id);
 
         return [
             'total' => (clone $query)->count(),
@@ -229,8 +229,8 @@ new #[Title('Edit user')] class extends Component
         }
 
         $from = today()->subDays(29);
-        $rows = AiApiRequest::query()
-            ->where('ai_api_key_id', $key->id)
+        $rows = ApiRequest::query()
+            ->where('api_key_id', $key->id)
             ->where('created_at', '>=', $from)
             ->selectRaw('DATE(created_at) as date, COUNT(*) as total, SUM(quota_charged = 1) as charged')
             ->groupByRaw('DATE(created_at)')
@@ -255,13 +255,13 @@ new #[Title('Edit user')] class extends Component
         $key = $this->apiKey;
 
         if (! $key) {
-            return AiApiRequest::query()->whereRaw('0 = 1')->paginate(15);
+            return ApiRequest::query()->whereRaw('0 = 1')->paginate(15);
         }
 
         $search = trim($this->logSearch);
 
-        return AiApiRequest::query()
-            ->where('ai_api_key_id', $key->id)
+        return ApiRequest::query()
+            ->where('api_key_id', $key->id)
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('status', 'like', '%'.$search.'%')
@@ -467,8 +467,8 @@ new #[Title('Edit user')] class extends Component
 									@if ($log->ip_address)
 										· {{ $log->ip_address }}
 									@endif
-									@if ($log->ai_image_id)
-										· image #{{ $log->ai_image_id }}
+									@if ($log->media_id)
+										· image #{{ $log->media_id }}
 									@endif
 								</flux:text>
 								@if ($log->error)

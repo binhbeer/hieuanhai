@@ -29,7 +29,7 @@ use Illuminate\Support\Str;
     'quota_used',
     'last_used_at',
 ])]
-class AiApiKey extends BaseModel
+class ApiKey extends BaseModel
 {
     public static function hashToken(string $token): string
     {
@@ -82,10 +82,10 @@ class AiApiKey extends BaseModel
     }
 
     /**
-     * @return HasMany<AiApiRequest, $this>
+     * @return HasMany<ApiRequest, $this>
      */
     public function requests(): HasMany
     {
-        return $this->hasMany(AiApiRequest::class);
+        return $this->hasMany(ApiRequest::class);
     }
 }

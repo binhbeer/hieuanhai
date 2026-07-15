@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\AiTag;
+use App\Models\Tag;
 use App\Models\Category;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
@@ -26,20 +26,20 @@ new class extends Component {
     }
 
     /**
-     * @return Collection<int, AiTag>
+     * @return Collection<int, Tag>
      */
     #[Computed]
     public function tags(): Collection
     {
         $recentImages = fn($query) => $query
             ->publiclyVisible()
-            ->where('ai_images.created_at', '>=', now()->subDay())
-            ->when($this->category, fn($query, Category $category) => $query->where('ai_images.category_id', (string) $category->id));
+            ->where('generated_media.created_at', '>=', now()->subDay())
+            ->when($this->category, fn($query, Category $category) => $query->where('generated_media.category_id', (string) $category->id));
 
-        return AiTag::query()
-            ->withCount(['images as recent_images_count' => $recentImages])
+        return Tag::query()
+            ->withCount(['media as recent_images_count' => $recentImages])
             ->when($this->mode === 'popular', fn($query) => $query
-                ->whereHas('images', $recentImages)
+                ->whereHas('media', $recentImages)
                 ->orderByDesc('recent_images_count'))
             ->orderBy('name')
             ->limit(20)

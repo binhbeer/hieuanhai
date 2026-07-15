@@ -60,8 +60,10 @@ use Illuminate\Support\Str;
     'request_meta',
     'response_meta',
 ])]
-class AiImage extends BaseModel
+class GeneratedMedia extends BaseModel
 {
+    protected $table = 'generated_media';
+
     public function getRouteKey(): string
     {
         return $this->routeKeySlug();
@@ -106,8 +108,8 @@ class AiImage extends BaseModel
     }
 
     /**
-     * @param  Builder<AiImage>  $query
-     * @return Builder<AiImage>
+     * @param  Builder<GeneratedMedia>  $query
+     * @return Builder<GeneratedMedia>
      */
     public function scopePubliclyVisible(Builder $query): Builder
     {
@@ -134,7 +136,7 @@ class AiImage extends BaseModel
     }
 
     /**
-     * @return BelongsTo<AiImage, $this>
+     * @return BelongsTo<GeneratedMedia, $this>
      */
     public function parent(): BelongsTo
     {
@@ -142,19 +144,19 @@ class AiImage extends BaseModel
     }
 
     /**
-     * @return HasMany<AiImageFavorite, $this>
+     * @return HasMany<MediaFavorite, $this>
      */
     public function favorites(): HasMany
     {
-        return $this->hasMany(AiImageFavorite::class);
+        return $this->hasMany(MediaFavorite::class, 'media_id');
     }
 
     /**
-     * @return BelongsToMany<AiTag, $this>
+     * @return BelongsToMany<Tag, $this>
      */
     public function tags(): BelongsToMany
     {
-        return $this->belongsToMany(AiTag::class, 'ai_image_tag', 'ai_image_id', 'ai_tag_id')->withTimestamps();
+        return $this->belongsToMany(Tag::class, 'media_tag', 'media_id', 'tag_id')->withTimestamps();
     }
 
     protected function casts(): array

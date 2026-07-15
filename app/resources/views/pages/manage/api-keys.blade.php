@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\AiApiKey;
-use App\Models\AiApiRequest;
+use App\Models\ApiKey;
+use App\Models\ApiRequest;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
@@ -29,8 +29,8 @@ new #[Title('Manage API keys')] class extends Component
     {
         $this->validate(['quotaLimit' => ['required', 'integer', 'min:0', 'max:1000000000']]);
 
-        $token = AiApiKey::newToken();
-        $key = AiApiKey::query()->disableModelCaching()->where('user_id', Auth::id())->latest()->first();
+        $token = ApiKey::newToken();
+        $key = ApiKey::query()->disableModelCaching()->where('user_id', Auth::id())->latest()->first();
 
         if ($key) {
             $key->update([
@@ -41,7 +41,7 @@ new #[Title('Manage API keys')] class extends Component
                 'last_used_at' => null,
             ]);
         } else {
-            $key = AiApiKey::create([
+            $key = ApiKey::create([
                 'user_id' => Auth::id(),
                 'token_hash' => $token['hash'],
                 'token_prefix' => $token['prefix'],
@@ -65,7 +65,7 @@ new #[Title('Manage API keys')] class extends Component
             return;
         }
 
-        $token = AiApiKey::newToken();
+        $token = ApiKey::newToken();
         $key->update([
             'token_hash' => $token['hash'],
             'token_prefix' => $token['prefix'],
@@ -107,7 +107,7 @@ new #[Title('Manage API keys')] class extends Component
     #[Computed]
     public function keys()
     {
-        return AiApiKey::query()
+        return ApiKey::query()
             ->disableModelCaching()
             ->where('user_id', Auth::id())
             ->withCount(['requests', 'requests as success_count' => fn ($query) => $query->where('status', 'succeeded'), 'requests as failed_count' => fn ($query) => $query->where('status', '!=', 'succeeded')])
@@ -124,7 +124,7 @@ new #[Title('Manage API keys')] class extends Component
             return ['total' => 0, 'success' => 0, 'failed' => 0, 'avg_duration' => 0];
         }
 
-        $query = AiApiRequest::query()->whereIn('ai_api_key_id', $keyIds);
+        $query = ApiRequest::query()->whereIn('api_key_id', $keyIds);
 
         return [
             'total' => (clone $query)->count(),
@@ -139,12 +139,12 @@ new #[Title('Manage API keys')] class extends Component
     {
         $keyIds = $this->keys->pluck('id');
 
-        return $keyIds->isEmpty() ? collect() : AiApiRequest::query()->with('key')->whereIn('ai_api_key_id', $keyIds)->latest()->limit(20)->get();
+        return $keyIds->isEmpty() ? collect() : ApiRequest::query()->with('key')->whereIn('api_key_id', $keyIds)->latest()->limit(20)->get();
     }
 
-    private function findKey(int $id): ?AiApiKey
+    private function findKey(int $id): ?ApiKey
     {
-        return AiApiKey::query()->disableModelCaching()->where('user_id', Auth::id())->find($id);
+        return ApiKey::query()->disableModelCaching()->where('user_id', Auth::id())->find($id);
     }
 
     private function refreshData(): void
@@ -319,7 +319,7 @@ new #[Title('Manage API keys')] class extends Component
 				<div class="grid gap-2 rounded-xl bg-white/5 p-3 text-sm sm:grid-cols-[1fr_auto]"
 					wire:key="api-log-{{ $log->id }}">
 					<div>
-						<div class="font-medium">Key #{{ $log->ai_api_key_id }} · {{ $log->status }} · HTTP {{ $log->status_code }}
+						<div class="font-medium">Key #{{ $log->api_key_id }} · {{ $log->status }} · HTTP {{ $log->status_code }}
 						</div>
 						<flux:text variant="subtle">{{ $log->created_at?->diffForHumans() }} · {{ number_format($log->duration_ms) }}ms
 							· quota {{ $log->quota_charged ? 'charged' : 'free' }}</flux:text>

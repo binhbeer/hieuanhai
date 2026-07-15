@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AiApiKey;
-use App\Models\AiApiRequest;
-use App\Models\AiImage;
-use App\Models\AiTag;
+use App\Models\ApiKey;
+use App\Models\ApiRequest;
 use App\Models\Category;
+use App\Models\GeneratedMedia;
+use App\Models\Tag;
 use App\Services\AiImageEditor;
 use App\Support\AppSettings;
 use Illuminate\Http\JsonResponse;
@@ -64,7 +64,7 @@ class AiImageController extends Controller
         $userId = $request->integer('user');
         $perPage = min(100, max(1, $request->integer('per_page', 24)));
 
-        $images = AiImage::query()
+        $images = GeneratedMedia::query()
             ->with(['category', 'tags', 'user'])
             ->publiclyVisible()
             ->when($keyword !== '', function ($query) use ($keyword): void {
@@ -84,7 +84,7 @@ class AiImageController extends Controller
             ->withQueryString();
 
         return response()->json([
-            'data' => $images->getCollection()->map(fn (AiImage $image): array => $this->searchImagePayload($image, $editor))->values()->all(),
+            'data' => $images->getCollection()->map(fn (GeneratedMedia $image): array => $this->searchImagePayload($image, $editor))->values()->all(),
             'meta' => [
                 'current_page' => $images->currentPage(),
                 'last_page' => $images->lastPage(),
@@ -99,7 +99,7 @@ class AiImageController extends Controller
         $startedAt = microtime(true);
         $key = $request->attributes->get('ai_api_key');
 
-        if (! $key instanceof AiApiKey) {
+        if (! $key instanceof ApiKey) {
             return response()->json(['message' => 'API key không hợp lệ.'], 401);
         }
 
@@ -177,7 +177,7 @@ class AiImageController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function searchImagePayload(AiImage $image, AiImageEditor $editor): array
+    private function searchImagePayload(GeneratedMedia $image, AiImageEditor $editor): array
     {
         return [
             'id' => $image->id,
@@ -192,7 +192,7 @@ class AiImageController extends Controller
                 'name' => $image->category->name,
                 'slug' => $image->category->slug,
             ] : null,
-            'tags' => $image->tags->map(fn (AiTag $tag): array => [
+            'tags' => $image->tags->map(fn (Tag $tag): array => [
                 'id' => $tag->id,
                 'name' => $tag->name,
                 'slug' => $tag->slug,
@@ -217,7 +217,7 @@ class AiImageController extends Controller
     /**
      * @return array{limit: int, used: int, remaining: int}
      */
-    private function quotaPayload(AiApiKey $key): array
+    private function quotaPayload(ApiKey $key): array
     {
         return [
             'limit' => $key->quota_limit,
@@ -229,7 +229,7 @@ class AiImageController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function responsePayload(AiImage $image, AiImageEditor $editor, AiApiKey $key, bool $publish): array
+    private function responsePayload(GeneratedMedia $image, AiImageEditor $editor, ApiKey $key, bool $publish): array
     {
         $payload = [
             'id' => $image->id,
@@ -265,7 +265,7 @@ class AiImageController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function responseMeta(AiImage $image, bool $publish): array
+    private function responseMeta(GeneratedMedia $image, bool $publish): array
     {
         $meta = [
             'image_id' => $image->id,
@@ -299,7 +299,7 @@ class AiImageController extends Controller
      * @param  array<string, mixed>  $responseMeta
      */
     private function logRequest(
-        AiApiKey $key,
+        ApiKey $key,
         Request $request,
         float $startedAt,
         int $statusCode,
@@ -309,10 +309,10 @@ class AiImageController extends Controller
         ?string $error,
         array $responseMeta = [],
     ): void {
-        AiApiRequest::create([
-            'ai_api_key_id' => $key->id,
+        ApiRequest::create([
+            'api_key_id' => $key->id,
             'user_id' => $key->user_id,
-            'ai_image_id' => $imageId,
+            'media_id' => $imageId,
             'ip_address' => $request->ip(),
             'status_code' => $statusCode,
             'status' => $status,

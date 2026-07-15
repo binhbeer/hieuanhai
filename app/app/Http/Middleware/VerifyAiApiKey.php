@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\AiApiKey;
+use App\Models\ApiKey;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
@@ -22,9 +22,9 @@ class VerifyAiApiKey
             return $this->unauthorized();
         }
 
-        $key = AiApiKey::query()
+        $key = ApiKey::query()
             ->with('user')
-            ->where('token_hash', AiApiKey::hashToken($token))
+            ->where('token_hash', ApiKey::hashToken($token))
             ->first();
 
         $user = $key?->user;

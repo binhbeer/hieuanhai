@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\AiImage;
-use App\Models\AiTag;
 use App\Models\Category;
+use App\Models\GeneratedMedia;
+use App\Models\Tag;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
@@ -19,7 +19,7 @@ Schedule::command('queue:monitor redis:default --max=10')->everyMinute()->withou
 Schedule::command('sitemap:generate')->everyTenMinutes();
 
 Artisan::command('sitemap:generate', function (): void {
-    $publicImages = fn () => AiImage::query()->publiclyVisible();
+    $publicImages = fn () => GeneratedMedia::query()->publiclyVisible();
 
     $publicImageFilter = fn ($query) => $query->publiclyVisible();
 
@@ -79,14 +79,14 @@ Artisan::command('sitemap:generate', function (): void {
     $tags = SitemapFile::create();
     $tagsLastModified = null;
 
-    AiTag::query()
-        ->whereHas('images', $publicImageFilter)
+    Tag::query()
+        ->whereHas('media', $publicImageFilter)
         ->orderBy('name')
         ->get()
-        ->each(function (AiTag $tag) use ($maxDate, $tags, $url, &$tagsLastModified): void {
-            $lastModified = $tag->images()
+        ->each(function (Tag $tag) use ($maxDate, $tags, $url, &$tagsLastModified): void {
+            $lastModified = $tag->media()
                 ->publiclyVisible()
-                ->max('ai_images.updated_at') ?? $tag->updated_at;
+                ->max('generated_media.updated_at') ?? $tag->updated_at;
 
             $tags->add($url(route('tags.show', $tag), $lastModified));
             $tagsLastModified = $maxDate($tagsLastModified, $lastModified);
@@ -102,7 +102,7 @@ Artisan::command('sitemap:generate', function (): void {
         ->orderByRaw('COALESCE(published_at, created_at) desc')
         ->limit(100)
         ->get()
-        ->each(function (AiImage $image) use ($latestImages, $maxDate, $url, &$latestImagesLastModified): void {
+        ->each(function (GeneratedMedia $image) use ($latestImages, $maxDate, $url, &$latestImagesLastModified): void {
             $lastModified = $image->updated_at ?? $image->published_at ?? $image->created_at;
 
             $latestImages->add($url(route('images.show', $image), $lastModified));

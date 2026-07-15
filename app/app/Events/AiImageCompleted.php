@@ -2,7 +2,7 @@
 
 namespace App\Events;
 
-use App\Models\AiImage;
+use App\Models\GeneratedMedia;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -12,7 +12,7 @@ class AiImageCompleted implements ShouldBroadcastNow
 {
     use Dispatchable, SerializesModels;
 
-    public function __construct(public AiImage $image) {}
+    public function __construct(public GeneratedMedia $image) {}
 
     /**
      * @return array<int, PrivateChannel>

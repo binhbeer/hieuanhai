@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Settings;
 
-use App\Models\AiApiKey;
-use App\Models\AiApiRequest;
+use App\Models\ApiKey;
+use App\Models\ApiRequest;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -113,15 +113,15 @@ class ProfileUpdateTest extends TestCase
             ->assertHasNoErrors();
 
         $firstPlain = $component->get('newApiToken');
-        $key = AiApiKey::query()->where('user_id', $user->id)->firstOrFail();
+        $key = ApiKey::query()->where('user_id', $user->id)->firstOrFail();
 
         $this->assertIsString($firstPlain);
         $this->assertStringStartsWith('genanh_', $firstPlain);
         $this->assertSame(100, $key->quota_limit);
 
         $key->update(['quota_used' => 1]);
-        AiApiRequest::create([
-            'ai_api_key_id' => $key->id,
+        ApiRequest::create([
+            'api_key_id' => $key->id,
             'user_id' => $user->id,
             'status_code' => 201,
             'status' => 'succeeded',
@@ -137,14 +137,14 @@ class ProfileUpdateTest extends TestCase
         $secondPlain = $component->get('newApiToken');
 
         $this->assertIsString($secondPlain);
-        $this->assertSame(1, AiApiKey::query()->where('user_id', $user->id)->count());
-        $this->assertDatabaseMissing('ai_api_keys', [
+        $this->assertSame(1, ApiKey::query()->where('user_id', $user->id)->count());
+        $this->assertDatabaseMissing('api_keys', [
             'id' => $key->id,
-            'token_hash' => AiApiKey::hashToken($firstPlain),
+            'token_hash' => ApiKey::hashToken($firstPlain),
         ]);
-        $this->assertDatabaseHas('ai_api_keys', [
+        $this->assertDatabaseHas('api_keys', [
             'id' => $key->id,
-            'token_hash' => AiApiKey::hashToken($secondPlain),
+            'token_hash' => ApiKey::hashToken($secondPlain),
         ]);
     }
 

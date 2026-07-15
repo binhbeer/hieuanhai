@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\AiImage;
-use App\Models\AiImageFavorite;
+use App\Models\GeneratedMedia;
+use App\Models\MediaFavorite;
 use App\Services\AiImageEditor;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
@@ -13,22 +13,22 @@ new #[Title('Ảnh yêu thích')] class extends Component
     #[Computed]
     public function images()
     {
-        return AiImage::query()
-            ->select('ai_images.*')
+        return GeneratedMedia::query()
+            ->select('generated_media.*')
             ->with(['category', 'user'])
-            ->join('ai_image_favorites', 'ai_image_favorites.ai_image_id', '=', 'ai_images.id')
-            ->where('ai_image_favorites.user_id', (int) Auth::id())
+            ->join('media_favorites', 'media_favorites.media_id', '=', 'generated_media.id')
+            ->where('media_favorites.user_id', (int) Auth::id())
             ->publiclyVisible()
-            ->latest('ai_image_favorites.created_at')
+            ->latest('media_favorites.created_at')
             ->limit(120)
             ->get();
     }
 
     public function removeFavorite(int $id): void
     {
-        AiImageFavorite::query()
+        MediaFavorite::query()
             ->where('user_id', (int) Auth::id())
-            ->where('ai_image_id', $id)
+            ->where('media_id', $id)
             ->first()
             ?->delete();
 
@@ -37,7 +37,7 @@ new #[Title('Ảnh yêu thích')] class extends Component
 
     public function useAsPrompt(int $id): void
     {
-        $image = AiImage::query()
+        $image = GeneratedMedia::query()
             ->publiclyVisible()
             ->whereKey($id)
             ->first();
@@ -49,22 +49,22 @@ new #[Title('Ảnh yêu thích')] class extends Component
         $this->dispatch('use-prompt', prompt: $image->prompt);
     }
 
-    public function imageUrl(AiImage $image, string $size = 'original'): ?string
+    public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
     {
         return app(AiImageEditor::class)->imageUrl($image, $size);
     }
 
-    public function imageSize(AiImage $image, string $size = 'original'): ?array
+    public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
     {
         return app(AiImageEditor::class)->imageSize($image, $size);
     }
 
-    public function detailUrl(AiImage $image): string
+    public function detailUrl(GeneratedMedia $image): string
     {
         return route('images.show', $image);
     }
 
-    public function creatorName(AiImage $image): string
+    public function creatorName(GeneratedMedia $image): string
     {
         return $image->user?->name ?: __('Guest');
     }

@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\AiApiKey;
-use App\Models\AiApiRequest;
+use App\Models\ApiKey;
+use App\Models\ApiRequest;
 use App\Models\User;
 use App\Support\AppSettings;
 use Flux\Flux;
@@ -21,7 +21,7 @@ new class extends Component {
 
         abort_unless($user instanceof User, 403);
 
-        $token = AiApiKey::newToken();
+        $token = ApiKey::newToken();
         $key = $this->apiKey;
 
         if ($key) {
@@ -32,7 +32,7 @@ new class extends Component {
                 'last_used_at' => null,
             ]);
         } else {
-            $key = AiApiKey::create([
+            $key = ApiKey::create([
                 'user_id' => $user->id,
                 'token_hash' => $token['hash'],
                 'token_prefix' => $token['prefix'],
@@ -51,9 +51,9 @@ new class extends Component {
     }
 
     #[Computed]
-    public function apiKey(): ?AiApiKey
+    public function apiKey(): ?ApiKey
     {
-        return AiApiKey::query()
+        return ApiKey::query()
             ->disableModelCaching()
             ->where('user_id', Auth::id())
             ->latest()
@@ -69,7 +69,7 @@ new class extends Component {
             return ['total' => 0, 'success' => 0, 'failed' => 0];
         }
 
-        $query = AiApiRequest::query()->where('ai_api_key_id', $key->id);
+        $query = ApiRequest::query()->where('api_key_id', $key->id);
 
         return [
             'total' => (clone $query)->count(),

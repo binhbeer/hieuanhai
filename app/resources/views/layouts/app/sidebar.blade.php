@@ -25,7 +25,6 @@
 					<flux:sidebar.group class="grid">
 						<flux:sidebar.item :href="route('home')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-arrow-left class="size-5" /></x-slot>
-							{{ __('Home') }}
 						</flux:sidebar.item>
 					</flux:sidebar.group>
 				</flux:sidebar.nav>
@@ -62,25 +61,25 @@
 				<flux:sidebar.nav>
 					<flux:sidebar.group class="grid">
 						<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
-							<x-slot name="icon"><x-iconsax-bul-home class="size-5" /></x-slot>
+							<x-slot name="icon"><x-iconsax-bul-home class="size-4" /></x-slot>
 							{{ __('Home') }}
 						</flux:sidebar.item>
 						@auth
 							<flux:sidebar.item :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
-								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
+								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-4" /></x-slot>
 								{{ __('Search') }}
 							</flux:sidebar.item>
 							<flux:sidebar.item :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
-								<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
+								<x-slot name="icon"><x-iconsax-bul-heart class="size-4" /></x-slot>
 								{{ __('Favorite images') }}
 							</flux:sidebar.item>
 						@else
 							<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
-								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-5" /></x-slot>
+								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-4" /></x-slot>
 								{{ __('Search') }}
 							</flux:sidebar.item>
 							<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
-								<x-slot name="icon"><x-iconsax-bul-heart class="size-5" /></x-slot>
+								<x-slot name="icon"><x-iconsax-bul-heart class="size-4" /></x-slot>
 								{{ __('Favorite images') }}
 							</flux:sidebar.item>
 						@endauth
@@ -92,6 +91,7 @@
 
 				<flux:sidebar.nav>
 					<flux:sidebar.group class="grid" expandable heading="{{ __('Categories') }}">
+						<x-slot name="icon"><x-iconsax-bul-folder-open class="size-4" /></x-slot>
 						<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
 							{{ __('All') }}
 						</flux:sidebar.item>
@@ -124,7 +124,7 @@
 						{{ __('Mới') }}
 					</flux:tab>
 					{{-- <flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
-						{{ __('Phổ biến') }}
+																{{ __('Phổ biến') }}
 					</flux:tab> --}}
 					<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
 						{{ __('Nổi bật') }}

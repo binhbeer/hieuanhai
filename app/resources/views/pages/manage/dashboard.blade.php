@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\AiApiKey;
-use App\Models\AiImage;
+use App\Models\ApiKey;
+use App\Models\GeneratedMedia;
 use App\Models\Category;
 use App\Models\User;
 use Livewire\Attributes\Computed;
@@ -20,10 +20,10 @@ new #[Title('Manage')] class extends Component {
 		return [
 			'users' => User::query()->count(),
 			'banned_users' => User::query()->whereNotNull('banned_at')->count(),
-			'api_keys' => AiApiKey::query()->count(),
+			'api_keys' => ApiKey::query()->count(),
 			'categories' => Category::query()->count(),
-			'published_images' => AiImage::query()->where('is_published', true)->count(),
-			'unpublished_images' => AiImage::query()->where('is_published', false)->where('status', 'succeeded')->whereNotNull('result_path')->count(),
+			'published_images' => GeneratedMedia::query()->where('is_published', true)->count(),
+			'unpublished_images' => GeneratedMedia::query()->where('is_published', false)->where('status', 'succeeded')->whereNotNull('result_path')->count(),
 		];
 	}
 
@@ -37,7 +37,7 @@ new #[Title('Manage')] class extends Component {
 			->groupByRaw('DATE(created_at)')
 			->get()
 			->keyBy('date');
-		$images = AiImage::query()
+		$images = GeneratedMedia::query()
 			->where('created_at', '>=', $from)
 			->selectRaw('DATE(created_at) as date, COUNT(*) as total, SUM(is_published = 1) as published')
 			->groupByRaw('DATE(created_at)')

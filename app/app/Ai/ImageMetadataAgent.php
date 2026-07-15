@@ -2,8 +2,8 @@
 
 namespace App\Ai;
 
-use App\Models\AiTag;
 use App\Models\Category;
+use App\Models\Tag;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Attributes\Temperature;
@@ -90,7 +90,7 @@ PROMPT;
 
     private function tagOptions(): string
     {
-        $tags = AiTag::query()
+        $tags = Tag::query()
             ->orderBy('name')
             ->limit(80)
             ->pluck('name')

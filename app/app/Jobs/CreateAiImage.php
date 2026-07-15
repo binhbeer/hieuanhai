@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Events\AiImageCompleted;
-use App\Models\AiImage;
+use App\Models\GeneratedMedia;
 use App\Services\AiImageEditor;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -36,7 +36,7 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
 
     public function handle(AiImageEditor $editor): void
     {
-        $image = AiImage::find($this->imageId);
+        $image = GeneratedMedia::find($this->imageId);
 
         if (! $image || $image->status !== 'pending') {
             return;
@@ -49,7 +49,7 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
 
     public function failed(?Throwable $exception): bool
     {
-        $image = AiImage::query()
+        $image = GeneratedMedia::query()
             ->whereKey($this->imageId)
             ->where('status', 'pending')
             ->first();
@@ -63,7 +63,7 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
         unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads']);
         $requestMeta['progress'] = 'failed';
 
-        $updated = AiImage::query()
+        $updated = GeneratedMedia::query()
             ->whereKey($image->id)
             ->where('status', 'pending')
             ->where('updated_at', $image->updated_at)

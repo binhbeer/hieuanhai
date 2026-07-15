@@ -36,7 +36,7 @@ new class extends Component {
 @auth
     @if ($buttonOnly)
         <flux:sidebar.item :href="route('images.index')" :current="request()->routeIs('images.*')" wire:navigate>
-            <x-slot name="icon"><x-iconsax-bul-gallery class="size-5" /></x-slot>
+            <x-slot name="icon"><x-iconsax-bul-gallery class="size-4" /></x-slot>
             {{ __(':count images created', ['count' => number_format($this->userImageCount)]) }}
         </flux:sidebar.item>
     @else

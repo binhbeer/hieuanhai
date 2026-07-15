@@ -1,7 +1,7 @@
 <?php
 
 use App\Jobs\CreateAiImage;
-use App\Models\AiImage;
+use App\Models\GeneratedMedia;
 use App\Services\AiImageEditor;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
@@ -98,7 +98,7 @@ new class extends Component {
             return;
         }
 
-        $image = AiImage::query()
+        $image = GeneratedMedia::query()
             ->where('user_id', Auth::id())
             ->whereKey($imageId)
             ->first();
@@ -119,9 +119,9 @@ new class extends Component {
     /**
      * @return array<int, int>
      */
-    private function availableReferenceIndexes(AiImageEditor $editor, ?AiImage $source): array
+    private function availableReferenceIndexes(AiImageEditor $editor, ?GeneratedMedia $source): array
     {
-        if (!$source instanceof AiImage) {
+        if (!$source instanceof GeneratedMedia) {
             return [];
         }
 
@@ -409,11 +409,11 @@ new class extends Component {
             return collect();
         }
 
-        return AiImage::query()
+        return GeneratedMedia::query()
             ->whereIn('id', $this->referenceImageIds)
             ->publiclyVisible()
             ->get()
-            ->sortBy(fn(AiImage $image) => array_search($image->id, $this->referenceImageIds, true));
+            ->sortBy(fn(GeneratedMedia $image) => array_search($image->id, $this->referenceImageIds, true));
     }
 
     #[Computed]
@@ -423,7 +423,7 @@ new class extends Component {
             return [];
         }
 
-        $image = AiImage::query()
+        $image = GeneratedMedia::query()
             ->where('user_id', Auth::id())
             ->whereKey($this->parentId)
             ->first();
@@ -443,17 +443,17 @@ new class extends Component {
     }
 
     #[Computed]
-    public function resultImage(): ?AiImage
+    public function resultImage(): ?GeneratedMedia
     {
-        return $this->resultId ? AiImage::with('category')->find($this->resultId) : null;
+        return $this->resultId ? GeneratedMedia::with('category')->find($this->resultId) : null;
     }
 
-    public function imageUrl(AiImage $image, string $size = 'original'): ?string
+    public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
     {
         return app(AiImageEditor::class)->imageUrl($image, $size);
     }
 
-    public function imageSize(AiImage $image, string $size = 'original'): ?array
+    public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
     {
         return app(AiImageEditor::class)->imageSize($image, $size);
     }

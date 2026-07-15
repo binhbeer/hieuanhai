@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\AiImage;
-use App\Models\AiImageFavorite;
-use App\Models\AiTag;
+use App\Models\GeneratedMedia;
+use App\Models\MediaFavorite;
+use App\Models\Tag;
 use App\Models\Category;
 use App\Services\AiImageEditor;
 use Flux\Flux;
@@ -15,7 +15,7 @@ use Livewire\Component;
 new #[Title('Trang chủ')] class extends Component {
 	public ?Category $category = null;
 
-	public ?AiTag $tag = null;
+	public ?Tag $tag = null;
 
 	public string $search = '';
 
@@ -23,14 +23,14 @@ new #[Title('Trang chủ')] class extends Component {
 
 	public int $perPage = 36;
 
-	public function mount(?Category $category = null, ?AiTag $tag = null): void
+	public function mount(?Category $category = null, ?Tag $tag = null): void
 	{
 		$search = request()->routeIs('search.*') ? request()->query('q') : null;
 		$sort = request()->query('sort');
 		$tagSlug = $category ? request()->query('tag') : null;
 
 		$this->category = $category;
-		$this->tag = $tag ?? (is_string($tagSlug) ? AiTag::query()->where('slug', $tagSlug)->first() : null);
+		$this->tag = $tag ?? (is_string($tagSlug) ? Tag::query()->where('slug', $tagSlug)->first() : null);
 		$this->search = is_string($search) ? trim($search) : '';
 		$this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'new';
 	}
@@ -104,18 +104,18 @@ new #[Title('Trang chủ')] class extends Component {
 			return [];
 		}
 
-		return AiImageFavorite::query()
+		return MediaFavorite::query()
 			->where('user_id', (int) Auth::id())
-			->pluck('ai_image_id')
+			->pluck('media_id')
 			->all();
 	}
 
-	public function isFavorite(AiImage $image): bool
+	public function isFavorite(GeneratedMedia $image): bool
 	{
 		return in_array($image->id, $this->favoriteIds, true);
 	}
 
-	public function favoriteCount(AiImage $image): int
+	public function favoriteCount(GeneratedMedia $image): int
 	{
 		return (int) ($image->favorites_count ?? 0);
 	}
@@ -128,7 +128,7 @@ new #[Title('Trang chủ')] class extends Component {
 			return;
 		}
 
-		$image = AiImage::query()
+		$image = GeneratedMedia::query()
 			->publiclyVisible()
 			->find($id);
 
@@ -137,42 +137,42 @@ new #[Title('Trang chủ')] class extends Component {
 		}
 
 		$userId = (int) Auth::id();
-		$favorite = AiImageFavorite::query()->where('user_id', $userId)->where('ai_image_id', $image->id)->first();
+		$favorite = MediaFavorite::query()->where('user_id', $userId)->where('media_id', $image->id)->first();
 
 		$wasFavorite = $favorite !== null;
 
 		$wasFavorite
 			? $favorite->delete()
-			: AiImageFavorite::query()->create(['user_id' => $userId, 'ai_image_id' => $image->id]);
+			: MediaFavorite::query()->create(['user_id' => $userId, 'media_id' => $image->id]);
 
 		unset($this->images, $this->favoriteIds);
 
 		Flux::toast(variant: 'success', text: $wasFavorite ? __('Remove favorite') : __('Favorite image'));
 	}
 
-	public function imageUrl(AiImage $image, string $size = 'original'): ?string
+	public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
 	{
 		return app(AiImageEditor::class)->imageUrl($image, $size);
 	}
 
-	public function imageSize(AiImage $image, string $size = 'original'): ?array
+	public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
 	{
 		return app(AiImageEditor::class)->imageSize($image, $size);
 	}
 
-	public function detailUrl(AiImage $image): string
+	public function detailUrl(GeneratedMedia $image): string
 	{
 		return route('images.show', $image);
 	}
 
-	public function creatorName(AiImage $image): string
+	public function creatorName(GeneratedMedia $image): string
 	{
 		return $image->user?->name ?: __('Guest');
 	}
 
-	private function publishedImage(int $id): ?AiImage
+	private function publishedImage(int $id): ?GeneratedMedia
 	{
-		return AiImage::query()
+		return GeneratedMedia::query()
 			->publiclyVisible()
 			->whereKey($id)
 			->first();

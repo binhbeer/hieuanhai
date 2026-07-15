@@ -7,10 +7,10 @@ use App\Ai\ImageReviewAgent;
 use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
-use App\Models\AiImage;
-use App\Models\AiTag;
 use App\Models\Category;
+use App\Models\GeneratedMedia;
 use App\Models\Setting;
+use App\Models\Tag;
 use App\Models\User;
 use App\Services\AiImageEditor;
 use App\Support\GptImageOptions;
@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Session\ArraySessionHandler;
 use Illuminate\Session\Store;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -59,7 +60,7 @@ class AiImageEditorTest extends TestCase
     {
         $category = Category::create(['name' => 'Sản phẩm', 'slug' => 'san-pham', 'sort_order' => 1, 'status' => 'active']);
         $otherCategory = Category::create(['name' => 'Chân dung', 'slug' => 'chan-dung', 'sort_order' => 2, 'status' => 'active']);
-        $tag = AiTag::create(['name' => '3D', 'slug' => '3d']);
+        $tag = Tag::create(['name' => '3D', 'slug' => '3d']);
         $matching = $this->publishedImage('Matching category and tag');
         $wrongTag = $this->publishedImage('Same category without tag');
         $wrongCategory = $this->publishedImage('Same tag in another category');
@@ -116,7 +117,7 @@ class AiImageEditorTest extends TestCase
         $request->setLaravelSession($session);
 
         foreach (range(1, 5) as $i) {
-            AiImage::create([
+            GeneratedMedia::create([
                 'user_id' => $user->id,
                 'visitor_key' => $editor->visitorKey($request),
                 'prompt' => 'Prompt '.$i,
@@ -147,7 +148,7 @@ class AiImageEditorTest extends TestCase
         $this->assertSame(3, $editor->remainingToday($request));
 
         foreach (range(1, 3) as $i) {
-            AiImage::create([
+            GeneratedMedia::create([
                 'user_id' => $user->id,
                 'visitor_key' => $editor->visitorKey($request),
                 'prompt' => 'Prompt '.$i,
@@ -207,7 +208,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        AiImage::create([
+        GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => $editor->visitorKey($request),
             'prompt' => 'Đang tạo',
@@ -233,7 +234,7 @@ class AiImageEditorTest extends TestCase
         $request->setLaravelSession($session);
 
         foreach (range(1, 10) as $i) {
-            AiImage::create([
+            GeneratedMedia::create([
                 'user_id' => 1,
                 'visitor_key' => $editor->visitorKey($request),
                 'prompt' => 'Prompt '.$i,
@@ -388,7 +389,7 @@ class AiImageEditorTest extends TestCase
         Storage::disk('public')->put($sourcePath, file_get_contents($source->getRealPath()));
         $user = User::factory()->create();
         $this->actingAs($user);
-        $parent = AiImage::create([
+        $parent = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Original parent prompt',
@@ -438,7 +439,7 @@ class AiImageEditorTest extends TestCase
             app(AiImageEditor::class)->create($request, [UploadedFile::fake()->image('politician.png')], 'Chế ảnh ác quỷ');
         } finally {
             ImageReviewAgent::assertPrompted(fn ($prompt): bool => $prompt->attachments->first() instanceof Base64Image);
-            $this->assertSame(0, AiImage::query()->count());
+            $this->assertSame(0, GeneratedMedia::query()->count());
             Http::assertNothingSent();
         }
     }
@@ -487,7 +488,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.image_review_model', 'gpt-5.5-mini');
         Setting::putValue('ai.tag_model', 'gpt-5.5-metadata');
         $category = Category::create(['name' => 'Meme nội bộ', 'slug' => 'internal-meme', 'sort_order' => 5, 'status' => 'active']);
-        AiTag::create(['name' => 'Nước hoa', 'slug' => 'nuoc-hoa']);
+        Tag::create(['name' => 'Nước hoa', 'slug' => 'nuoc-hoa']);
         ImageReviewAgent::fake([$this->allowedReview()]);
         ImageMetadataAgent::fake([$this->publishReview('internal-meme', ['Nước hoa', 'banner ads', 'sản phẩm'])]);
 
@@ -514,7 +515,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'visitor_key' => $editor->visitorKey($request),
             'prompt' => 'Tạo ads banner cho sản phẩm nước hoa',
             'provider' => 'openai',
@@ -543,7 +544,7 @@ class AiImageEditorTest extends TestCase
                 && $attachment->mimeType() === 'image/jpeg';
         });
 
-        $other = AiImage::create([
+        $other = GeneratedMedia::create([
             'visitor_key' => $editor->visitorKey($request),
             'prompt' => 'Vẽ chân dung cổ điển',
             'provider' => 'openai',
@@ -559,8 +560,8 @@ class AiImageEditorTest extends TestCase
         $this->assertSame('Banner nước hoa cao cấp cho quảng cáo sản phẩm, bố cục rõ chủ thể, phong cách thương mại hiện đại, phù hợp SEO gallery công khai.', $published->description);
         $this->assertTrue($published->category->is($category));
         $this->assertSame(['banner-ads', 'nuoc-hoa', 'san-pham'], $published->tags->pluck('slug')->sort()->values()->all());
-        $this->assertSame('Nước hoa', AiTag::query()->where('slug', 'nuoc-hoa')->value('name'));
-        $this->assertSame(3, AiTag::query()->count());
+        $this->assertSame('Nước hoa', Tag::query()->where('slug', 'nuoc-hoa')->value('name'));
+        $this->assertSame(3, Tag::query()->count());
         $this->assertTrue($editor->publishedGallery($category)->contains($published));
         $this->assertTrue($editor->publishedGallery(search: 'nước hoa')->contains($published));
         $this->assertFalse($editor->publishedGallery(search: 'nước hoa')->contains($other));
@@ -657,7 +658,7 @@ class AiImageEditorTest extends TestCase
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
         $request->setLaravelSession($session);
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'visitor_key' => $editor->visitorKey($request),
             'prompt' => 'Tạo ảnh phong cảnh',
             'provider' => 'openai',
@@ -685,7 +686,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'visitor_key' => $editor->visitorKey($request),
             'prompt' => 'Tạo ảnh comic bất kì',
             'provider' => 'openai',
@@ -714,7 +715,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'visitor_key' => $editor->visitorKey($request),
             'prompt' => $prompt,
             'provider' => 'openai',
@@ -760,7 +761,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'visitor_key' => $editor->visitorKey($request),
             'prompt' => 'Tạo ads banner cho sản phẩm nước hoa',
             'provider' => 'openai',
@@ -913,7 +914,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'visitor_key' => $editor->visitorKey($request),
             'prompt' => 'Tạo ảnh bôi xấu lãnh tụ',
             'provider' => 'openai',
@@ -942,7 +943,7 @@ class AiImageEditorTest extends TestCase
         ImageMetadataAgent::fake([$this->publishReview('other', [])]);
         $admin = User::factory()->create(['id' => 1]);
         $user = User::factory()->create();
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'visitor_key' => 'visitor-a',
             'prompt' => 'Tạo ảnh phong cảnh',
@@ -1082,7 +1083,7 @@ class AiImageEditorTest extends TestCase
             resolution: '2k',
         );
 
-        $storedImage = AiImage::findOrFail($image->id);
+        $storedImage = GeneratedMedia::findOrFail($image->id);
         $this->assertSame('16:9', data_get($storedImage->request_meta, 'aspect_ratio'));
         $this->assertSame('2k', data_get($storedImage->request_meta, 'resolution'));
         $this->assertSame('1536x864', data_get($storedImage->request_meta, 'size'));
@@ -1187,7 +1188,7 @@ class AiImageEditorTest extends TestCase
 
     public function test_generator_persists_aspect_resolution_and_image_quality(): void
     {
-        \Illuminate\Support\Facades\Bus::fake();
+        Bus::fake();
 
         $this->actingAs(User::factory()->create());
 
@@ -1200,7 +1201,7 @@ class AiImageEditorTest extends TestCase
             ->call('createImage')
             ->assertHasNoErrors();
 
-        $image = AiImage::query()->latest('id')->firstOrFail();
+        $image = GeneratedMedia::query()->latest('id')->firstOrFail();
         $this->assertSame('16:9', data_get($image->request_meta, 'aspect_ratio'));
         $this->assertSame('2k', data_get($image->request_meta, 'resolution'));
         $this->assertSame('1536x864', data_get($image->request_meta, 'size'));
@@ -1208,9 +1209,9 @@ class AiImageEditorTest extends TestCase
         $this->assertSame('1536x864', GptImageOptions::size('16:9', '2k'));
     }
 
-    private function publishedImage(string $prompt, ?\DateTimeInterface $publishedAt = null): AiImage
+    private function publishedImage(string $prompt, ?\DateTimeInterface $publishedAt = null): GeneratedMedia
     {
-        return AiImage::create([
+        return GeneratedMedia::create([
             'visitor_key' => 'visitor-'.str()->random(8),
             'prompt' => $prompt,
             'provider' => 'openai',
@@ -1225,9 +1226,9 @@ class AiImageEditorTest extends TestCase
     /**
      * @param  list<string>  $tags
      */
-    private function syncImageTags(AiImage $image, array $tags): void
+    private function syncImageTags(GeneratedMedia $image, array $tags): void
     {
-        $image->tags()->sync(collect($tags)->map(fn (string $tag): int => (int) AiTag::query()->firstOrCreate([
+        $image->tags()->sync(collect($tags)->map(fn (string $tag): int => (int) Tag::query()->firstOrCreate([
             'slug' => Str::slug($tag, '-'),
         ], [
             'name' => $tag,
@@ -1250,7 +1251,6 @@ class AiImageEditorTest extends TestCase
     {
         return ['allowed' => true, 'blocked_policy' => 'none', 'title' => $title, 'description' => $description, 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
     }
-
 
     private function pngBinary(int $width, int $height): string
     {

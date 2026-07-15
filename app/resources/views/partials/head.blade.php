@@ -12,9 +12,9 @@
     $routeImage = request()->route('image');
     $routeCategory = request()->route('category');
     $routeTag = request()->route('tag');
-    $metaImage = $routeImage instanceof \App\Models\AiImage && $routeImage->is_published && $routeImage->status === 'succeeded' && filled($routeImage->result_path) ? $routeImage : null;
+    $metaImage = $routeImage instanceof \App\Models\GeneratedMedia && $routeImage->is_published && $routeImage->status === 'succeeded' && filled($routeImage->result_path) ? $routeImage : null;
     $metaCategory = $routeCategory instanceof \App\Models\Category ? $routeCategory : null;
-    $metaTag = $routeTag instanceof \App\Models\AiTag ? $routeTag : null;
+    $metaTag = $routeTag instanceof \App\Models\Tag ? $routeTag : null;
     $isIndexable = request()->routeIs('home', 'categories.show', 'tags.show', 'images.show');
 
     $metaTitle = match (true) {

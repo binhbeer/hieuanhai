@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\AiImage;
+use App\Models\GeneratedMedia;
 use App\Models\Category;
 use App\Services\AiImageEditor;
 use Flux\Flux;
@@ -53,7 +53,7 @@ new #[Title('Manage created images')] class extends Component {
 
 	public function updateCategory(int $id, int|string|null $categoryId): void
 	{
-		$image = AiImage::query()->findOrFail($id);
+		$image = GeneratedMedia::query()->findOrFail($id);
 		$categoryId = ctype_digit((string) $categoryId) ? (int) $categoryId : null;
 
 		if ($categoryId && !Category::query()->whereKey($categoryId)->exists()) {
@@ -68,7 +68,7 @@ new #[Title('Manage created images')] class extends Component {
 
 	public function publishImage(int $id, AiImageEditor $editor): void
 	{
-		$image = AiImage::query()->findOrFail($id);
+		$image = GeneratedMedia::query()->findOrFail($id);
 
 		try {
 			$editor->publish($image, request(), requireOwner: false);
@@ -84,7 +84,7 @@ new #[Title('Manage created images')] class extends Component {
 
 	public function unpublishImage(int $id): void
 	{
-		AiImage::query()->findOrFail($id)->update(['is_published' => false]);
+		GeneratedMedia::query()->findOrFail($id)->update(['is_published' => false]);
 
 		$this->refreshData();
 		Flux::toast(variant: 'success', text: __('Image unpublished.'));
@@ -100,21 +100,21 @@ new #[Title('Manage created images')] class extends Component {
 	public function stats(): array
 	{
 		return [
-			'total' => AiImage::query()->count(),
-			'published' => AiImage::query()->where('is_published', true)->count(),
-			'unpublished' => AiImage::query()
+			'total' => GeneratedMedia::query()->count(),
+			'published' => GeneratedMedia::query()->where('is_published', true)->count(),
+			'unpublished' => GeneratedMedia::query()
 				->where('is_published', false)
 				->where('status', 'succeeded')
 				->whereNotNull('result_path')
 				->count(),
-			'failed' => AiImage::query()->where('status', 'failed')->count(),
+			'failed' => GeneratedMedia::query()->where('status', 'failed')->count(),
 		];
 	}
 
 	#[Computed]
 	public function images()
 	{
-		return AiImage::query()
+		return GeneratedMedia::query()
 			->with(['category', 'user'])
 			->when($this->search !== '', function ($query): void {
 				$search = trim($this->search);
@@ -144,12 +144,12 @@ new #[Title('Manage created images')] class extends Component {
 			->paginate(20);
 	}
 
-	public function imageUrl(AiImage $image, string $size = 'original'): ?string
+	public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
 	{
 		return app(AiImageEditor::class)->imageUrl($image, $size);
 	}
 
-	public function imageSize(AiImage $image, string $size = 'original'): ?array
+	public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
 	{
 		return app(AiImageEditor::class)->imageSize($image, $size);
 	}

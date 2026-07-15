@@ -1,8 +1,8 @@
 <?php
 
 use App\Jobs\CreateAiImage;
-use App\Models\AiImage;
-use App\Models\AiImageFavorite;
+use App\Models\GeneratedMedia;
+use App\Models\MediaFavorite;
 use App\Models\User;
 use App\Services\AiImageEditor;
 use App\Support\GptImageOptions;
@@ -18,7 +18,7 @@ new class extends Component {
 
     public bool $standalone = false;
 
-    public function mount(?AiImage $image = null, ?int $selectedImageId = null, bool $standalone = false): void
+    public function mount(?GeneratedMedia $image = null, ?int $selectedImageId = null, bool $standalone = false): void
     {
         $this->selectedImageId = $selectedImageId;
         $this->standalone = $standalone;
@@ -39,7 +39,7 @@ new class extends Component {
         if ($this->standalone) {
             $image = $this->selectedImageId ? $this->publicImage($this->selectedImageId) : null;
 
-            abort_unless($image instanceof AiImage, 404);
+            abort_unless($image instanceof GeneratedMedia, 404);
 
             $this->openImage($image->id);
 
@@ -106,12 +106,12 @@ new class extends Component {
         }
 
         $userId = (int) Auth::id();
-        $favorite = AiImageFavorite::query()->where('user_id', $userId)->where('ai_image_id', $image->id)->first();
+        $favorite = MediaFavorite::query()->where('user_id', $userId)->where('media_id', $image->id)->first();
         $wasFavorite = $favorite !== null;
 
         $wasFavorite
             ? $favorite->delete()
-            : AiImageFavorite::query()->create(['user_id' => $userId, 'ai_image_id' => $image->id]);
+            : MediaFavorite::query()->create(['user_id' => $userId, 'media_id' => $image->id]);
 
         unset($this->selectedImage, $this->relatedImages, $this->favoriteIds);
         $this->dispatch('gallery-updated');
@@ -148,7 +148,7 @@ new class extends Component {
             return;
         }
 
-        $image = AiImage::query()
+        $image = GeneratedMedia::query()
             ->where('user_id', Auth::id())
             ->whereKey($id)
             ->first();
@@ -172,7 +172,7 @@ new class extends Component {
             return;
         }
 
-        $image = AiImage::query()
+        $image = GeneratedMedia::query()
             ->where('user_id', Auth::id())
             ->where('status', 'pending')
             ->whereKey($id)
@@ -196,7 +196,7 @@ new class extends Component {
             return;
         }
 
-        $image = AiImage::query()
+        $image = GeneratedMedia::query()
             ->where('user_id', Auth::id())
             ->whereKey($id)
             ->first();
@@ -241,7 +241,7 @@ new class extends Component {
             return;
         }
 
-        $image = AiImage::query()
+        $image = GeneratedMedia::query()
             ->publiclyVisible()
             ->whereKey($id)
             ->first();
@@ -259,7 +259,7 @@ new class extends Component {
     }
 
     #[Computed]
-    public function selectedImage(): ?AiImage
+    public function selectedImage(): ?GeneratedMedia
     {
         return $this->selectedImageId ? $this->visibleImage($this->selectedImageId) : null;
     }
@@ -279,16 +279,16 @@ new class extends Component {
             return [];
         }
 
-        return AiImageFavorite::query()
+        return MediaFavorite::query()
             ->where('user_id', (int) Auth::id())
-            ->pluck('ai_image_id')
+            ->pluck('media_id')
             ->all();
     }
 
     /**
      * @return array<int, string>
      */
-    public function referenceImageUrls(AiImage $image): array
+    public function referenceImageUrls(GeneratedMedia $image): array
     {
         if (!$this->canEdit($image) && !$this->canManageFeatured()) {
             return [];
@@ -305,42 +305,42 @@ new class extends Component {
         ));
     }
 
-    public function imageUrl(AiImage $image, string $size = 'original'): ?string
+    public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
     {
         return app(AiImageEditor::class)->imageUrl($image, $size);
     }
 
-    public function imageSize(AiImage $image, string $size = 'original'): ?array
+    public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
     {
         return app(AiImageEditor::class)->imageSize($image, $size);
     }
 
-    public function detailUrl(AiImage $image): string
+    public function detailUrl(GeneratedMedia $image): string
     {
         return route('images.show', $image);
     }
 
-    public function creatorName(AiImage $image): string
+    public function creatorName(GeneratedMedia $image): string
     {
         return $image->user?->name ?: __('Guest');
     }
 
-    public function isFavorite(AiImage $image): bool
+    public function isFavorite(GeneratedMedia $image): bool
     {
         return in_array($image->id, $this->favoriteIds, true);
     }
 
-    public function favoriteCount(AiImage $image): int
+    public function favoriteCount(GeneratedMedia $image): int
     {
         return (int) ($image->favorites_count ?? 0);
     }
 
-    public function canFavorite(AiImage $image): bool
+    public function canFavorite(GeneratedMedia $image): bool
     {
         return Auth::check() && $this->isPublicImage($image);
     }
 
-    public function canEdit(AiImage $image): bool
+    public function canEdit(GeneratedMedia $image): bool
     {
         return Auth::check() && $image->user_id === Auth::id();
     }
@@ -352,7 +352,7 @@ new class extends Component {
         return $user instanceof User && $user->isAdmin();
     }
 
-    public function statusLabel(AiImage $image): string
+    public function statusLabel(GeneratedMedia $image): string
     {
         return match ($image->status) {
             'pending' => __('Creating'),
@@ -361,7 +361,7 @@ new class extends Component {
         };
     }
 
-    public function progressLabel(AiImage $image): string
+    public function progressLabel(GeneratedMedia $image): string
     {
         if ($image->updated_at?->lt(now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES))) {
             return __('Task interrupted. Please try again.');
@@ -375,7 +375,7 @@ new class extends Component {
         };
     }
 
-    public function progressStep(AiImage $image): int
+    public function progressStep(GeneratedMedia $image): int
     {
         return match (data_get($image->request_meta, 'progress', 'queued')) {
             'reviewing' => 2,
@@ -388,7 +388,7 @@ new class extends Component {
     /**
      * @return array{aspect_ratio: ?string, resolution: ?string, image_detail: ?string}
      */
-    public function generationOptions(AiImage $image): array
+    public function generationOptions(GeneratedMedia $image): array
     {
         $meta = is_array($image->request_meta) ? $image->request_meta : [];
         $aspectRatio = is_string($meta['aspect_ratio'] ?? null) ? $meta['aspect_ratio'] : null;
@@ -421,15 +421,15 @@ new class extends Component {
         return $userId ? ['echo-private:App.Models.User.' . $userId . ',AiImageCompleted' => 'refreshCompletedImage'] : [];
     }
 
-    private function latestCreatedImage(): ?AiImage
+    private function latestCreatedImage(): ?GeneratedMedia
     {
         return app(AiImageEditor::class)->guestHistory(request(), 1)->first();
     }
 
-    private function visibleImage(int $id): ?AiImage
+    private function visibleImage(int $id): ?GeneratedMedia
     {
         $user = Auth::user();
-        $query = AiImage::query()->with(['category', 'user', 'tags'])->whereKey($id);
+        $query = GeneratedMedia::query()->with(['category', 'user', 'tags'])->whereKey($id);
 
         if ($user instanceof User && $user->isAdmin()) {
             return $query->first();
@@ -446,15 +446,15 @@ new class extends Component {
             ->first();
     }
 
-    private function publicImage(int $id): ?AiImage
+    private function publicImage(int $id): ?GeneratedMedia
     {
-        return AiImage::query()
+        return GeneratedMedia::query()
             ->publiclyVisible()
             ->whereKey($id)
             ->first();
     }
 
-    private function isPublicImage(AiImage $image): bool
+    private function isPublicImage(GeneratedMedia $image): bool
     {
         return $image->is_published && $image->status === 'succeeded' && filled($image->result_path);
     }

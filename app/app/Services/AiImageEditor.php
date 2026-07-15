@@ -8,9 +8,9 @@ use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
 use App\Events\AiImageCompleted;
-use App\Models\AiImage;
-use App\Models\AiTag;
 use App\Models\Category;
+use App\Models\GeneratedMedia;
+use App\Models\Tag;
 use App\Models\User;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
@@ -57,7 +57,7 @@ class AiImageEditor
     /**
      * @param  array<int, mixed>  $photos
      */
-    public function create(Request $request, array $photos, string $prompt): AiImage
+    public function create(Request $request, array $photos, string $prompt): GeneratedMedia
     {
         $prompt = trim($prompt);
 
@@ -76,7 +76,7 @@ class AiImageEditor
             $prompt,
         ])));
 
-        $image = AiImage::create([
+        $image = GeneratedMedia::create([
             'user_id' => Auth::id(),
             'visitor_key' => $visitorKey,
             'ip_address' => $request->ip(),
@@ -144,7 +144,7 @@ class AiImageEditor
         ?string $imageDetail = null,
         ?string $aspectRatio = null,
         ?string $resolution = null,
-    ): AiImage {
+    ): GeneratedMedia {
 
         if (! Auth::check()) {
             throw new \InvalidArgumentException('Vui lòng đăng nhập để tạo ảnh.');
@@ -171,7 +171,7 @@ class AiImageEditor
         return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution) {
             User::query()->whereKey($userId)->lockForUpdate()->first();
 
-            if (AiImage::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
+            if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
                 throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
             }
 
@@ -182,7 +182,7 @@ class AiImageEditor
             }
 
             $parent = $parentId
-                ? AiImage::query()->where('user_id', $userId)->find($parentId)
+                ? GeneratedMedia::query()->where('user_id', $userId)->find($parentId)
                 : null;
 
             if ($parentId && ! $parent) {
@@ -198,7 +198,7 @@ class AiImageEditor
             $pendingUploads = [...$parentReferenceUploads, ...$referenceUploads, ...$this->storePendingUploads($photos)];
             $photo = $photos[0] ?? null;
 
-            return AiImage::create([
+            return GeneratedMedia::create([
                 'user_id' => $userId,
                 'parent_id' => $parent?->id,
                 'visitor_key' => $this->visitorKey($request),
@@ -225,7 +225,7 @@ class AiImageEditor
         });
     }
 
-    public function cancelPending(AiImage $image): bool
+    public function cancelPending(GeneratedMedia $image): bool
     {
         if ($image->status !== 'pending') {
             return false;
@@ -236,7 +236,7 @@ class AiImageEditor
         unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads']);
         $requestMeta['progress'] = 'cancelled';
 
-        $updated = AiImage::query()
+        $updated = GeneratedMedia::query()
             ->whereKey($image->id)
             ->where('status', 'pending')
             ->update([
@@ -255,7 +255,7 @@ class AiImageEditor
         return true;
     }
 
-    public function retryFailed(AiImage $image, Request $request): AiImage
+    public function retryFailed(GeneratedMedia $image, Request $request): GeneratedMedia
     {
         if ($image->status !== 'failed') {
             return $image->refresh();
@@ -266,7 +266,7 @@ class AiImageEditor
         return DB::transaction(function () use ($image, $request, $userId) {
             User::query()->whereKey($userId)->lockForUpdate()->first();
 
-            if (AiImage::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
+            if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
                 throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
             }
 
@@ -295,7 +295,7 @@ class AiImageEditor
         });
     }
 
-    public function completePending(AiImage $image): AiImage
+    public function completePending(GeneratedMedia $image): GeneratedMedia
     {
         if ($image->status !== 'pending') {
             return $image->refresh();
@@ -369,7 +369,7 @@ class AiImageEditor
 
             unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads'], $requestMeta['progress']);
 
-            $updated = AiImage::query()
+            $updated = GeneratedMedia::query()
                 ->whereKey($image->id)
                 ->where('status', 'pending')
                 ->update([
@@ -420,7 +420,7 @@ class AiImageEditor
             unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads']);
             $requestMeta['progress'] = 'failed';
 
-            AiImage::query()
+            GeneratedMedia::query()
                 ->whereKey($image->id)
                 ->where('status', 'pending')
                 ->update([
@@ -443,11 +443,11 @@ class AiImageEditor
     /**
      * @param  array<string, mixed>  $requestMeta
      */
-    private function updateImageProgress(AiImage $image, array &$requestMeta, string $progress): bool
+    private function updateImageProgress(GeneratedMedia $image, array &$requestMeta, string $progress): bool
     {
         $requestMeta['progress'] = $progress;
 
-        $updated = AiImage::query()
+        $updated = GeneratedMedia::query()
             ->whereKey($image->id)
             ->where('status', 'pending')
             ->update(['request_meta' => $requestMeta]);
@@ -461,7 +461,7 @@ class AiImageEditor
         return true;
     }
 
-    public function publish(AiImage $image, Request $request, bool $requireOwner = true): AiImage
+    public function publish(GeneratedMedia $image, Request $request, bool $requireOwner = true): GeneratedMedia
     {
         if ($requireOwner && ! $this->ownsImage($image, $request)) {
             throw new \InvalidArgumentException('Không tìm thấy ảnh để publish.');
@@ -503,7 +503,7 @@ class AiImageEditor
         return $image->refresh()->load('tags');
     }
 
-    public function backfillMetadata(AiImage $image): AiImage
+    public function backfillMetadata(GeneratedMedia $image): GeneratedMedia
     {
         $metadata = $this->imageMetadata($image);
         $prompt = (string) $image->prompt;
@@ -524,14 +524,14 @@ class AiImageEditor
     }
 
     /**
-     * @return Collection<int, AiImage>
+     * @return Collection<int, GeneratedMedia>
      */
-    public function publishedGallery(?Category $category = null, int $limit = 80, string $search = '', string $sort = 'featured', ?AiTag $tag = null): Collection
+    public function publishedGallery(?Category $category = null, int $limit = 80, string $search = '', string $sort = 'featured', ?Tag $tag = null): Collection
     {
         $search = trim($search);
         $sort = in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'featured';
 
-        $query = AiImage::query()
+        $query = GeneratedMedia::query()
             ->with(['category', 'user'])
             ->publiclyVisible()
             ->when($category, fn ($query) => $query->where('category_id', $category->id))
@@ -555,21 +555,21 @@ class AiImageEditor
     }
 
     /**
-     * @return Collection<int, AiImage>
+     * @return Collection<int, GeneratedMedia>
      */
-    public function relatedPublished(AiImage $image, int $limit = 8): Collection
+    public function relatedPublished(GeneratedMedia $image, int $limit = 8): Collection
     {
-        $tagIds = $image->tags()->pluck('ai_tags.id')->all();
+        $tagIds = $image->tags()->pluck('tags.id')->all();
 
-        $query = AiImage::query()
+        $query = GeneratedMedia::query()
             ->with(['category', 'user', 'tags'])
             ->publiclyVisible()
             ->whereKeyNot($image->id);
 
         if ($tagIds !== []) {
             return $query
-                ->whereHas('tags', fn ($query) => $query->whereIn('ai_tags.id', $tagIds))
-                ->withCount(['tags as matching_tags_count' => fn ($query) => $query->whereIn('ai_tags.id', $tagIds)])
+                ->whereHas('tags', fn ($query) => $query->whereIn('tags.id', $tagIds))
+                ->withCount(['tags as matching_tags_count' => fn ($query) => $query->whereIn('tags.id', $tagIds)])
                 ->orderByDesc('matching_tags_count')
                 ->latest('published_at')
                 ->limit($limit)
@@ -641,7 +641,7 @@ class AiImageEditor
 
     public function countToday(Request $request): int
     {
-        $query = AiImage::query()->disableModelCaching();
+        $query = GeneratedMedia::query()->disableModelCaching();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
@@ -655,7 +655,7 @@ class AiImageEditor
 
     public function generatedLastDay(): int
     {
-        return AiImage::query()
+        return GeneratedMedia::query()
             ->where('status', 'succeeded')
             ->where('created_at', '>=', Carbon::now()->subDay())
             ->count();
@@ -663,7 +663,7 @@ class AiImageEditor
 
     public function guestImageCount(Request $request): int
     {
-        $query = AiImage::query();
+        $query = GeneratedMedia::query();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
@@ -676,11 +676,11 @@ class AiImageEditor
     }
 
     /**
-     * @return Collection<int, AiImage>
+     * @return Collection<int, GeneratedMedia>
      */
     public function guestHistory(Request $request, int $limit = 12): Collection
     {
-        $query = AiImage::query();
+        $query = GeneratedMedia::query();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
@@ -696,7 +696,7 @@ class AiImageEditor
 
     public function deleteGuestImage(Request $request, int $id): void
     {
-        $query = AiImage::query();
+        $query = GeneratedMedia::query();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
@@ -714,7 +714,7 @@ class AiImageEditor
         $image->delete();
     }
 
-    public function imageUrl(AiImage $image, string $size = 'original', ?int $width = null, ?int $height = null): ?string
+    public function imageUrl(GeneratedMedia $image, string $size = 'original', ?int $width = null, ?int $height = null): ?string
     {
         if (! $image->result_path) {
             return null;
@@ -743,7 +743,7 @@ class AiImageEditor
     /**
      * @return array{width: int, height: int}|null
      */
-    public function imageSize(AiImage $image, string $size = 'original', ?int $width = null, ?int $height = null): ?array
+    public function imageSize(GeneratedMedia $image, string $size = 'original', ?int $width = null, ?int $height = null): ?array
     {
         if (! $image->result_path) {
             return null;
@@ -773,12 +773,12 @@ class AiImageEditor
         ];
     }
 
-    public function resultUrl(AiImage $image): ?string
+    public function resultUrl(GeneratedMedia $image): ?string
     {
         return $this->imageUrl($image);
     }
 
-    private function thumbUrl(AiImage $image, int $width, ?int $height = null): string
+    private function thumbUrl(GeneratedMedia $image, int $width, ?int $height = null): string
     {
         $size = $height === null ? "{$width}x" : "{$width}x{$height}";
 
@@ -788,7 +788,7 @@ class AiImageEditor
     /**
      * @return array{width: int, height: int}|null
      */
-    private function originalImageSize(AiImage $image): ?array
+    private function originalImageSize(GeneratedMedia $image): ?array
     {
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk('public');
@@ -801,7 +801,7 @@ class AiImageEditor
     /**
      * @return array<int, string>
      */
-    public function referenceSourcePaths(AiImage $image): array
+    public function referenceSourcePaths(GeneratedMedia $image): array
     {
         $paths = is_array($image->response_meta) ? ($image->response_meta['source_paths'] ?? []) : [];
 
@@ -816,7 +816,7 @@ class AiImageEditor
      * @param  array<int, int>  $indexes
      * @return array<int, array{path: string, name: string|null, mime: string|null}>
      */
-    private function storeParentReferenceUploads(AiImage $parent, array $indexes): array
+    private function storeParentReferenceUploads(GeneratedMedia $parent, array $indexes): array
     {
         $sourcePaths = $this->referenceSourcePaths($parent);
         $indexes = array_slice(array_values(array_unique(array_map('intval', $indexes))), 0, 3);
@@ -862,7 +862,7 @@ class AiImageEditor
         $disk = Storage::disk('public');
         $uploads = [];
 
-        $images = AiImage::query()
+        $images = GeneratedMedia::query()
             ->whereIn('id', $imageIds)
             ->publiclyVisible()
             ->get()
@@ -1243,7 +1243,7 @@ class AiImageEditor
     /**
      * @return array{allowed: bool, title: string, description: string, category: string, tags: list<string>, reason: string}
      */
-    private function reviewForPublish(AiImage $image): array
+    private function reviewForPublish(GeneratedMedia $image): array
     {
         $prompt = (string) $image->prompt;
         $review = $this->reviewPrompt($prompt, publish: true, image: $image);
@@ -1263,7 +1263,7 @@ class AiImageEditor
     }
 
     /** @return array<string, mixed> */
-    private function imageMetadata(AiImage $image): array
+    private function imageMetadata(GeneratedMedia $image): array
     {
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
         $model = $this->textModel('ai.tag_model', (string) config('ai.tag_model', config('ai.image_review_model', 'gpt-5.5')));
@@ -1290,7 +1290,7 @@ class AiImageEditor
      * @param  list<Base64Image>  $attachments
      * @return array<string, mixed>
      */
-    private function reviewPrompt(string $prompt, bool $publish, ?AiImage $image = null, array $attachments = []): array
+    private function reviewPrompt(string $prompt, bool $publish, ?GeneratedMedia $image = null, array $attachments = []): array
     {
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
         $model = $this->textModel('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
@@ -1352,7 +1352,7 @@ class AiImageEditor
     /**
      * @return list<Base64Image>
      */
-    private function reviewImageAttachments(AiImage $image): array
+    private function reviewImageAttachments(GeneratedMedia $image): array
     {
         if (! is_string($image->result_path) || $image->result_path === '') {
             return [];
@@ -1399,7 +1399,7 @@ class AiImageEditor
         Ai::forgetInstance($provider);
     }
 
-    private function ownsImage(AiImage $image, Request $request): bool
+    private function ownsImage(GeneratedMedia $image, Request $request): bool
     {
         return Auth::check()
             ? $image->user_id === Auth::id()
@@ -1547,15 +1547,15 @@ class AiImageEditor
     /**
      * @param  list<string>  $tags
      */
-    private function syncTags(AiImage $image, array $tags): void
+    private function syncTags(GeneratedMedia $image, array $tags): void
     {
         $tagNames = collect($tags)->mapWithKeys(fn (string $name): array => [$this->tagSlug($name) => $name]);
-        $existing = AiTag::query()
+        $existing = Tag::query()
             ->whereIn('slug', $tagNames->keys())
             ->pluck('id', 'slug');
 
         $ids = $tagNames
-            ->map(fn (string $name, string $slug): int => (int) ($existing[$slug] ?? AiTag::query()->firstOrCreate(
+            ->map(fn (string $name, string $slug): int => (int) ($existing[$slug] ?? Tag::query()->firstOrCreate(
                 ['slug' => $slug],
                 ['name' => $name],
             )->id))

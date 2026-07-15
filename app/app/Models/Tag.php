@@ -14,14 +14,14 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['name', 'slug'])]
-class AiTag extends BaseModel
+class Tag extends BaseModel
 {
     /**
-     * @return BelongsToMany<AiImage, $this>
+     * @return BelongsToMany<GeneratedMedia, $this>
      */
-    public function images(): BelongsToMany
+    public function media(): BelongsToMany
     {
-        return $this->belongsToMany(AiImage::class, 'ai_image_tag', 'ai_tag_id', 'ai_image_id')->withTimestamps();
+        return $this->belongsToMany(GeneratedMedia::class, 'media_tag', 'tag_id', 'media_id')->withTimestamps();
     }
 
     public function getRouteKeyName(): string

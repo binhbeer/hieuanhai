@@ -8,9 +8,9 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $ai_api_key_id
+ * @property int $api_key_id
  * @property int|null $user_id
- * @property int|null $ai_image_id
+ * @property int|null $media_id
  * @property string|null $ip_address
  * @property int $status_code
  * @property string $status
@@ -23,9 +23,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable([
-    'ai_api_key_id',
+    'api_key_id',
     'user_id',
-    'ai_image_id',
+    'media_id',
     'ip_address',
     'status_code',
     'status',
@@ -35,22 +35,22 @@ use Illuminate\Support\Carbon;
     'request_meta',
     'response_meta',
 ])]
-class AiApiRequest extends BaseModel
+class ApiRequest extends BaseModel
 {
     /**
-     * @return BelongsTo<AiApiKey, $this>
+     * @return BelongsTo<ApiKey, $this>
      */
     public function key(): BelongsTo
     {
-        return $this->belongsTo(AiApiKey::class, 'ai_api_key_id');
+        return $this->belongsTo(ApiKey::class, 'api_key_id');
     }
 
     /**
-     * @return BelongsTo<AiImage, $this>
+     * @return BelongsTo<GeneratedMedia, $this>
      */
-    public function image(): BelongsTo
+    public function media(): BelongsTo
     {
-        return $this->belongsTo(AiImage::class, 'ai_image_id');
+        return $this->belongsTo(GeneratedMedia::class, 'media_id');
     }
 
     /**

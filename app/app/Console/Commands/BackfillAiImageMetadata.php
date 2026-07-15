@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\AiImage;
+use App\Models\GeneratedMedia;
 use App\Services\AiImageEditor;
 use Illuminate\Console\Command;
 use Throwable;
@@ -23,7 +23,7 @@ class BackfillAiImageMetadata extends Command
             return self::INVALID;
         }
 
-        $query = AiImage::query()
+        $query = GeneratedMedia::query()
             ->publiclyVisible()
             ->where(fn ($query) => $query
                 ->whereNull('title')
@@ -44,7 +44,7 @@ class BackfillAiImageMetadata extends Command
             ->orderBy('id')
             ->chunkById(50, function ($images) use ($editor, $limit, $progress, &$processed, &$done, &$failed): bool {
                 foreach ($images as $image) {
-                    /** @var AiImage $image */
+                    /** @var GeneratedMedia $image */
                     $processed++;
 
                     try {

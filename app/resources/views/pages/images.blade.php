@@ -1,7 +1,7 @@
 <?php
 
 use App\Jobs\CreateAiImage;
-use App\Models\AiImage;
+use App\Models\GeneratedMedia;
 use App\Services\AiImageEditor;
 use App\Support\AppSettings;
 use Flux\Flux;
@@ -98,7 +98,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
 
     public function cancelPending(int $id, AiImageEditor $editor): void
     {
-        $query = AiImage::query();
+        $query = GeneratedMedia::query();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
@@ -138,7 +138,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
     public function dailyUsage(): array
     {
         $from = today()->subDays(29);
-        $counts = AiImage::query()
+        $counts = GeneratedMedia::query()
             ->where('user_id', Auth::id())
             ->whereIn('status', ['pending', 'succeeded'])
             ->where('created_at', '>=', $from)
@@ -168,7 +168,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
         $sortBy = in_array($this->sortBy, ['id', 'created_at', 'status'], true) ? $this->sortBy : 'created_at';
         $sortDirection = $this->sortDirection === 'asc' ? 'asc' : 'desc';
 
-        $query = AiImage::query();
+        $query = GeneratedMedia::query();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
@@ -185,17 +185,17 @@ new #[Title('Ảnh của bạn')] class extends Component {
             ->paginate(20);
     }
 
-    public function imageUrl(AiImage $image, string $size = 'original'): ?string
+    public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
     {
         return app(AiImageEditor::class)->imageUrl($image, $size);
     }
 
-    public function imageSize(AiImage $image, string $size = 'original'): ?array
+    public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
     {
         return app(AiImageEditor::class)->imageSize($image, $size);
     }
 
-    public function progressLabel(AiImage $image): string
+    public function progressLabel(GeneratedMedia $image): string
     {
         if ($image->updated_at?->lt(now()->subMinutes(CreateAiImage::STALE_AFTER_MINUTES))) {
             return __('Task interrupted. Please try again.');
@@ -209,7 +209,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
         };
     }
 
-    public function progressStep(AiImage $image): int
+    public function progressStep(GeneratedMedia $image): int
     {
         return match (data_get($image->request_meta, 'progress', 'queued')) {
             'reviewing' => 2,
@@ -219,7 +219,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
         };
     }
 
-    public function statusLabel(AiImage $image): string
+    public function statusLabel(GeneratedMedia $image): string
     {
         return match ($image->status) {
             'pending' => __('Creating'),
@@ -228,7 +228,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
         };
     }
 
-    public function sizeLabel(AiImage $image): ?string
+    public function sizeLabel(GeneratedMedia $image): ?string
     {
         $meta = $image->request_meta ?? [];
         $size = is_string($meta['size'] ?? null) ? $meta['size'] : null;
@@ -238,7 +238,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
         return collect([$aspect, $resolution, $size])->filter()->unique()->implode(' · ') ?: null;
     }
 
-    public function errorCode(AiImage $image): ?string
+    public function errorCode(GeneratedMedia $image): ?string
     {
         if (! Auth::user()?->isAdmin()) {
             return null;
@@ -268,9 +268,9 @@ new #[Title('Ảnh của bạn')] class extends Component {
         return $userId ? ['echo-private:App.Models.User.'.$userId.',AiImageCompleted' => 'refreshCompletedImage'] : [];
     }
 
-    private function findImage(int $id): ?AiImage
+    private function findImage(int $id): ?GeneratedMedia
     {
-        $query = AiImage::query();
+        $query = GeneratedMedia::query();
 
         Auth::check()
             ? $query->where('user_id', Auth::id())

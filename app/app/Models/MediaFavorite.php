@@ -9,30 +9,30 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $user_id
- * @property int $ai_image_id
+ * @property int $media_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['user_id', 'ai_image_id'])]
-class AiImageFavorite extends BaseModel
+#[Fillable(['user_id', 'media_id'])]
+class MediaFavorite extends BaseModel
 {
     protected static function booted(): void
     {
-        static::created(fn (self $favorite) => AiImage::query()
-            ->whereKey($favorite->ai_image_id)
+        static::created(fn (self $favorite) => GeneratedMedia::query()
+            ->whereKey($favorite->media_id)
             ->increment('favorites_count'));
 
-        static::deleted(fn (self $favorite) => AiImage::query()
-            ->whereKey($favorite->ai_image_id)
+        static::deleted(fn (self $favorite) => GeneratedMedia::query()
+            ->whereKey($favorite->media_id)
             ->where('favorites_count', '>', 0)
             ->decrement('favorites_count'));
     }
 
     /**
-     * @return BelongsTo<AiImage, $this>
+     * @return BelongsTo<GeneratedMedia, $this>
      */
-    public function image(): BelongsTo
+    public function media(): BelongsTo
     {
-        return $this->belongsTo(AiImage::class, 'ai_image_id');
+        return $this->belongsTo(GeneratedMedia::class, 'media_id');
     }
 }

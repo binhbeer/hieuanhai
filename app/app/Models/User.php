@@ -78,11 +78,11 @@ class User extends BaseModel implements AuthenticatableContract, AuthorizableCon
     }
 
     /**
-     * @return HasMany<AiApiKey, $this>
+     * @return HasMany<ApiKey, $this>
      */
     public function apiKeys(): HasMany
     {
-        return $this->hasMany(AiApiKey::class);
+        return $this->hasMany(ApiKey::class);
     }
 
     /**
