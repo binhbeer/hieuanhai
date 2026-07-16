@@ -6,7 +6,10 @@ cd "$(dirname "$0")"
 git pull
 php artisan migrate
 pnpm build
-php artisan view:clear
+mv storage/framework/views storage/framework/views.old
+mkdir storage/framework/views
+chown www-data:www-data storage/framework/views
+rm -rf storage/framework/views.old
 php artisan route:clear
 php artisan optimize
 chown -R www-data:www-data storage/
