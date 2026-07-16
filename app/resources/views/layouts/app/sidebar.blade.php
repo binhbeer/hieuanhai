@@ -12,7 +12,7 @@
 			<flux:sidebar.collapse class="lg:hidden" />
 		</flux:sidebar.header>
 
-		@php($sidebarCategories = \App\Models\Category::query()->active()->when(app()->getLocale() === 'en', fn ($query) => $query->englishReady())->ordered()->get())
+		@php($sidebarCategories = \App\Models\Category::query()->active()->when(app()->getLocale() === 'en', fn($query) => $query->englishReady())->ordered()->get())
 		@php($selectedSidebarCategory = request()->route('category'))
 		@php($gallerySearch = \App\Support\LocalizedRoute::is('search.*') && is_string(request('q')) ? request('q') : '')
 		@php($gallerySort = is_string(request('sort')) && in_array(request('sort'), ['featured', 'new', 'popular'], true) ? request('sort') : 'new')
@@ -123,7 +123,7 @@
 	</flux:sidebar>
 
 	@if (!\App\Support\LocalizedRoute::is('images.show'))
-		<flux:header class="sticky top-0 border-b border-zinc-200 bg-white/70 px-3! md:px-4! dark:border-zinc-700 dark:bg-zinc-900/70 backdrop-blur">
+		<flux:header class="sticky top-0 border-b border-zinc-200 bg-white/70 px-3! md:px-4! dark:border-zinc-700 dark:bg-zinc-900/70 backdrop-blur border-none">
 			<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
 			@if (\App\Support\LocalizedRoute::is('home', 'categories.show') || (\App\Support\LocalizedRoute::is('search.*') && $gallerySearch !== ''))
@@ -132,7 +132,7 @@
 						{{ __('New') }}
 					</flux:tab>
 					{{-- <flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
-																{{ __('Popular') }}
+																		{{ __('Popular') }}
 					</flux:tab> --}}
 					<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
 						{{ __('Featured') }}

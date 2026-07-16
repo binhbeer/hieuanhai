@@ -590,5 +590,20 @@
     ":percent of total": ":percent of total",
     ":count failed generations": ":count failed generations",
     "Daily published, unpublished, and failed images for the last 30 days": "Daily published, unpublished, and failed images for the last 30 days",
-    ":published published, :unpublished unpublished, :failed failed": ":published published, :unpublished unpublished, :failed failed"
+    ":published published, :unpublished unpublished, :failed failed": ":published published, :unpublished unpublished, :failed failed",
+    "Create AI images": "Create AI images",
+    "Describe your idea and let AI create the image.": "Describe your idea and let AI create the image.",
+    "Create avatars, illustrations, or social media images.": "Create avatars, illustrations, or social media images.",
+    "Make product photos and marketing visuals.": "Make product photos and marketing visuals.",
+    "Use your own photo as a visual reference.": "Use your own photo as a visual reference.",
+    "AI Studio": "AI Studio",
+    "Create a complete set of product images.": "Create a complete set of product images.",
+    "Design marketing posters in a few steps.": "Design marketing posters in a few steps.",
+    "Keep your brand style consistent across images.": "Keep your brand style consistent across images.",
+    "Save projects and create new versions anytime.": "Save projects and create new versions anytime.",
+    "Community gallery": "Community gallery",
+    "Browse ideas from community-created images.": "Browse ideas from community-created images.",
+    "Find visual styles for your next project.": "Find visual styles for your next project.",
+    "Reuse an image idea to create your own version.": "Reuse an image idea to create your own version.",
+    "Save your favorite images for later.": "Save your favorite images for later."
 }

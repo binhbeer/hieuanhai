@@ -590,5 +590,20 @@
     ":percent of total": ":percent tổng số",
     ":count failed generations": ":count lần tạo thất bại",
     "Daily published, unpublished, and failed images for the last 30 days": "Ảnh publish, chưa publish và thất bại theo ngày trong 30 ngày gần nhất",
-    ":published published, :unpublished unpublished, :failed failed": ":published đã publish, :unpublished chưa publish, :failed thất bại"
+    ":published published, :unpublished unpublished, :failed failed": ":published đã publish, :unpublished chưa publish, :failed thất bại",
+    "Create AI images": "Tạo ảnh AI",
+    "Describe your idea and let AI create the image.": "Mô tả ý tưởng, AI sẽ tạo ảnh giúp bạn.",
+    "Create avatars, illustrations, or social media images.": "Tạo avatar, ảnh minh họa hoặc ảnh đăng mạng xã hội.",
+    "Make product photos and marketing visuals.": "Làm ảnh sản phẩm và hình ảnh quảng cáo.",
+    "Use your own photo as a visual reference.": "Dùng ảnh có sẵn để AI tạo theo phong cách bạn muốn.",
+    "AI Studio": "Studio AI",
+    "Create a complete set of product images.": "Tạo trọn bộ ảnh sản phẩm đồng nhất.",
+    "Design marketing posters in a few steps.": "Thiết kế poster quảng cáo chỉ trong vài bước.",
+    "Keep your brand style consistent across images.": "Giữ phong cách thương hiệu nhất quán trên mọi ảnh.",
+    "Save projects and create new versions anytime.": "Lưu dự án và tạo phiên bản mới bất cứ lúc nào.",
+    "Community gallery": "Gallery cộng đồng",
+    "Browse ideas from community-created images.": "Xem ý tưởng từ những hình ảnh do cộng đồng tạo.",
+    "Find visual styles for your next project.": "Tìm phong cách hình ảnh cho dự án tiếp theo.",
+    "Reuse an image idea to create your own version.": "Dùng lại ý tưởng để tạo phiên bản của riêng bạn.",
+    "Save your favorite images for later.": "Lưu ảnh yêu thích để xem lại khi cần."
 }
