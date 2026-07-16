@@ -331,25 +331,29 @@ new #[Title('Ảnh của bạn')] class extends Component {
             </div>
         </div>
 
-        <div class="overflow-x-auto pb-1">
-            <div class="min-w-2xl">
-                <div class="flex h-36 items-end gap-1 border-b border-zinc-200 dark:border-white/10" role="img" aria-label="{{ __('Daily image generations for the last 30 days') }}">
-                    @foreach ($dailyUsage as $day)
-                        @php($height = $day['total'] > 0 ? max(6, $day['total'] / $maxDailyUsage * 100) : 0)
-                        <div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="image-usage-{{ $day['date']->toDateString() }}">
-                            <div class="w-full rounded-t bg-violet-500 transition hover:bg-violet-400" style="height: {{ $height }}%"></div>
-                            <div class="pointer-events-none absolute bottom-full inset-s-1/2 z-10 mb-2 hidden w-max -translate-x-1/2 rounded-lg bg-zinc-950 px-2 py-1.5 text-xs text-white shadow-lg group-hover:block">
-                                {{ $day['date']->format('d/m') }} · {{ __(':count generations', ['count' => number_format($day['total'])]) }}
+        <div class="overflow-visible pb-1">
+            <div class="flex h-40 items-end gap-1 border-b border-zinc-200 pt-7 dark:border-white/10" role="img" aria-label="{{ __('Daily image generations for the last 30 days') }}">
+                @foreach ($dailyUsage as $day)
+                    @php($height = $day['total'] > 0 ? max(6, $day['total'] / $maxDailyUsage * 100) : 0)
+                    <div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="image-usage-{{ $day['date']->toDateString() }}">
+                        <div class="relative w-full" style="height: {{ $height }}%">
+                            <div class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-950 px-1.5 py-1 text-[10px] font-medium tabular-nums text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 dark:bg-zinc-100 dark:text-zinc-900">
+                                {{ number_format($day['total']) }}
+                                <span class="font-normal text-zinc-300 dark:text-zinc-500">· {{ $day['date']->format('d/m') }}</span>
                             </div>
-                            <span class="sr-only">{{ $day['date']->format('d/m/Y') }}: {{ __(':count generations', ['count' => number_format($day['total'])]) }}</span>
+                            <div
+                                class="h-full w-full rounded-t bg-yellow-500 transition group-hover:bg-yellow-400 dark:bg-yellow-400 dark:group-hover:bg-yellow-300"
+                                title="{{ $day['date']->format('d/m/Y') }}: {{ __(':count generations', ['count' => number_format($day['total'])]) }}"
+                            ></div>
                         </div>
-                    @endforeach
-                </div>
-                <div class="mt-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                    <span>{{ $dailyUsage[0]['date']->format('d/m') }}</span>
-                    <span>{{ __('30 days') }}</span>
-                    <span>{{ $dailyUsage[29]['date']->format('d/m') }}</span>
-                </div>
+                        <span class="sr-only">{{ $day['date']->format('d/m/Y') }}: {{ __(':count generations', ['count' => number_format($day['total'])]) }}</span>
+                    </div>
+                @endforeach
+            </div>
+            <div class="mt-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                <span>{{ $dailyUsage[0]['date']->format('d/m') }}</span>
+                <span>{{ __('30 days') }}</span>
+                <span>{{ $dailyUsage[29]['date']->format('d/m') }}</span>
             </div>
         </div>
     </flux:card>
@@ -399,7 +403,7 @@ new #[Title('Ảnh của bạn')] class extends Component {
                     <flux:table.row wire:key="created-image-{{ $image->id }}-{{ $image->is_published ? 'published' : 'unpublished' }}">
                         <flux:table.cell>
                             <div class="flex items-center gap-3">
-                                <button class="shrink-0 overflow-hidden rounded-xl bg-zinc-100 dark:bg-white/10" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
+                                <button class="shrink-0 overflow-hidden rounded-xl bg-zinc-100 dark:bg-white/10" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }}, preview: @js($thumbUrl) })" aria-label="{{ __('View image details') }}">
                                     @if ($thumbUrl)
                                         <img class="size-16 object-cover" src="{{ $thumbUrl }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" @if ($thumbSize) width="{{ $thumbSize['width'] }}" height="{{ $thumbSize['height'] }}" @endif loading="lazy" />
                                     @elseif ($image->status === 'pending')

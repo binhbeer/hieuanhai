@@ -20,7 +20,7 @@ Route::livewire('c/{category:slug}', 'pages::gallery')->name('categories.show');
 Route::livewire('t/{tag:slug}', 'pages::gallery')->name('tags.show');
 Route::livewire('anh/{image}', 'gallery.detail')->name('images.show');
 Route::livewire('favorites', 'pages::favorites')->middleware('auth')->name('favorites.index');
-Route::livewire('history', 'pages::images')->middleware('auth')->name('history.index');
+Route::livewire('history', 'pages::history')->middleware('auth')->name('history.index');
 
 Route::middleware(['auth'])->prefix('manage')->name('manage.')->group(function () {
     Route::livewire('/', 'pages::manage.dashboard')->name('index');

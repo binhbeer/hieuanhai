@@ -30,6 +30,46 @@ class GptImageOptions
     ];
 
     /**
+     * Tailwind size classes for the aspect-ratio menu icon (outline rectangle).
+     *
+     * @return array<string, string>
+     */
+    public static function aspectRatioIconClasses(): array
+    {
+        return [
+            'auto' => 'size-3.5',
+            '1:1' => 'size-3.5',
+            '3:4' => 'h-3.5 w-2.5',
+            '4:5' => 'h-3.5 w-2.5',
+            '2:3' => 'h-3.5 w-2.5',
+            '9:16' => 'h-3.5 w-2',
+            '4:3' => 'h-2.5 w-3.5',
+            '3:2' => 'h-2.5 w-3.5',
+            '16:9' => 'h-2 w-3.5',
+        ];
+    }
+
+    /**
+     * Human labels for the aspect-ratio menu (empty string = no label).
+     *
+     * @return array<string, string>
+     */
+    public static function aspectRatioDescriptions(): array
+    {
+        return [
+            'auto' => '',
+            '1:1' => __('Square'),
+            '3:4' => __('Portrait'),
+            '4:5' => __('Portrait'),
+            '2:3' => __('Tall'),
+            '9:16' => __('Vertical'),
+            '4:3' => __('Landscape'),
+            '3:2' => __('Wide'),
+            '16:9' => __('Widescreen'),
+        ];
+    }
+
+    /**
      * Provider-native size map (current gateway ignores large OpenAI sizes).
      * Long-edge targets stay within observed provider output so width|height can meet config without crop/resize.
      *

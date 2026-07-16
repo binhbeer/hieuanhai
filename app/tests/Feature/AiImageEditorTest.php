@@ -261,7 +261,7 @@ class AiImageEditorTest extends TestCase
 
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
-                'data' => [['b64_json' => base64_encode('fake-png')]],
+                'data' => [['b64_json' => base64_encode($this->pngBinary(1024, 1024))]],
             ]),
         ]);
 
@@ -292,6 +292,16 @@ class AiImageEditorTest extends TestCase
         Storage::disk('public')->assertExists($image->result_path);
         $this->assertMatchesRegularExpression('#^image/generatedmedia/\d{6}/\d{2}/\d+/\d+/[\w-]+\.png$#', (string) $image->result_path);
         $this->assertMatchesRegularExpression('#^image/generatedmedia/\d{6}/\d{2}/\d+/\d+/[\w-]+\.jpg$#', (string) ($image->response_meta['source_paths'][0] ?? ''));
+        $media = $image->getFirstMedia('result');
+        $this->assertNotNull($media);
+        $this->assertTrue($media->getCustomProperty('generated'));
+        $this->assertTrue($media->getCustomProperty('optimized'));
+        $this->assertSame('openai', $media->getCustomProperty('provider'));
+        $this->assertSame('cx/gpt-5.5-image', $media->getCustomProperty('model'));
+        $this->assertSame('A cute cat wearing a hat', $media->getCustomProperty('prompt'));
+        $this->assertSame('image/png', $media->getCustomProperty('mime_type'));
+        $this->assertSame($media->size, $media->getCustomProperty('optimized_size'));
+        $this->assertNotNull($media->getCustomProperty('optimized_at'));
         $this->assertSame('succeeded', $image->status);
     }
 
@@ -1035,6 +1045,21 @@ class AiImageEditorTest extends TestCase
         $this->assertFalse($related->contains($other));
     }
 
+    public function test_similar_images_component_loads_fixed_batch(): void
+    {
+        $selected = $this->publishedImage('Ảnh được chọn');
+        $related = collect(range(1, 21))->map(fn (int $i): GeneratedMedia => $this->publishedImage('Ảnh tương tự '.$i, now()->subMinutes($i)));
+        $this->syncImageTags($selected, ['sản phẩm']);
+        $related->each(fn (GeneratedMedia $image) => $this->syncImageTags($image, ['sản phẩm']));
+
+        Livewire::withoutLazyLoading()
+            ->test('gallery.similar-images', ['imageId' => $selected->id])
+            ->assertSee('Ảnh tương tự 1')
+            ->assertSee('Ảnh tương tự 20')
+            ->assertDontSee('Ảnh tương tự 21')
+            ->assertDontSee(__('Loading more images...'));
+    }
+
     public function test_admin_can_toggle_featured_image_from_detail_and_featured_sort_uses_it(): void
     {
         $admin = User::factory()->create(['id' => 1]);
@@ -1147,7 +1172,24 @@ class AiImageEditorTest extends TestCase
         $this->assertSame(941, data_get($image->response_meta, 'dimensions.height'));
         $this->assertTrue((bool) data_get($image->response_meta, 'dimensions.meets_width_or_height'));
         $this->assertFalse((bool) data_get($image->response_meta, 'dimensions.resized'));
+        $media = $image->getFirstMedia('result');
+        $this->assertNotNull($media);
+        $this->assertSame('image/png', $media->mime_type);
+        $this->assertTrue($media->getCustomProperty('generated'));
+        $this->assertTrue($media->getCustomProperty('optimized'));
+        $this->assertSame('openai', $media->getCustomProperty('provider'));
+        $this->assertSame('cx/gpt-5.5-image', $media->getCustomProperty('model'));
+        $this->assertSame('A cute cat wearing a hat', $media->getCustomProperty('prompt'));
+        $this->assertSame('image/png', $media->getCustomProperty('mime_type'));
+        $this->assertSame(1672, $media->getCustomProperty('width'));
+        $this->assertSame(941, $media->getCustomProperty('height'));
+        $this->assertSame('1536x864', $media->getCustomProperty('requested_size'));
+        $this->assertSame(strlen($providerPng), $media->getCustomProperty('original_size'));
+        $this->assertSame($media->size, $media->getCustomProperty('optimized_size'));
+        $this->assertLessThan(strlen($providerPng), $media->size);
+        $this->assertNotNull($media->getCustomProperty('optimized_at'));
         $resultBinary = Storage::disk('public')->get($image->result_path);
+        $this->assertSame(strlen($resultBinary), $media->size);
         $resultSize = getimagesizefromstring($resultBinary);
         $this->assertSame(1672, $resultSize[0] ?? null);
         $this->assertSame(941, $resultSize[1] ?? null);

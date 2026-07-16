@@ -37,9 +37,13 @@ RUN apk add --no-cache \
   php84-xmlwriter \
   php84-zip \
   curl \
+  jpegoptim \
+  libwebp-tools \
   nginx \
   nodejs \
   npm \
+  optipng \
+  pngquant \
   runit \
   tzdata
 

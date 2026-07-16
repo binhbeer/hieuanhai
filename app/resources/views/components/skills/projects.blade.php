@@ -20,7 +20,7 @@
                     <article class="relative overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5">
                         <div class="absolute top-3 left-3 z-10"><flux:badge variant="solid">{{ __('Version :version', ['version' => $page->mediaVersion($image)]) }}</flux:badge></div>
                         @if ($image->status === 'succeeded' && $page->imageUrl($image, 'md'))
-                            <button type="button" class="block w-full bg-zinc-100 text-left dark:bg-white/10" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
+                            <button type="button" class="block w-full bg-zinc-100 text-left dark:bg-white/10" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }}, preview: @js($page->imageUrl($image, 'md')) })" aria-label="{{ __('View image details') }}">
                                 <img class="h-auto w-full" src="{{ $page->imageUrl($image, 'md') }}" alt="{{ $image->title ?: $image->prompt }}">
                             </button>
                         @elseif ($image->status === 'failed')

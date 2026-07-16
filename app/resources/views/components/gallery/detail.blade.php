@@ -7,11 +7,14 @@ use App\Models\User;
 use App\Services\AiImageEditor;
 use App\Support\GptImageOptions;
 use Flux\Flux;
+use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
-new class extends Component {
+new class extends Component
+{
     public ?int $selectedImageId = null;
 
     public bool $show = false;
@@ -27,7 +30,7 @@ new class extends Component {
             abort_unless($this->isPublicImage($image), 404);
 
             if (request()->route()?->originalParameter('image') !== $image->getRouteKey()) {
-                abort(new \Illuminate\Http\RedirectResponse(route('images.show', $image), 301));
+                abort(new RedirectResponse(route('images.show', $image), 301));
             }
 
             $this->standalone = true;
@@ -49,7 +52,7 @@ new class extends Component {
         if (request()->routeIs('history.index')) {
             $id = request()->integer('image');
 
-            if (!$id && request()->boolean('composer')) {
+            if (! $id && request()->boolean('composer')) {
                 $id = $this->latestCreatedImage()?->id;
             }
 
@@ -63,7 +66,7 @@ new class extends Component {
     {
         $image = $this->visibleImage($id);
 
-        if (!$image) {
+        if (! $image) {
             $this->closeImage();
 
             return;
@@ -71,14 +74,14 @@ new class extends Component {
 
         $this->selectedImageId = $image->id;
         $this->show = true;
-        unset($this->selectedImage, $this->relatedImages, $this->favoriteIds);
+        unset($this->selectedImage, $this->favoriteIds);
     }
 
     public function closeImage(): void
     {
         $this->selectedImageId = null;
         $this->show = false;
-        unset($this->selectedImage, $this->relatedImages, $this->favoriteIds);
+        unset($this->selectedImage, $this->favoriteIds);
     }
 
     public function refreshCompletedImage(array $payload = []): void
@@ -87,13 +90,13 @@ new class extends Component {
             return;
         }
 
-        unset($this->selectedImage, $this->relatedImages);
+        unset($this->selectedImage);
         $this->dispatch('image-usage-updated');
     }
 
     public function toggleFavorite(int $id): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -101,7 +104,7 @@ new class extends Component {
 
         $image = $this->publicImage($id);
 
-        if (!$image) {
+        if (! $image) {
             return;
         }
 
@@ -113,7 +116,7 @@ new class extends Component {
             ? $favorite->delete()
             : MediaFavorite::query()->create(['user_id' => $userId, 'media_id' => $image->id]);
 
-        unset($this->selectedImage, $this->relatedImages, $this->favoriteIds);
+        unset($this->selectedImage, $this->favoriteIds);
         $this->dispatch('gallery-updated');
 
         Flux::toast(variant: 'success', text: $wasFavorite ? __('Remove favorite') : __('Favorite image'));
@@ -121,7 +124,7 @@ new class extends Component {
 
     public function useAsPrompt(int $id): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -129,20 +132,20 @@ new class extends Component {
 
         $image = $this->visibleImage($id);
 
-        if (!$image) {
+        if (! $image) {
             return;
         }
 
         $this->dispatch('use-prompt', prompt: $image->prompt);
 
-        if (!$this->standalone) {
+        if (! $this->standalone) {
             $this->closeImage();
         }
     }
 
     public function editImage(int $id): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -153,20 +156,20 @@ new class extends Component {
             ->whereKey($id)
             ->first();
 
-        if (!$image) {
+        if (! $image) {
             return;
         }
 
         $this->dispatch('edit-image', imageId: $image->id);
 
-        if (!$this->standalone) {
+        if (! $this->standalone) {
             $this->closeImage();
         }
     }
 
     public function cancelPending(int $id, AiImageEditor $editor): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -178,11 +181,11 @@ new class extends Component {
             ->whereKey($id)
             ->first();
 
-        if (!$image || !$editor->cancelPending($image)) {
+        if (! $image || ! $editor->cancelPending($image)) {
             return;
         }
 
-        unset($this->selectedImage, $this->relatedImages);
+        unset($this->selectedImage);
         $this->dispatch('image-usage-updated');
         $this->dispatch('gallery-updated');
         Flux::toast(text: __('Image creation cancelled.'));
@@ -190,7 +193,7 @@ new class extends Component {
 
     public function retryImage(int $id, AiImageEditor $editor): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -201,7 +204,7 @@ new class extends Component {
             ->whereKey($id)
             ->first();
 
-        if (!$image || $image->status !== 'failed') {
+        if (! $image || $image->status !== 'failed') {
             return;
         }
 
@@ -230,14 +233,14 @@ new class extends Component {
             return;
         }
 
-        unset($this->selectedImage, $this->relatedImages);
+        unset($this->selectedImage);
         $this->dispatch('image-usage-updated');
         $this->dispatch('gallery-updated');
     }
 
     public function toggleFeatured(int $id): void
     {
-        if (!$this->canManageFeatured()) {
+        if (! $this->canManageFeatured()) {
             return;
         }
 
@@ -246,13 +249,13 @@ new class extends Component {
             ->whereKey($id)
             ->first();
 
-        if (!$image) {
+        if (! $image) {
             return;
         }
 
-        $image->update(['is_featured' => !$image->is_featured]);
+        $image->update(['is_featured' => ! $image->is_featured]);
 
-        unset($this->selectedImage, $this->relatedImages);
+        unset($this->selectedImage);
         $this->dispatch('gallery-updated');
 
         Flux::toast(variant: 'success', text: $image->is_featured ? __('Image featured.') : __('Image unfeatured.'));
@@ -265,17 +268,9 @@ new class extends Component {
     }
 
     #[Computed]
-    public function relatedImages()
-    {
-        return $this->selectedImage && $this->isPublicImage($this->selectedImage)
-            ? app(AiImageEditor::class)->relatedPublished($this->selectedImage, 6)
-            : collect();
-    }
-
-    #[Computed]
     public function favoriteIds(): array
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             return [];
         }
 
@@ -290,16 +285,16 @@ new class extends Component {
      */
     public function referenceImageUrls(GeneratedMedia $image): array
     {
-        if (!$this->canEdit($image) && !$this->canManageFeatured()) {
+        if (! $this->canEdit($image) && ! $this->canManageFeatured()) {
             return [];
         }
 
-        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        /** @var FilesystemAdapter $disk */
         $disk = Storage::disk('public');
 
         return array_values(array_filter(
             array_map(
-                fn(string $path): ?string => $disk->exists($path) ? $disk->url($path) : null,
+                fn (string $path): ?string => $disk->exists($path) ? $disk->url($path) : null,
                 app(AiImageEditor::class)->referenceSourcePaths($image),
             ),
         ));
@@ -410,7 +405,7 @@ new class extends Component {
                 'high' => __('Good'),
                 'original' => __('High'),
                 default => null,
-        },
+            },
         ];
     }
 
@@ -418,7 +413,7 @@ new class extends Component {
     {
         $userId = Auth::id();
 
-        return $userId ? ['echo-private:App.Models.User.' . $userId . ',AiImageCompleted' => 'refreshCompletedImage'] : [];
+        return $userId ? ['echo-private:App.Models.User.'.$userId.',AiImageCompleted' => 'refreshCompletedImage'] : [];
     }
 
     private function latestCreatedImage(): ?GeneratedMedia
@@ -437,7 +432,7 @@ new class extends Component {
 
         return $query
             ->where(function ($query) use ($user): void {
-                $query->where(fn($query) => $query->publiclyVisible());
+                $query->where(fn ($query) => $query->publiclyVisible());
 
                 if ($user instanceof User) {
                     $query->orWhere('user_id', $user->id);
@@ -463,8 +458,11 @@ new class extends Component {
 <div class="contents" x-data="{
     previousUrl: null,
     previousTitle: null,
+    loading: false,
+    loadingImageId: null,
+    preview: null,
     siteName: @js(\App\Support\AppSettings::string('site.name', config('app.name', 'GenAnh'))),
-    openImage(id, url, title) {
+    openImage(id, url, title, preview = null) {
         if (url) {
             if (this.previousUrl) {
                 history.replaceState(null, '', url);
@@ -477,7 +475,47 @@ new class extends Component {
 
         if (title) document.title = `${title} - ${this.siteName}`;
 
-        $wire.openImage(id);
+        this.preview = preview;
+        this.loadingImageId = id;
+        this.loading = Boolean(preview);
+        $wire.openImage(id).catch(() => {
+            if (this.loadingImageId === id) this.finishLoading();
+        });
+    },
+    finishLoading() {
+        const finishedPreview = this.preview;
+
+        this.loading = false;
+        this.loadingImageId = null;
+        setTimeout(() => {
+            if (this.preview === finishedPreview) this.preview = null;
+        }, 200);
+    },
+    finishLoadingImage(image, id) {
+        if (this.loadingImageId !== id) return;
+
+        if (typeof image.decode !== 'function') {
+            this.finishLoading();
+
+            return;
+        }
+
+        image.decode().catch(() => {}).finally(() => {
+            if (this.loadingImageId === id) this.finishLoading();
+        });
+    },
+    fallbackToPreview(image, id) {
+        if (this.loadingImageId !== id) return;
+
+        const previewUrl = this.preview ? new URL(this.preview, window.location.href).href : null;
+
+        if (previewUrl && image.src !== previewUrl) {
+            image.src = previewUrl;
+
+            return;
+        }
+
+        this.finishLoading();
     },
     closeImage() {
         if (this.previousUrl) {
@@ -487,9 +525,21 @@ new class extends Component {
             this.previousTitle = null;
         }
 
+        this.loading = false;
+        this.loadingImageId = null;
+        this.preview = null;
         $wire.closeImage();
     },
-}" x-on:keydown.escape.window="if (!document.querySelector('.lightbox3-overlay')) { {{ $standalone ? "window.location.href = '" . route('home') . "'" : 'closeImage()' }} }" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title)" @endif>
+}" x-on:keydown.escape.window="if (!document.querySelector('.lightbox3-overlay')) { {{ $standalone ? "window.location.href = '" . route('home') . "'" : 'closeImage()' }} }" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title, $event.detail.preview)" @endif>
+    @if (!$standalone)
+        <div x-show="loading" x-cloak class="fixed inset-0 z-60 flex flex-col overflow-hidden bg-zinc-100/90 text-zinc-950 backdrop-blur dark:bg-zinc-950/80 dark:text-white md:grid md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)]" role="dialog" x-transition:leave="transition-opacity ease-out duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" aria-modal="true" aria-label="{{ __('Image details') }}">
+            <div class="relative flex min-h-0 items-start justify-center pt-16 sm:p-4 sm:pt-16 md:items-center md:p-20">
+                <img x-show="preview" x-bind:src="preview" alt="" class="block h-auto max-h-[62svh] max-w-full rounded-xl object-contain md:max-h-[calc(100svh-10rem)] md:rounded-2xl" decoding="sync">
+            </div>
+            <aside class="hidden border-l border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950 md:block"></aside>
+        </div>
+    @endif
+
     @php($selected = $this->selectedImage())
 
     @if ($show && $selected)
@@ -503,7 +553,11 @@ new class extends Component {
     @php($visiblePrompt = $canViewFullPrompt ? $selected->prompt : Str::limit($selected->prompt, 160))
     @php($generationOptions = $this->generationOptions($selected))
 
-    <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 dark:bg-zinc-950/80 dark:text-white md:grid md:backdrop-blur md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
+    @if (!$selectedThumbUrl && !$standalone)
+        <div x-init="finishLoading()"></div>
+    @endif
+
+    <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 dark:bg-zinc-950/80 dark:text-white md:grid md:backdrop-blur md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-[.985]" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
         <div class="relative flex flex-col shrink-0 md:shrink md:flex-1">
             <div class="fixed inset-x-0 top-0 z-20 flex h-16 min-w-0 items-center gap-3 bg-zinc-100/90 px-4 backdrop-blur dark:bg-zinc-950/80 md:absolute md:inset-x-4 md:top-4 md:h-auto md:bg-transparent md:p-0 md:backdrop-blur-none">
                 @if (filled($selected->title))
@@ -544,8 +598,8 @@ new class extends Component {
                 <div class="flex flex-1 items-center justify-center gap-4 p-0 md:px-16 md:py-16">
                     @if ($selectedThumbUrl)
                         <div class="relative flex flex-col min-w-0 flex-1 gap-2 items-center justify-center overflow-hidden">
-                            <a class="relative flex max-h-[62svh] max-w-full cursor-zoom-in items-center justify-center overflow-hidden rounded-xl md:max-h-[calc(100svh-10rem)] md:rounded-2xl" href="{{ $selectedUrl }}" data-lightbox @if ($selectedOriginalSize) data-width="{{ $selectedOriginalSize['width'] }}" data-height="{{ $selectedOriginalSize['height'] }}" @endif aria-label="{{ __('View original image') }}">
-                                <img class="block h-auto max-h-[62svh] max-w-full object-contain opacity-100 md:max-h-[calc(100svh-10rem)]" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selectedTitle, 80) }}" @if ($selectedImageSize) width="{{ $selectedImageSize['width'] }}" height="{{ $selectedImageSize['height'] }}" @endif decoding="async" />
+                            <a class="relative grid max-h-[62svh] max-w-full cursor-zoom-in items-center justify-center overflow-hidden rounded-xl md:max-h-[calc(100svh-10rem)] md:rounded-2xl" href="{{ $selectedUrl }}" data-lightbox @if ($selectedOriginalSize) data-width="{{ $selectedOriginalSize['width'] }}" data-height="{{ $selectedOriginalSize['height'] }}" @endif aria-label="{{ __('View original image') }}">
+                                <img class="col-start-1 row-start-1 block h-auto max-h-[62svh] max-w-full rounded-xl object-contain md:max-h-[calc(100svh-10rem)] md:rounded-2xl" src="{{ $selectedThumbUrl }}" alt="{{ Str::limit($selectedTitle, 80) }}" @if ($selectedImageSize) width="{{ $selectedImageSize['width'] }}" height="{{ $selectedImageSize['height'] }}" @endif decoding="async" @if (!$standalone) x-init="$nextTick(() => { if ($el.complete) finishLoadingImage($el, {{ $selected->id }}) })" x-on:load="finishLoadingImage($el, {{ $selected->id }})" x-on:error="fallbackToPreview($el, {{ $selected->id }})" @endif />
                             </a>
                         </div>
                     @elseif ($selected->status === 'pending')
@@ -594,19 +648,11 @@ new class extends Component {
             </header>
 
             <div class="flex-1 p-4 md:min-h-0 md:overflow-y-auto">
-                <div class="mb-5 flex flex-wrap gap-1">
-                    @if ($selected->is_featured)
+                @if ($selected->is_featured)
+                    <div class="mb-5 flex flex-wrap gap-1">
                         <flux:badge size="sm" color="amber">{{ __('Featured') }}</flux:badge>
-                    @endif
-                    @if ($selected->category)
-                        <flux:button :href="route('categories.show', $selected->category)" size="xs" variant="ghost" wire:navigate>{{ $selected->category->name }}</flux:button>
-                    @endif
-                    @foreach ($selected->tags as $tag)
-                        <flux:button :href="route('tags.show', $tag)" size="xs" variant="ghost" wire:navigate wire:key="image-detail-tag-{{ $tag->id }}">
-                            #{{ $tag->name }}
-                        </flux:button>
-                    @endforeach
-                </div>
+                    </div>
+                @endif
 
                 <div class="space-y-3" x-data="{ copied: false, expanded: false, prompt: @js($canViewFullPrompt ? $selected->prompt : $visiblePrompt) }">
                     <div>
@@ -668,22 +714,21 @@ new class extends Component {
                     </div>
                 @endif
 
-                @if ($this->relatedImages->isNotEmpty())
-                <div class="mt-7">
-                    <div class="mb-3 text-lg font-semibold">{{ __('Similar images') }}</div>
-                    <x-gallery.list :images="$this->relatedImages" class="gap-x-3 gap-y-2" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
-                        @foreach ($this->relatedImages as $related)
-                        @php($relatedUrl = $this->imageUrl($related, 'xs'))
-                        @php($relatedSize = $this->imageSize($related, 'xs'))
-                        @php($relatedTitle = Str::limit($related->title ?: $related->prompt, 70, ''))
-                        @if ($relatedUrl)
-                            <a class="overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/10" href="{{ $this->detailUrl($related) }}" @if ($standalone) wire:navigate @else x-data x-on:click.prevent="$dispatch('open-image-detail', { id: {{ $related->id }}, url: @js($this->detailUrl($related)), title: @js($relatedTitle) })" @endif wire:key="related-image-detail-{{ $related->id }}">
-                                <img class="block h-auto w-full" src="{{ $relatedUrl }}" alt="{{ Str::limit($related->title ?: $related->prompt, 50) }}" @if ($relatedSize) width="{{ $relatedSize['width'] }}" height="{{ $relatedSize['height'] }}" @endif loading="lazy">
-                            </a>
+                @if ($this->isPublicImage($selected))
+                    <livewire:gallery.similar-images :image-id="$selected->id" :standalone="$standalone" lazy :key="'similar-images-'.$selected->id" />
+                @endif
+
+                @if ($selected->category || $selected->tags->isNotEmpty())
+                    <div class="mt-7 flex flex-wrap gap-1">
+                        @if ($selected->category)
+                            <flux:button :href="route('categories.show', $selected->category)" size="xs" variant="ghost" wire:navigate>{{ $selected->category->name }}</flux:button>
                         @endif
+                        @foreach ($selected->tags as $tag)
+                            <flux:button :href="route('tags.show', $tag)" size="xs" variant="ghost" wire:navigate wire:key="image-detail-tag-{{ $tag->id }}">
+                                #{{ $tag->name }}
+                            </flux:button>
                         @endforeach
-                    </x-gallery.list>
-                </div>
+                    </div>
                 @endif
             </div>
 

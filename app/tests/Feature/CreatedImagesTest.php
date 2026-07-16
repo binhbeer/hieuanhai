@@ -68,7 +68,7 @@ class CreatedImagesTest extends TestCase
             $image->forceFill(['created_at' => $createdAt])->save();
         }
 
-        $component = Livewire::actingAs($user)->test('pages::images');
+        $component = Livewire::actingAs($user)->test('pages::history');
         $dailyUsage = $component->get('dailyUsage');
 
         $this->assertCount(30, $dailyUsage);
@@ -140,7 +140,7 @@ class CreatedImagesTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        Livewire::test('pages::images')
+        Livewire::test('pages::history')
             ->call('refreshCompletedImage', ['status' => 'pending', 'progress' => 'generating'])
             ->assertNotDispatched('toast-show');
     }
@@ -150,11 +150,11 @@ class CreatedImagesTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        Livewire::test('pages::images')
+        Livewire::test('pages::history')
             ->call('refreshCompletedImage', ['status' => 'succeeded'])
             ->assertDispatched('toast-show');
 
-        Livewire::test('pages::images')
+        Livewire::test('pages::history')
             ->call('refreshCompletedImage', ['status' => 'failed'])
             ->assertDispatched('toast-show');
     }
@@ -232,7 +232,7 @@ class CreatedImagesTest extends TestCase
     {
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('pages::image-generator')
+        Livewire::test('gallery.generator')
             ->set('parentId', 999)
             ->set('parentPrompt', 'Old parent prompt')
             ->set('parentReferenceIndexes', [0])
@@ -262,7 +262,7 @@ class CreatedImagesTest extends TestCase
         ]);
         $this->actingAs($user);
 
-        Livewire::test('pages::image-generator')
+        Livewire::test('gallery.generator')
             ->call('editImage', $parent->id)
             ->assertSet('parentId', $parent->id)
             ->assertSet('parentPrompt', 'Original parent prompt')
@@ -287,12 +287,12 @@ class CreatedImagesTest extends TestCase
         ]);
 
         Livewire::actingAs($owner)
-            ->test('image-detail')
+            ->test('gallery.detail')
             ->call('openImage', $image->id)
             ->assertSee(__('Edit image'));
 
         Livewire::actingAs(User::factory()->create())
-            ->test('image-detail')
+            ->test('gallery.detail')
             ->call('openImage', $image->id)
             ->assertDontSee(__('Edit image'));
     }
@@ -309,7 +309,7 @@ class CreatedImagesTest extends TestCase
         ]);
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('pages::image-generator')
+        Livewire::test('gallery.generator')
             ->call('editImage', $parent->id)
             ->assertSet('parentId', null)
             ->assertSet('showComposer', false)
@@ -334,7 +334,7 @@ class CreatedImagesTest extends TestCase
         ]);
         $this->actingAs($user);
 
-        $component = Livewire::test('pages::image-generator')
+        $component = Livewire::test('gallery.generator')
             ->call('editImage', $parent->id)
             ->set('prompt', 'Make the lighting warmer')
             ->call('createImage')
@@ -362,7 +362,7 @@ class CreatedImagesTest extends TestCase
         ]);
         $this->actingAs($user);
 
-        Livewire::test('pages::image-generator')
+        Livewire::test('gallery.generator')
             ->call('editImage', $parent->id)
             ->assertSet('parentId', $parent->id)
             ->assertSet('parentPrompt', 'Prompt-only parent')
@@ -373,7 +373,7 @@ class CreatedImagesTest extends TestCase
     {
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('pages::image-generator')
+        Livewire::test('gallery.generator')
             ->set('showComposer', true)
             ->set('prompt', str_repeat('mèo ', 1201))
             ->call('createImage')
@@ -412,7 +412,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('pages::image-generator')
+        Livewire::test('gallery.generator')
             ->set('showComposer', true)
             ->set('prompt', 'small cat')
             ->set('rewriteInstruction', 'make it cinematic')
@@ -496,7 +496,7 @@ class CreatedImagesTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        $component = Livewire::test('pages::image-generator')
+        $component = Livewire::test('gallery.generator')
             ->set('showComposer', true)
             ->set('prompt', 'Create a small cat')
             ->call('createImage')
@@ -523,7 +523,7 @@ class CreatedImagesTest extends TestCase
         $user = User::factory()->unverified()->create(['id' => 200, 'created_at' => now()->subDay()]);
         $this->actingAs($user);
 
-        Livewire::test('pages::image-generator')
+        Livewire::test('gallery.generator')
             ->set('showComposer', true)
             ->set('prompt', 'Create a small cat')
             ->call('createImage')
@@ -712,7 +712,7 @@ class CreatedImagesTest extends TestCase
             ->assertSee('Created portrait image')
             ->assertSee(__('Publish'));
 
-        $component = Livewire::test('pages::images')
+        $component = Livewire::test('pages::history')
             ->call('togglePublish', $image->id)
             ->assertSee(__('Published'))
             ->assertSee(__('Unpublish'));
@@ -744,7 +744,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs($user);
 
-        Livewire::test('pages::images')
+        Livewire::test('pages::history')
             ->assertSee('Prompt không phù hợp để tạo hoặc publish ảnh.')
             ->assertSeeHtml('disabled');
 

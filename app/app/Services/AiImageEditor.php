@@ -29,6 +29,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Files\Base64Image;
+use Spatie\ImageOptimizer\OptimizerChainFactory;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Throwable;
 
 class AiImageEditor
@@ -49,7 +51,7 @@ class AiImageEditor
     private const IMAGE_SIZES = [
         'original' => null,
         'xs' => 320,
-        'sm' => 720,
+        'sm' => 640,
         'md' => 1024,
         'lg' => 1200,
         'og' => [1200, 630],
@@ -66,7 +68,7 @@ class AiImageEditor
             throw new \InvalidArgumentException('Prompt là bắt buộc.');
         }
 
-        $photos = array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile));
+        $photos = array_values(array_filter($photos, fn($item) => $item instanceof UploadedFile));
         $this->reviewForCreation($prompt, $photos);
         $photo = $photos[0] ?? null;
         $visitorKey = $this->visitorKey($request);
@@ -102,10 +104,7 @@ class AiImageEditor
                 throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
             }
 
-            $media = $image->addMediaFromString($content)
-                ->usingFileName(Str::uuid().$this->extensionFor($result['mime']))
-                ->withProperties(['mime_type' => $result['mime']])
-                ->toMediaCollection('result');
+            $media = $this->storeGeneratedImage($image, $content, $result);
 
             $image->update([
                 'result_path' => $media->getPathRelativeToRoot(),
@@ -147,7 +146,7 @@ class AiImageEditor
         ?string $resolution = null,
     ): GeneratedMedia {
 
-        if (! Auth::check()) {
+        if (!Auth::check()) {
             throw new \InvalidArgumentException('Vui lòng đăng nhập để tạo ảnh.');
         }
 
@@ -186,7 +185,7 @@ class AiImageEditor
                 ? GeneratedMedia::query()->where('user_id', $userId)->find($parentId)
                 : null;
 
-            if ($parentId && ! $parent) {
+            if ($parentId && !$parent) {
                 throw new \InvalidArgumentException('Không tìm thấy ảnh gốc để chỉnh sửa.');
             }
 
@@ -195,7 +194,7 @@ class AiImageEditor
                 : [];
             $referenceImageIds = array_slice(array_values(array_unique(array_map('intval', $referenceImageIds))), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads)));
             $referenceUploads = $this->storeReferenceImageUploads($referenceImageIds);
-            $photos = array_slice(array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile)), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads) - count($referenceUploads)));
+            $photos = array_slice(array_values(array_filter($photos, fn($item) => $item instanceof UploadedFile)), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads) - count($referenceUploads)));
             $pendingUploads = [...$parentReferenceUploads, ...$referenceUploads, ...$this->storePendingUploads($photos)];
             $photo = $photos[0] ?? null;
 
@@ -213,7 +212,7 @@ class AiImageEditor
                     'upload_mime' => $photo?->getClientMimeType(),
                     'upload_size' => $photo?->getSize(),
                     'upload_count' => count($pendingUploads),
-                    'reference_image_ids' => array_values(array_filter(array_map(fn (array $upload) => $upload['image_id'] ?? null, $referenceUploads))),
+                    'reference_image_ids' => array_values(array_filter(array_map(fn(array $upload) => $upload['image_id'] ?? null, $referenceUploads))),
                     'parent_prompt' => $parent?->prompt,
                     'pending_uploads' => $pendingUploads,
                     'aspect_ratio' => $aspectRatio,
@@ -221,7 +220,7 @@ class AiImageEditor
                     'size' => $size,
                     'image_detail' => $imageDetail,
                     'progress' => 'queued',
-                ], fn (mixed $value): bool => $value !== null),
+                ], fn(mixed $value): bool => $value !== null),
             ]);
         });
     }
@@ -311,17 +310,17 @@ class AiImageEditor
             $parentPrompt = $requestMeta['parent_prompt'] ?? null;
             $finalPrompt = trim(implode("\n\n", array_filter([
                 $photos === [] ? null : $this->referencePrompt($requestMeta),
-                is_string($parentPrompt) ? 'Original prompt: '.$parentPrompt : null,
-                $image->parent_id ? 'Edit instructions: '.$image->prompt : $image->prompt,
+                is_string($parentPrompt) ? 'Original prompt: ' . $parentPrompt : null,
+                $image->parent_id ? 'Edit instructions: ' . $image->prompt : $image->prompt,
             ])));
 
-            if (! $this->updateImageProgress($image, $requestMeta, 'reviewing')) {
+            if (!$this->updateImageProgress($image, $requestMeta, 'reviewing')) {
                 return $image->refresh();
             }
 
             $this->reviewForCreation($finalPrompt, array_values($photos));
 
-            if (! $this->updateImageProgress($image, $requestMeta, 'generating')) {
+            if (!$this->updateImageProgress($image, $requestMeta, 'generating')) {
                 return $image->refresh();
             }
 
@@ -343,7 +342,7 @@ class AiImageEditor
                 return $image->refresh();
             }
 
-            if (! $this->updateImageProgress($image, $requestMeta, 'saving')) {
+            if (!$this->updateImageProgress($image, $requestMeta, 'saving')) {
                 if ($sourcePaths !== []) {
                     $image->update([
                         'response_meta' => [
@@ -363,10 +362,7 @@ class AiImageEditor
                 throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
             }
 
-            $media = $image->addMediaFromString($content)
-                ->usingFileName(Str::uuid().$this->extensionFor($result['mime']))
-                ->withProperties(['mime_type' => $result['mime']])
-                ->toMediaCollection('result');
+            $media = $this->storeGeneratedImage($image, $content, $result);
             $storedPath = $media->getPathRelativeToRoot();
 
             unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads'], $requestMeta['progress']);
@@ -384,11 +380,11 @@ class AiImageEditor
                         'usage' => $result['usage'],
                         'source_paths' => $result['source_paths'],
                         'dimensions' => $result['dimensions'] ?? null,
-                    ], fn (mixed $value): bool => $value !== null),
+                    ], fn(mixed $value): bool => $value !== null),
                 ]);
 
             if ($updated === 0) {
-                Storage::disk('public')->delete($storedPath);
+                $media->delete();
 
                 if ($sourcePaths !== []) {
                     $image->update([
@@ -415,7 +411,7 @@ class AiImageEditor
                 return $image->refresh();
             }
 
-            if (! $e instanceof \InvalidArgumentException) {
+            if (!$e instanceof \InvalidArgumentException) {
                 report($e);
             }
 
@@ -443,6 +439,58 @@ class AiImageEditor
     }
 
     /**
+     * @param  array{mime: string, dimensions?: array<string, mixed>}  $result
+     */
+    private function storeGeneratedImage(GeneratedMedia $image, string $content, array $result): Media
+    {
+        $properties = array_filter([
+            'generated' => true,
+            'provider' => $image->provider,
+            'model' => $image->model,
+            'prompt' => $image->prompt,
+            'source' => $image->source,
+            'parent_id' => $image->parent_id,
+            'mime_type' => $result['mime'],
+            'width' => data_get($result, 'dimensions.width'),
+            'height' => data_get($result, 'dimensions.height'),
+            'requested_size' => data_get($result, 'dimensions.requested_size'),
+            'original_size' => strlen($content),
+        ], fn (mixed $value): bool => $value !== null);
+
+        $media = $image->addMediaFromString($content)
+            ->usingFileName(Str::uuid().$this->extensionFor($result['mime']))
+            ->withProperties(['mime_type' => $result['mime']])
+            ->withCustomProperties($properties)
+            ->toMediaCollection('result');
+
+        try {
+            $path = $media->getPath();
+            OptimizerChainFactory::create((array) config('media-library.image_optimizers'))
+                ->throws()
+                ->optimize($path);
+
+            clearstatcache(true, $path);
+            $optimizedSize = filesize($path);
+
+            if ($optimizedSize === false) {
+                throw new \RuntimeException('Không đọc được dung lượng ảnh đã optimize.');
+            }
+
+            $media->size = $optimizedSize;
+            $media->setCustomProperty('optimized', true);
+            $media->setCustomProperty('optimized_size', $media->size);
+            $media->setCustomProperty('optimized_at', now()->toISOString());
+            $media->save();
+        } catch (Throwable $e) {
+            $media->delete();
+
+            throw $e;
+        }
+
+        return $media;
+    }
+
+    /**
      * @param  array<string, mixed>  $requestMeta
      */
     private function updateImageProgress(GeneratedMedia $image, array &$requestMeta, string $progress): bool
@@ -465,17 +513,17 @@ class AiImageEditor
 
     public function publish(GeneratedMedia $image, Request $request, bool $requireOwner = true): GeneratedMedia
     {
-        if ($requireOwner && ! $this->ownsImage($image, $request)) {
+        if ($requireOwner && !$this->ownsImage($image, $request)) {
             throw new \InvalidArgumentException('Không tìm thấy ảnh để publish.');
         }
 
-        if ($image->status !== 'succeeded' || ! $image->result_path) {
+        if ($image->status !== 'succeeded' || !$image->result_path) {
             throw new \InvalidArgumentException('Chỉ publish được ảnh đã tạo xong.');
         }
 
         $responseMeta = is_array($image->response_meta) ? $image->response_meta : [];
 
-        if (is_string($responseMeta['publish_error'] ?? null) && ! Auth::user()?->isAdmin()) {
+        if (is_string($responseMeta['publish_error'] ?? null) && !Auth::user()?->isAdmin()) {
             throw new \InvalidArgumentException($responseMeta['publish_error']);
         }
 
@@ -536,14 +584,14 @@ class AiImageEditor
         $query = GeneratedMedia::query()
             ->with(['category', 'user'])
             ->publiclyVisible()
-            ->when($category, fn ($query) => $query->where('category_id', $category->id))
-            ->when($tag, fn ($query) => $query->whereHas('tags', fn ($query) => $query->whereKey($tag->id)))
+            ->when($category, fn($query) => $query->where('category_id', $category->id))
+            ->when($tag, fn($query) => $query->whereHas('tags', fn($query) => $query->whereKey($tag->id)))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
-                    $query->where('title', 'like', '%'.$search.'%')
-                        ->orWhere('prompt', 'like', '%'.$search.'%')
-                        ->orWhereHas('category', fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
-                        ->orWhereHas('tags', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
+                    $query->where('title', 'like', '%' . $search . '%')
+                        ->orWhere('prompt', 'like', '%' . $search . '%')
+                        ->orWhereHas('category', fn($query) => $query->where('name', 'like', '%' . $search . '%'))
+                        ->orWhereHas('tags', fn($query) => $query->where('name', 'like', '%' . $search . '%'));
                 });
             });
 
@@ -570,8 +618,8 @@ class AiImageEditor
 
         if ($tagIds !== []) {
             return $query
-                ->whereHas('tags', fn ($query) => $query->whereIn('tags.id', $tagIds))
-                ->withCount(['tags as matching_tags_count' => fn ($query) => $query->whereIn('tags.id', $tagIds)])
+                ->whereHas('tags', fn($query) => $query->whereIn('tags.id', $tagIds))
+                ->withCount(['tags as matching_tags_count' => fn($query) => $query->whereIn('tags.id', $tagIds)])
                 ->orderByDesc('matching_tags_count')
                 ->latest('published_at')
                 ->limit($limit)
@@ -579,7 +627,7 @@ class AiImageEditor
         }
 
         return $query
-            ->when($image->category_id, fn ($query) => $query->where('category_id', $image->category_id))
+            ->when($image->category_id, fn($query) => $query->where('category_id', $image->category_id))
             ->latest('published_at')
             ->limit($limit)
             ->get();
@@ -593,7 +641,7 @@ class AiImageEditor
             return null;
         }
 
-        if (! preg_match('/^[A-Za-z0-9._:-]+$/', $source)) {
+        if (!preg_match('/^[A-Za-z0-9._:-]+$/', $source)) {
             throw new \InvalidArgumentException('Source không hợp lệ.');
         }
 
@@ -604,14 +652,14 @@ class AiImageEditor
     {
         $sessionId = $request->hasSession() ? $request->session()->getId() : null;
 
-        return hash('sha256', ($sessionId ?: 'stateless').'|'.$request->ip());
+        return hash('sha256', ($sessionId ?: 'stateless') . '|' . $request->ip());
     }
 
     public function remainingToday(Request $request): ?int
     {
         $user = Auth::user();
 
-        if (! $user instanceof User) {
+        if (!$user instanceof User) {
             return 0;
         }
 
@@ -636,9 +684,9 @@ class AiImageEditor
         $user = Auth::user();
 
         return $user instanceof User
-            && ! $user->isAdmin()
-            && ! $user->hasVerifiedEmail()
-            && ! $user->created_at?->isToday();
+            && !$user->isAdmin()
+            && !$user->hasVerifiedEmail()
+            && !$user->created_at?->isToday();
     }
 
     public function countToday(Request $request): int
@@ -706,7 +754,7 @@ class AiImageEditor
 
         $image = $query->find($id);
 
-        if (! $image) {
+        if (!$image) {
             return;
         }
 
@@ -715,7 +763,7 @@ class AiImageEditor
 
     public function imageUrl(GeneratedMedia $image, string $size = 'original', ?int $width = null, ?int $height = null): ?string
     {
-        if (! $image->result_path) {
+        if (!$image->result_path) {
             return null;
         }
 
@@ -744,7 +792,7 @@ class AiImageEditor
      */
     public function imageSize(GeneratedMedia $image, string $size = 'original', ?int $width = null, ?int $height = null): ?array
     {
-        if (! $image->result_path) {
+        if (!$image->result_path) {
             return null;
         }
 
@@ -760,7 +808,7 @@ class AiImageEditor
 
         $originalSize = $this->originalImageSize($image);
 
-        if (! $originalSize) {
+        if (!$originalSize) {
             return null;
         }
 
@@ -781,7 +829,7 @@ class AiImageEditor
     {
         $size = $height === null ? "{$width}x" : "{$width}x{$height}";
 
-        return '/thumb_x'.$size.'/storage/'.ltrim($image->result_path ?? '', '/');
+        return '/thumb_x' . $size . '/storage/' . ltrim($image->result_path ?? '', '/');
     }
 
     /**
@@ -821,7 +869,7 @@ class AiImageEditor
 
         foreach ($roles as $index => $role) {
             if (is_string($role) && isset($descriptions[$role])) {
-                $lines[] = 'Image '.($index + 1).' — '.$descriptions[$role];
+                $lines[] = 'Image ' . ($index + 1) . ' — ' . $descriptions[$role];
             }
         }
 
@@ -837,11 +885,11 @@ class AiImageEditor
     {
         $paths = is_array($image->response_meta) ? ($image->response_meta['source_paths'] ?? []) : [];
 
-        if (! is_array($paths)) {
+        if (!is_array($paths)) {
             return [];
         }
 
-        return array_slice(array_values(array_filter($paths, fn (mixed $path): bool => is_string($path) && $path !== '')), 0, AppSettings::maxReferencePhotos(), true);
+        return array_slice(array_values(array_filter($paths, fn(mixed $path): bool => is_string($path) && $path !== '')), 0, AppSettings::maxReferencePhotos(), true);
     }
 
     /**
@@ -859,14 +907,14 @@ class AiImageEditor
         foreach ($indexes as $index) {
             $sourcePath = $sourcePaths[$index] ?? null;
 
-            if (! is_string($sourcePath) || ! $disk->exists($sourcePath)) {
+            if (!is_string($sourcePath) || !$disk->exists($sourcePath)) {
                 continue;
             }
 
             $extension = pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'jpg';
-            $path = $this->datedPath('ai-image-pending', Str::uuid().'.'.$extension);
+            $path = $this->datedPath('ai-image-pending', Str::uuid() . '.' . $extension);
 
-            if (! $disk->put($path, $disk->get($sourcePath), ['visibility' => 'private'])) {
+            if (!$disk->put($path, $disk->get($sourcePath), ['visibility' => 'private'])) {
                 throw new \RuntimeException('Không lưu được ảnh tham chiếu.');
             }
 
@@ -903,14 +951,14 @@ class AiImageEditor
         foreach ($imageIds as $imageId) {
             $image = $images->get($imageId);
 
-            if (! $image || ! $image->result_path || ! $disk->exists($image->result_path)) {
+            if (!$image || !$image->result_path || !$disk->exists($image->result_path)) {
                 continue;
             }
 
             $extension = pathinfo($image->result_path, PATHINFO_EXTENSION) ?: 'png';
-            $path = $this->datedPath('ai-image-pending', Str::uuid().'.'.$extension);
+            $path = $this->datedPath('ai-image-pending', Str::uuid() . '.' . $extension);
 
-            if (! $disk->put($path, $disk->get($image->result_path), ['visibility' => 'private'])) {
+            if (!$disk->put($path, $disk->get($image->result_path), ['visibility' => 'private'])) {
                 throw new \RuntimeException('Không lưu được ảnh tham chiếu.');
             }
 
@@ -938,7 +986,7 @@ class AiImageEditor
         foreach ($photos as $photo) {
             $sourcePath = $photo->getRealPath();
 
-            if (! is_string($sourcePath)) {
+            if (!is_string($sourcePath)) {
                 throw new \InvalidArgumentException('Không đọc được ảnh tải lên.');
             }
 
@@ -948,9 +996,9 @@ class AiImageEditor
                 throw new \InvalidArgumentException('Không đọc được ảnh tải lên.');
             }
 
-            $path = $this->datedPath('ai-image-pending', Str::uuid().'.'.$photo->extension());
+            $path = $this->datedPath('ai-image-pending', Str::uuid() . '.' . $photo->extension());
 
-            if (! $disk->put($path, $content, ['visibility' => 'private'])) {
+            if (!$disk->put($path, $content, ['visibility' => 'private'])) {
                 throw new \RuntimeException('Không lưu được ảnh tải lên.');
             }
 
@@ -969,7 +1017,7 @@ class AiImageEditor
      */
     private function pendingUploadedFiles(mixed $uploads): array
     {
-        if (! is_array($uploads)) {
+        if (!is_array($uploads)) {
             return [];
         }
 
@@ -978,14 +1026,14 @@ class AiImageEditor
         $files = [];
 
         foreach ($uploads as $upload) {
-            if (! is_array($upload) || ! is_string($upload['path'] ?? null)) {
+            if (!is_array($upload) || !is_string($upload['path'] ?? null)) {
                 continue;
             }
 
             $path = $upload['path'];
             $absolutePath = $disk->path($path);
 
-            if (! is_file($absolutePath)) {
+            if (!is_file($absolutePath)) {
                 throw new \RuntimeException('Không tìm thấy ảnh tải lên.');
             }
 
@@ -1002,12 +1050,12 @@ class AiImageEditor
 
     private function deletePendingUploads(mixed $uploads): void
     {
-        if (! is_array($uploads)) {
+        if (!is_array($uploads)) {
             return;
         }
 
         Storage::disk('public')->delete(array_values(array_filter(array_map(
-            fn ($upload) => is_array($upload) && is_string($upload['path'] ?? null) ? $upload['path'] : null,
+            fn($upload) => is_array($upload) && is_string($upload['path'] ?? null) ? $upload['path'] : null,
             $uploads,
         ))));
     }
@@ -1031,28 +1079,28 @@ class AiImageEditor
         $referenceImages = [];
 
         foreach (array_slice($photos, 0, AppSettings::maxReferencePhotos()) as $photo) {
-            if (! $photo instanceof UploadedFile) {
+            if (!$photo instanceof UploadedFile) {
                 continue;
             }
 
             $sourceContent = $this->referenceImageContent($photo);
             $sourceMedia = $image->addMediaFromString($sourceContent)
-                ->usingFileName(Str::uuid().'.jpg')
+                ->usingFileName(Str::uuid() . '.jpg')
                 ->withProperties(['mime_type' => 'image/jpeg'])
                 ->toMediaCollection('sources');
 
             $sourcePaths[] = $sourceMedia->getPathRelativeToRoot();
-            $referenceImages[] = 'data:image/jpeg;base64,'.base64_encode($sourceContent);
+            $referenceImages[] = 'data:image/jpeg;base64,' . base64_encode($sourceContent);
         }
 
         $providerConfig = config("ai.providers.$provider");
 
-        if (! is_array($providerConfig)) {
+        if (!is_array($providerConfig)) {
             throw new \RuntimeException("Provider AI [$provider] chưa được cấu hình.");
         }
 
-        $url = rtrim(AppSettings::string('ai.'.$provider.'_url'), '/');
-        $key = AppSettings::string('ai.'.$provider.'_api_key');
+        $url = rtrim(AppSettings::string('ai.' . $provider . '_url'), '/');
+        $key = AppSettings::string('ai.' . $provider . '_api_key');
 
         if ($url === '' || $key === '') {
             throw new \RuntimeException("Provider AI [$provider] thiếu URL hoặc API key.");
@@ -1065,7 +1113,7 @@ class AiImageEditor
             ? $imageDetail
             : AppSettings::string('ai.image_detail', (string) config('ai.image_detail', 'high'));
         $sizeHint = $this->providerSizePromptHint($resolvedSize);
-        $providerPrompt = $sizeHint === '' ? $prompt : rtrim($prompt)."\n\n".$sizeHint;
+        $providerPrompt = $sizeHint === '' ? $prompt : rtrim($prompt) . "\n\n" . $sizeHint;
 
         $payload = [
             'model' => $model,
@@ -1088,10 +1136,10 @@ class AiImageEditor
             ->acceptJson()
             ->asJson()
             ->timeout(AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)))
-            ->post($url.'/images/generations', $payload);
+            ->post($url . '/images/generations', $payload);
 
         if ($response->failed()) {
-            throw new \RuntimeException('API tạo ảnh lỗi '.$response->status().': '.Str::limit($response->body(), 1000, ''));
+            throw new \RuntimeException('API tạo ảnh lỗi ' . $response->status() . ': ' . Str::limit($response->body(), 1000, ''));
         }
 
         $data = $response->json();
@@ -1099,7 +1147,7 @@ class AiImageEditor
         $base64 = data_get($data, 'data.0.b64_json');
         $usage = data_get($data, 'usage', []);
 
-        if (! is_string($base64) || $base64 === '') {
+        if (!is_string($base64) || $base64 === '') {
             throw new \RuntimeException('API không trả về ảnh base64.');
         }
 
@@ -1112,7 +1160,7 @@ class AiImageEditor
         $requestedSize = is_string($payload['size'] ?? null) ? $payload['size'] : null;
         $dimensions = $this->measureGeneratedImage($decoded, $requestedSize);
 
-        if ($dimensions['target_width'] !== null && $dimensions['target_height'] !== null && ! $dimensions['meets_width_or_height']) {
+        if ($dimensions['target_width'] !== null && $dimensions['target_height'] !== null && !$dimensions['meets_width_or_height']) {
             throw new \RuntimeException(sprintf(
                 'API trả về ảnh %sx%s nhỏ hơn cấu hình %s (cần width >= %s hoặc height >= %s).',
                 $dimensions['width'] ?? '?',
@@ -1303,7 +1351,7 @@ class AiImageEditor
 
         try {
             $response = ImageMetadataAgent::make()->prompt(
-                "Tạo metadata để publish ảnh sau.\n\nPrompt:\n".(string) $image->prompt,
+                "Tạo metadata để publish ảnh sau.\n\nPrompt:\n" . (string) $image->prompt,
                 attachments: $this->reviewImageAttachments($image),
                 provider: $provider,
                 model: $model,
@@ -1340,7 +1388,7 @@ class AiImageEditor
 
         try {
             $response = ImageReviewAgent::make()->prompt(
-                $prefix.$prompt,
+                $prefix . $prompt,
                 attachments: $attachments,
                 provider: $provider,
                 model: $model,
@@ -1376,7 +1424,7 @@ class AiImageEditor
     private function reviewUploadedFileAttachments(array $photos): array
     {
         return array_map(
-            fn (UploadedFile $photo): Base64Image => new Base64Image(base64_encode($this->referenceImageContent($photo)), 'image/jpeg'),
+            fn(UploadedFile $photo): Base64Image => new Base64Image(base64_encode($this->referenceImageContent($photo)), 'image/jpeg'),
             $photos,
         );
     }
@@ -1386,21 +1434,23 @@ class AiImageEditor
      */
     private function reviewImageAttachments(GeneratedMedia $image): array
     {
-        if (! is_string($image->result_path) || $image->result_path === '') {
+        if (!is_string($image->result_path) || $image->result_path === '') {
             return [];
         }
 
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk('public');
 
-        if (! $disk->exists($image->result_path)) {
+        if (!$disk->exists($image->result_path)) {
             return [];
         }
 
-        return $this->reviewUploadedFileAttachments([new UploadedFile(
-            $disk->path($image->result_path),
-            basename($image->result_path),
-        )]);
+        return $this->reviewUploadedFileAttachments([
+            new UploadedFile(
+                $disk->path($image->result_path),
+                basename($image->result_path),
+            )
+        ]);
     }
 
     private function textModel(string $overrideKey, string $fallback): string
@@ -1416,8 +1466,8 @@ class AiImageEditor
 
     private function configureReviewProvider(string $provider): void
     {
-        $url = rtrim(AppSettings::string('ai.'.$provider.'_url'), '/');
-        $key = AppSettings::string('ai.'.$provider.'_api_key');
+        $url = rtrim(AppSettings::string('ai.' . $provider . '_url'), '/');
+        $key = AppSettings::string('ai.' . $provider . '_api_key');
 
         if ($url === '' || $key === '') {
             throw new \InvalidArgumentException("Provider AI [$provider] thiếu URL hoặc API key.");
@@ -1440,7 +1490,7 @@ class AiImageEditor
 
     private function datedPath(string $directory, string $filename): string
     {
-        return $directory.'/'.now()->format('Ym/d').'/'.$filename;
+        return $directory . '/' . now()->format('Ym/d') . '/' . $filename;
     }
 
     private function imageTitle(mixed $title, string $prompt): string
@@ -1510,7 +1560,7 @@ class AiImageEditor
                 }
             }
 
-            if (is_string($value) && trim($value) !== '' && ! $this->looksLikeStructuredPrompt($value)) {
+            if (is_string($value) && trim($value) !== '' && !$this->looksLikeStructuredPrompt($value)) {
                 return trim($value);
             }
         }
@@ -1554,14 +1604,14 @@ class AiImageEditor
      */
     private function tagNames(mixed $tags): array
     {
-        if (! is_array($tags)) {
+        if (!is_array($tags)) {
             return [];
         }
 
         $names = [];
 
         foreach ($tags as $tag) {
-            if (! is_string($tag)) {
+            if (!is_string($tag)) {
                 continue;
             }
 
@@ -1581,7 +1631,7 @@ class AiImageEditor
      */
     private function syncTags(GeneratedMedia $image, array $tags): void
     {
-        $tagNames = collect($tags)->mapWithKeys(fn (string $name): array => [$this->tagSlug($name) => $name]);
+        $tagNames = collect($tags)->mapWithKeys(fn(string $name): array => [$this->tagSlug($name) => $name]);
         $existing = Tag::query()
             ->whereIn('slug', $tagNames->keys())
             ->pluck('id', 'slug');
@@ -1615,7 +1665,7 @@ class AiImageEditor
     {
         $path = $photo->getRealPath();
 
-        if (! is_string($path)) {
+        if (!is_string($path)) {
             throw new \InvalidArgumentException('Không đọc được ảnh tải lên.');
         }
 
@@ -1623,7 +1673,7 @@ class AiImageEditor
         $mime = is_array($info) ? $info['mime'] : (string) $photo->getMimeType();
         $image = $this->imageFromPath($path, $mime);
 
-        if (! $image) {
+        if (!$image) {
             throw new \InvalidArgumentException('Định dạng ảnh chưa hỗ trợ. Hãy dùng JPG, PNG, WEBP hoặc AVIF.');
         }
 
@@ -1634,7 +1684,7 @@ class AiImageEditor
         $targetHeight = max(1, (int) round($height * $targetWidth / $width));
         $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
 
-        if (! $canvas) {
+        if (!$canvas) {
             imagedestroy($image);
 
             throw new \RuntimeException('Không resize được ảnh nguồn.');
@@ -1642,14 +1692,14 @@ class AiImageEditor
 
         $white = imagecolorallocate($canvas, 255, 255, 255);
 
-        if ($white === false || ! imagefill($canvas, 0, 0, $white)) {
+        if ($white === false || !imagefill($canvas, 0, 0, $white)) {
             imagedestroy($image);
             imagedestroy($canvas);
 
             throw new \RuntimeException('Không resize được ảnh nguồn.');
         }
 
-        if (! imagecopyresampled($canvas, $image, 0, 0, 0, 0, $targetWidth, $targetHeight, $width, $height)) {
+        if (!imagecopyresampled($canvas, $image, 0, 0, 0, 0, $targetWidth, $targetHeight, $width, $height)) {
             imagedestroy($image);
             imagedestroy($canvas);
 
@@ -1663,7 +1713,7 @@ class AiImageEditor
         $content = ob_get_clean();
         imagedestroy($canvas);
 
-        if (! $encoded) {
+        if (!$encoded) {
             throw new \RuntimeException('Không nén được ảnh nguồn.');
         }
 
@@ -1685,7 +1735,7 @@ class AiImageEditor
 
     private function orientImage(GdImage $image, string $path, string $mime): GdImage
     {
-        if ($mime !== 'image/jpeg' || ! function_exists('exif_read_data')) {
+        if ($mime !== 'image/jpeg' || !function_exists('exif_read_data')) {
             return $image;
         }
 
@@ -1758,7 +1808,7 @@ class AiImageEditor
                 return '';
             }
 
-            return 'Generate the final image at size '.$size.'. Do not change the creative subject.';
+            return 'Generate the final image at size ' . $size . '. Do not change the creative subject.';
         }
 
         [$width, $height] = $pixels;
@@ -1781,7 +1831,7 @@ class AiImageEditor
      */
     private function parsePixelSize(?string $size): ?array
     {
-        if (! is_string($size) || ! preg_match('/^(\d+)x(\d+)$/', $size, $matches)) {
+        if (!is_string($size) || !preg_match('/^(\d+)x(\d+)$/', $size, $matches)) {
             return null;
         }
 

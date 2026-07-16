@@ -23,7 +23,7 @@ class SkillsTest extends TestCase
         $this->get(route('skills.index'))
             ->assertOk()
             ->assertSee('Công cụ AI')
-            ->assertSee('Ảnh chi tiết sản phẩm')
+            ->assertSee('Ảnh sản phẩm')
             ->assertSee('Poster quảng cáo')
             ->assertDontSee('Nền trắng');
 
@@ -271,16 +271,19 @@ class SkillsTest extends TestCase
             'provider' => 'openai',
             'model' => 'cx/gpt-5.5-image',
             'status' => 'succeeded',
+            'result_path' => 'ai-images/existing-poster.png',
             'request_meta' => ['version' => 1],
         ]);
+        Storage::disk('public')->put('ai-images/existing-poster.png', UploadedFile::fake()->image('existing-poster.png')->getContent());
 
         Livewire::actingAs($user)
             ->withQueryParams(['view' => 'projects', 'project' => $project->id])
             ->test('pages::skills')
             ->assertSet('showWizard', false)
             ->assertSee('Existing campaign')
-            ->assertSee("\$dispatch('open-image-detail', { id: {$image->id} })", false)
+            ->assertSee("id: {$image->id}, preview:", false)
             ->assertSee('ResizeObserver', false)
+            ->assertSee("addEventListener('load'", false)
             ->call('resumeProject', $project->id)
             ->assertSet('showWizard', true)
             ->assertSet('projectName', 'Existing campaign')

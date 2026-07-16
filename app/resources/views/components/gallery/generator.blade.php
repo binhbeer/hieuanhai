@@ -489,7 +489,7 @@ new class extends Component {
                         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100">{{ $publishMessage }}</div>
                     @endif
 
-                    <button class="block w-full" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $resultImage->id }} })" aria-label="{{ __('View image details') }}">
+                    <button class="block w-full" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $resultImage->id }}, preview: @js($resultThumbUrl) })" aria-label="{{ __('View image details') }}">
                         <img class="max-h-[58svh] w-full rounded-[1.75rem] bg-zinc-100 object-contain shadow-inner" src="{{ $resultThumbUrl }}" alt="{{ __('AI-generated image') }}" @if ($resultImageSize) width="{{ $resultImageSize['width'] }}" height="{{ $resultImageSize['height'] }}" @endif />
                     </button>
 
@@ -758,11 +758,19 @@ new class extends Component {
                             <flux:button type="button" size="sm" variant="outline" icon:trailing="chevron-down" wire:loading.attr="disabled" wire:target="createImage">
                                 {{ $aspectRatio === 'auto' ? __('Auto') : $aspectRatio }}
                             </flux:button>
-                            <flux:menu>
+                            <flux:menu class="min-w-48">
                                 <flux:menu.radio.group wire:model.live="aspectRatio">
                                     @foreach (GptImageOptions::ASPECT_RATIOS as $ratio)
                                         <flux:menu.radio :value="$ratio" wire:key="aspect-{{ $ratio }}">
-                                            {{ $ratio === 'auto' ? __('Auto') : $ratio }}
+                                            <div class="flex items-center gap-2.5">
+                                                <span class="flex size-5 shrink-0 items-center justify-center" aria-hidden="true">
+                                                    <span class="{{ GptImageOptions::aspectRatioIconClasses()[$ratio] ?? 'size-3.5' }} rounded-[2px] border-2 border-current opacity-70"></span>
+                                                </span>
+                                                <span class="flex items-baseline gap-2">
+                                                    <span>{{ $ratio === 'auto' ? __('Auto') : $ratio }}</span>
+                                                    <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">{{ GptImageOptions::aspectRatioDescriptions()[$ratio] ?? '' }}</span>
+                                                </span>
+                                            </div>
                                         </flux:menu.radio>
                                     @endforeach
                                 </flux:menu.radio.group>

@@ -240,7 +240,7 @@ new #[Title('Manage created images')] class extends Component {
 					@php($imageSize = $this->imageSize($image, 'xs'))
 					<tr class="border-b border-white/10" wire:key="manage-image-{{ $image->id }}">
 						<td class="px-3 py-3 align-top">
-							<button class="block text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }} })" aria-label="{{ __('View image details') }}">
+							<button class="block text-left" type="button" x-data x-on:click="$dispatch('open-image-detail', { id: {{ $image->id }}, preview: @js($url) })" aria-label="{{ __('View image details') }}">
 								@if ($url)
 									<img class="size-20 rounded-xl bg-white/5 object-cover" src="{{ $url }}" alt="{{ Str::limit($image->title ?: __('Image #:id', ['id' => $image->id]), 80) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif loading="lazy" />
 								@else
