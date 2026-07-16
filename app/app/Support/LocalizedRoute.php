@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Illuminate\Routing\Exceptions\UrlGenerationException;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -31,5 +32,18 @@ class LocalizedRoute
         } finally {
             App::setLocale($previous);
         }
+    }
+
+    public static function currentUrl(string $locale, bool $absolute = true): string
+    {
+        try {
+            $url = self::url(self::name() ?? 'home', request()->route()?->parameters() ?? [], $locale, $absolute);
+        } catch (UrlGenerationException) {
+            return self::url('home', locale: $locale, absolute: $absolute);
+        }
+
+        $query = request()->getQueryString();
+
+        return $url.($query ? '?'.$query : '');
     }
 }

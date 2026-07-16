@@ -5,7 +5,10 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\GeneratedMedia;
 use App\Models\Setting;
+use App\Models\Tag;
+use App\Support\LocalizedRoute;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class LocalizationSeoTest extends TestCase
@@ -69,6 +72,36 @@ class LocalizationSeoTest extends TestCase
         $category = Category::query()->where('slug', 'portraits')->firstOrFail();
 
         $this->get('/en/categories/'.$category->slug)->assertNotFound();
+    }
+
+    public function test_guest_language_switch_on_untranslated_tag_page_does_not_crash(): void
+    {
+        Setting::putValue('locales.en.enabled', true);
+
+        $tag = Tag::query()->create([
+            'name' => ['vi' => 'Studio'],
+            'slug' => 'studio-guest-switch',
+            'description' => ['vi' => 'Tag studio tiếng Việt'],
+        ]);
+
+        $this->get(route('tags.show', $tag))
+            ->assertOk()
+            ->assertDontSee('>English</a>', false);
+    }
+
+    public function test_language_switch_falls_back_home_when_livewire_context_loses_route_parameters(): void
+    {
+        Setting::putValue('locales.en.enabled', true);
+
+        Route::get('/__test/livewire-route-context', function (): string {
+            request()->route()?->name('translated_en.tags.show');
+
+            return LocalizedRoute::currentUrl('en');
+        });
+
+        $this->get('/__test/livewire-route-context')
+            ->assertOk()
+            ->assertSee(LocalizedRoute::url('home', locale: 'en'));
     }
 
     public function test_private_skills_variant_is_noindex(): void

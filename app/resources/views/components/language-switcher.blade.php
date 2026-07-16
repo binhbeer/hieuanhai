@@ -3,16 +3,14 @@
     @php($routeCategory = request()->route('category'))
     @php($routeTag = request()->route('tag'))
     @php($routeImage = request()->route('image'))
-    @php($englishReady = match (true) {
-        $routeCategory instanceof \App\Models\Category => $routeCategory->englishReady(),
-        $routeTag instanceof \App\Models\Tag => $routeTag->englishReady(),
-        $routeImage instanceof \App\Models\GeneratedMedia => $routeImage->englishReady(),
+    @php($routeName = \App\Support\LocalizedRoute::name())
+    @php($englishReady = match ($routeName) {
+        'categories.show' => $routeCategory instanceof \App\Models\Category && $routeCategory->englishReady(),
+        'tags.show' => $routeTag instanceof \App\Models\Tag && $routeTag->englishReady(),
+        'images.show' => $routeImage instanceof \App\Models\GeneratedMedia && $routeImage->englishReady(),
         default => true,
     })
-    @php($routeName = \App\Support\LocalizedRoute::name())
-    @php($routeParameters = request()->route()?->parameters() ?? [])
-    @php($query = request()->getQueryString())
-    @php($localizedUrl = fn (string $locale): string => \App\Support\LocalizedRoute::url($routeName, $routeParameters, $locale).($query ? '?'.$query : ''))
+    @php($localizedUrl = fn (string $locale): string => \App\Support\LocalizedRoute::currentUrl($locale))
 
     @if (app()->getLocale() === 'en')
         <flux:menu.item :href="$localizedUrl('vi')">
