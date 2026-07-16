@@ -5,7 +5,10 @@ use App\Jobs\GenerateTagDescription;
 use App\Models\Category;
 use App\Models\GeneratedMedia;
 use App\Models\Tag;
+use App\Support\AppSettings;
+use App\Support\LocalizedRoute;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -23,11 +26,12 @@ Schedule::command('sitemap:generate')->everyTenMinutes();
 // Schedule::command('tags:backfill-descriptions')->dailyAt('02:00')->withoutOverlapping();
 
 Artisan::command('sitemap:generate', function (): void {
-    $publicImages = fn() => GeneratedMedia::query()->publiclyVisible();
+    $publicImages = fn () => GeneratedMedia::query()->publiclyVisible();
+    $englishEnabled = AppSettings::bool('locales.en.enabled');
 
-    $publicImageFilter = fn($query) => $query->publiclyVisible();
+    $publicImageFilter = fn ($query) => $query->publiclyVisible();
 
-    $date = fn(mixed $value): ?CarbonInterface => $value ? Carbon::parse($value) : null;
+    $date = fn (mixed $value): ?CarbonInterface => $value ? Carbon::parse($value) : null;
     $maxDate = function (?CarbonInterface $current, mixed $candidate) use ($date): CarbonInterface {
         $candidate = $date($candidate) ?? now();
 
@@ -57,8 +61,14 @@ Artisan::command('sitemap:generate', function (): void {
     $latestImageUpdate = $date($publicImages()->max('updated_at')) ?? now();
 
     $pages = SitemapFile::create()
-        ->add($url(route('home'), $latestImageUpdate))
-        ->add($url(route('skills.index'), now()));
+        ->add($url(LocalizedRoute::url('home', locale: 'vi'), $latestImageUpdate))
+        ->add($url(LocalizedRoute::url('skills.index', locale: 'vi'), now()));
+
+    if ($englishEnabled) {
+        $pages
+            ->add($url(LocalizedRoute::url('home', locale: 'en'), $latestImageUpdate))
+            ->add($url(LocalizedRoute::url('skills.index', locale: 'en'), now()));
+    }
     $pagesLastModified = $write('sitemap-pages.xml', $pages, now());
     $index->add(SitemapEntry::create(url('/sitemap-pages.xml'))->setLastModificationDate($pagesLastModified));
 
@@ -69,12 +79,17 @@ Artisan::command('sitemap:generate', function (): void {
         ->active()
         ->ordered()
         ->get()
-        ->each(function (Category $category) use ($categories, $maxDate, $publicImages, $url, &$categoriesLastModified): void {
+        ->each(function (Category $category) use ($categories, $englishEnabled, $maxDate, $publicImages, $url, &$categoriesLastModified): void {
             $lastModified = $publicImages()
                 ->where('category_id', $category->id)
                 ->max('updated_at') ?? $category->updated_at;
 
-            $categories->add($url(route('categories.show', $category), $lastModified));
+            $categories->add($url(LocalizedRoute::url('categories.show', $category, 'vi'), $lastModified));
+
+            if ($englishEnabled && $category->englishReady()) {
+                $categories->add($url(LocalizedRoute::url('categories.show', $category, 'en'), $lastModified));
+            }
+
             $categoriesLastModified = $maxDate($categoriesLastModified, $lastModified);
         });
 
@@ -86,14 +101,19 @@ Artisan::command('sitemap:generate', function (): void {
 
     Tag::query()
         ->whereHas('media', $publicImageFilter)
-        ->orderBy('name')
+        ->orderBy('id')
         ->get()
-        ->each(function (Tag $tag) use ($maxDate, $tags, $url, &$tagsLastModified): void {
+        ->each(function (Tag $tag) use ($englishEnabled, $maxDate, $tags, $url, &$tagsLastModified): void {
             $lastModified = $tag->media()
                 ->publiclyVisible()
                 ->max('generated_media.updated_at') ?? $tag->updated_at;
 
-            $tags->add($url(route('tags.show', $tag), $lastModified));
+            $tags->add($url(LocalizedRoute::url('tags.show', $tag, 'vi'), $lastModified));
+
+            if ($englishEnabled && $tag->englishReady()) {
+                $tags->add($url(LocalizedRoute::url('tags.show', $tag, 'en'), $lastModified));
+            }
+
             $tagsLastModified = $maxDate($tagsLastModified, $lastModified);
         });
 
@@ -107,10 +127,15 @@ Artisan::command('sitemap:generate', function (): void {
         ->orderByRaw('COALESCE(published_at, created_at) desc')
         ->limit(100)
         ->get()
-        ->each(function (GeneratedMedia $image) use ($latestImages, $maxDate, $url, &$latestImagesLastModified): void {
+        ->each(function (GeneratedMedia $image) use ($englishEnabled, $latestImages, $maxDate, $url, &$latestImagesLastModified): void {
             $lastModified = $image->updated_at ?? $image->published_at ?? $image->created_at;
 
-            $latestImages->add($url(route('images.show', $image), $lastModified));
+            $latestImages->add($url(LocalizedRoute::url('images.show', $image, 'vi'), $lastModified));
+
+            if ($englishEnabled && $image->englishReady()) {
+                $latestImages->add($url(LocalizedRoute::url('images.show', $image, 'en'), $lastModified));
+            }
+
             $latestImagesLastModified = $maxDate($latestImagesLastModified, $lastModified);
         });
 
@@ -133,7 +158,7 @@ Artisan::command('sitemap:generate', function (): void {
     krsort($months);
 
     foreach (array_keys($months) as $month) {
-        $start = Carbon::createFromFormat('Y-m-d H:i:s', $month . '-01 00:00:00')->startOfMonth();
+        $start = Carbon::createFromFormat('Y-m-d H:i:s', $month.'-01 00:00:00')->startOfMonth();
         $end = $start->copy()->endOfMonth();
         $images = SitemapFile::create();
         $imagesLastModified = null;
@@ -146,18 +171,24 @@ Artisan::command('sitemap:generate', function (): void {
                             ->whereBetween('created_at', [$start, $end]);
                     });
             })
-            ->chunkById(1000, function ($chunk) use ($images, $maxDate, $url, &$imagesLastModified): void {
+            ->chunkById(1000, function ($chunk) use ($englishEnabled, $images, $maxDate, $url, &$imagesLastModified): void {
+                /** @var Collection<int, GeneratedMedia> $chunk */
                 foreach ($chunk as $image) {
                     $lastModified = $image->updated_at ?? $image->published_at ?? $image->created_at;
 
-                    $images->add($url(route('images.show', $image), $lastModified));
+                    $images->add($url(LocalizedRoute::url('images.show', $image, 'vi'), $lastModified));
+
+                    if ($englishEnabled && $image->englishReady()) {
+                        $images->add($url(LocalizedRoute::url('images.show', $image, 'en'), $lastModified));
+                    }
+
                     $imagesLastModified = $maxDate($imagesLastModified, $lastModified);
                 }
             });
 
-        $file = 'sitemap-images-' . $month . '.xml';
+        $file = 'sitemap-images-'.$month.'.xml';
         $imagesLastModified = $write($file, $images, $imagesLastModified);
-        $index->add(SitemapEntry::create(url('/' . $file))->setLastModificationDate($imagesLastModified));
+        $index->add(SitemapEntry::create(url('/'.$file))->setLastModificationDate($imagesLastModified));
     }
 
     $index->writeToFile(public_path('sitemap.xml'));
@@ -176,7 +207,7 @@ Artisan::command('categories:backfill-descriptions {--limit=0 : Max categories t
 
     $query = Category::query()
         ->active()
-        ->where(fn($query) => $query->whereNull('description')->orWhere('description', ''))
+        ->where(fn ($query) => $query->whereNull('description')->orWhere('description', ''))
         ->ordered();
 
     if ($limit > 0) {
@@ -184,7 +215,7 @@ Artisan::command('categories:backfill-descriptions {--limit=0 : Max categories t
     }
 
     $categoryIds = $query->pluck('id');
-    $categoryIds->each(fn(int $categoryId) => GenerateCategoryDescription::dispatch($categoryId));
+    $categoryIds->each(fn (int $categoryId) => GenerateCategoryDescription::dispatch($categoryId));
     $this->info("Queued {$categoryIds->count()} category descriptions.");
 
     return 0;
@@ -200,8 +231,8 @@ Artisan::command('tags:backfill-descriptions {--limit=0 : Max tags to queue (0 =
     }
 
     $query = Tag::query()
-        ->where(fn($query) => $query->whereNull('description')->orWhere('description', ''))
-        ->whereHas('media', fn($query) => $query
+        ->where(fn ($query) => $query->whereNull('description')->orWhere('description', ''))
+        ->whereHas('media', fn ($query) => $query
             ->where('is_published', true)
             ->where('status', 'succeeded')
             ->whereNotNull('result_path'))
@@ -212,7 +243,7 @@ Artisan::command('tags:backfill-descriptions {--limit=0 : Max tags to queue (0 =
     }
 
     $tagIds = $query->pluck('id');
-    $tagIds->each(fn(int $tagId) => GenerateTagDescription::dispatch($tagId));
+    $tagIds->each(fn (int $tagId) => GenerateTagDescription::dispatch($tagId));
     $this->info("Queued {$tagIds->count()} tag descriptions.");
 
     return 0;

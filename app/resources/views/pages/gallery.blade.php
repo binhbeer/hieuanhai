@@ -12,7 +12,7 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Trang chủ')] class extends Component {
+new #[Title('AI Gallery')] class extends Component {
 	public ?Category $category = null;
 
 	public ?Tag $tag = null;
@@ -25,12 +25,12 @@ new #[Title('Trang chủ')] class extends Component {
 
 	public function mount(?Category $category = null, ?Tag $tag = null): void
 	{
-		$search = request()->routeIs('search.*') ? request()->query('q') : null;
+		$search = \App\Support\LocalizedRoute::is('search.*') ? request()->query('q') : null;
 		$sort = request()->query('sort');
 		$tagSlug = $category ? request()->query('tag') : null;
 
 		$this->category = $category;
-		$this->tag = $tag ?? (is_string($tagSlug) ? Tag::query()->where('slug', $tagSlug)->first() : null);
+		$this->tag = $tag ?? (is_string($tagSlug) ? Tag::query()->where(app()->getLocale() === 'en' ? 'slug_en' : 'slug', $tagSlug)->first() : null);
 		$this->search = is_string($search) ? trim($search) : '';
 		$this->sort = is_string($sort) && in_array($sort, ['featured', 'new', 'popular'], true) ? $sort : 'new';
 	}
@@ -174,6 +174,7 @@ new #[Title('Trang chủ')] class extends Component {
 	{
 		return GeneratedMedia::query()
 			->publiclyVisible()
+			->when(app()->getLocale() === 'en', fn ($query) => $query->englishReady())
 			->whereKey($id)
 			->first();
 	}
@@ -185,11 +186,14 @@ new #[Title('Trang chủ')] class extends Component {
 			@if($category?->name || $tag?->name || $search)
 				<div class="mb-2 flex flex-wrap items-end justify-between gap-3 pl-2">
 					<div>
-						<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ request()->routeIs('search.*') ? __('Search results') : ($category?->name ?? ($tag?->name ? '#' . $tag->name : 'AI Gallery')) }}</h1>
+						<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ \App\Support\LocalizedRoute::is('search.*') ? __('Search results') : ($category?->name ?? ($tag?->name ? '#' . $tag->name : 'AI Gallery')) }}</h1>
 						@if ($category && $tag)
 							<flux:badge class="mt-2" rounded>#{{ $tag->name }} <flux:badge.close wire:click="clearTag" :aria-label="__('Clear tag filter')" /></flux:badge>
 						@endif
 					</div>
+					@if (filled($category?->description ?? $tag?->description))
+						<p class="mt-2 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">{{ $category?->description ?? $tag?->description }}</p>
+					@endif
 				</div>
 			@endif
 

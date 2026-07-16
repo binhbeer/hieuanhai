@@ -46,6 +46,7 @@ new class extends Component {
         $this->newApiToken = $token['plain'];
         $this->newApiTokenKeyId = $key->id;
         $this->refreshApiKeyData();
+        $this->dispatch('api-key-updated');
 
         Flux::toast(variant: 'success', text: __('API key generated.'));
     }
@@ -83,7 +84,7 @@ new class extends Component {
     {
         $key = $this->apiKey;
 
-        return $key ? $key->requests()->latest()->limit(10)->get() : collect();
+        return $key ? $key->requests()->latest()->limit(5)->get() : collect();
     }
 
     #[Computed]
@@ -101,120 +102,125 @@ new class extends Component {
 <section class="w-full">
     <flux:heading class="sr-only">{{ __('API key settings') }}</flux:heading>
 
-    <x-settings.layout active="api-key" :heading="__('API key')" :subheading="__('Generate one API key for image API requests and track quota usage.')">
-        <div class="mb-6">
-            <flux:modal.trigger name="api-usage-guide">
-                <flux:button type="button" variant="filled">{{ __('Guide') }}</flux:button>
-            </flux:modal.trigger>
-        </div>
-
-        <div class="space-y-6">
-            @if ($newApiToken)
-                <flux:card class="space-y-3 border-emerald-400/30 bg-emerald-400/10" wire:key="settings-api-token-{{ $newApiTokenKeyId }}">
-                    <flux:heading size="lg">{{ __('New API key #:id', ['id' => $newApiTokenKeyId]) }}</flux:heading>
-                    <flux:text variant="subtle">{{ __('This replaces your old API key immediately.') }}</flux:text>
-                </flux:card>
-            @endif
-
+    <x-settings.layout active="api-key">
+        <div class="space-y-3">
             @if ($this->apiKey)
                 @php
                     $visibleApiToken = $newApiToken ?: $this->apiKey->token;
+                    $quotaTooltip = __('Remaining :count', ['count' => number_format($this->apiKey->quotaRemaining())]);
                 @endphp
 
-                <flux:card class="space-y-4">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
+                <flux:card class="space-y-3 p-3!">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <flux:heading size="lg">API key #{{ $this->apiKey->id }}</flux:heading>
-                            <flux:text variant="subtle">Prefix: <span class="font-mono">{{ $this->apiKey->token_prefix }}...</span></flux:text>
-                            <flux:text variant="subtle">{{ __('Last used:') }} {{ $this->apiKey->last_used_at?->diffForHumans() ?? __('Never used') }}</flux:text>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
                             @if ($this->upgradeUrl !== '')
-                                <flux:button :href="$this->upgradeUrl" target="_blank" rel="noopener noreferrer" variant="primary">
+                                <flux:button :href="$this->upgradeUrl" target="_blank" rel="noopener noreferrer" size="sm" variant="primary" icon="arrow-up-right">
                                     {{ __('Upgrade quota') }}
                                 </flux:button>
                             @endif
-                            <flux:button type="button" variant="danger" wire:click="generateApiKey" wire:confirm="{{ __('Regenerating will invalidate this key. Continue?') }}">
+                        </div>
+                        <flux:modal.trigger name="api-usage-guide">
+                            <flux:button type="button" size="sm" variant="filled" icon="book-open">
+                                {{ __('Guide') }}
+                            </flux:button>
+                        </flux:modal.trigger>
+                    </div>
+
+                    @if ($newApiToken)
+                        <flux:callout variant="success" icon="check-circle" class="!py-2">
+                            <flux:callout.text>{{ __('This replaces your old API key immediately.') }}</flux:callout.text>
+                        </flux:callout>
+                    @endif
+
+                    @if ($visibleApiToken)
+                        <div class="space-y-1.5" wire:key="api-token-{{ $this->apiKey->id }}-{{ $this->apiKey->token_prefix }}-{{ crc32($visibleApiToken) }}" x-data="{ show: false, copied: false, token: @js($visibleApiToken) }">
+                            <div class="flex items-center gap-1.5">
+                                <flux:input class="min-w-0 flex-1 font-mono text-xs" size="sm" readonly x-bind:type="show ? 'text' : 'password'" x-bind:value="token" />
+                                <flux:tooltip position="top">
+                                    <flux:button type="button" size="sm" variant="ghost" icon="eye" x-on:click="show = ! show" :aria-label="__('Show')" />
+                                    <flux:tooltip.content>
+                                        <span x-text="show ? @js(__('Hide')) : @js(__('Show'))"></span>
+                                    </flux:tooltip.content>
+                                </flux:tooltip>
+                                <flux:tooltip position="top">
+                                    <flux:button type="button" size="sm" variant="primary" icon="clipboard-document" x-on:click="navigator.clipboard.writeText(token); copied = true; setTimeout(() => copied = false, 1500)" :aria-label="__('Copy key')" />
+                                    <flux:tooltip.content>
+                                        <span x-text="copied ? @js(__('Copied')) : @js(__('Copy key'))"></span>
+                                    </flux:tooltip.content>
+                                </flux:tooltip>
+                                <flux:tooltip content="{{ __('Regenerate API key') }}" position="top">
+                                    <flux:button type="button" size="sm" variant="danger" icon="arrow-path" wire:click="generateApiKey" wire:confirm="{{ __('Regenerating will invalidate this key. Continue?') }}" :aria-label="__('Regenerate API key')" />
+                                </flux:tooltip>
+                            </div>
+                            <flux:text class="truncate text-xs" variant="subtle" :title="__('This key is stored encrypted and can be shown/copied again here.')">
+                                #{{ $this->apiKey->id }} · {{ $this->apiKey->token_prefix }}… · {{ __('Last used:') }} {{ $this->apiKey->last_used_at?->diffForHumans() ?? __('Never used') }}
+                            </flux:text>
+                        </div>
+                    @else
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <flux:text class="text-sm" variant="subtle">{{ __('Old keys do not store plaintext. Regenerate to show/copy.') }}</flux:text>
+                            <flux:button type="button" size="sm" variant="danger" icon="arrow-path" wire:click="generateApiKey" wire:confirm="{{ __('Regenerating will invalidate this key. Continue?') }}">
                                 {{ __('Regenerate API key') }}
                             </flux:button>
                         </div>
-                    </div>
-
-                    @if ($visibleApiToken)
-                        <div class="grid gap-2" x-data="{ show: false, copied: false, token: @js($visibleApiToken) }">
-                            <flux:input class="font-mono" readonly x-bind:type="show ? 'text' : 'password'" x-bind:value="token" />
-                            <div class="flex flex-wrap gap-2">
-                                <flux:button type="button" size="sm" variant="filled" x-on:click="show = ! show"><span x-text="show ? @js(__('Hide')) : @js(__('Show'))"></span></flux:button>
-                                <flux:button type="button" size="sm" variant="primary" x-on:click="navigator.clipboard.writeText(token); copied = true; setTimeout(() => copied = false, 1500)"><span x-text="copied ? @js(__('Copied')) : @js(__('Copy key'))"></span></flux:button>
-                            </div>
-                            <flux:text class="text-xs" variant="subtle">{{ __('This key is stored encrypted and can be shown/copied again here.') }}</flux:text>
-                        </div>
-                    @else
-                        <flux:text class="text-sm" variant="subtle">{{ __('Old keys do not store plaintext. Regenerate to show/copy.') }}</flux:text>
                     @endif
 
-                    <div class="grid gap-3 sm:grid-cols-3">
-                        <div class="rounded-xl bg-white/5 p-4">
-                            <flux:text variant="subtle">{{ __('Limit') }}</flux:text>
-                            <div class="text-2xl font-semibold tabular-nums">{{ number_format($this->apiKey->quota_limit) }}</div>
+                    <flux:tooltip :content="$quotaTooltip" position="top">
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between gap-2 text-xs font-medium">
+                                <span>{{ __('API key quota') }}</span>
+                                <span class="tabular-nums">{{ $this->apiKey->quota_used }}/{{ $this->apiKey->quota_limit }}</span>
+                            </div>
+                            <flux:progress max="{{ max($this->apiKey->quota_limit, 1) }}" value="{{ min($this->apiKey->quota_used, max($this->apiKey->quota_limit, 1)) }}" color="amber" />
+                            <div class="flex items-center justify-between gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                                <span>{{ __('Remaining') }}: <span class="tabular-nums font-medium text-zinc-800 dark:text-zinc-100">{{ number_format($this->apiKey->quotaRemaining()) }}</span></span>
+                                <span>{{ __('Total') }} {{ number_format($this->apiKeyStats['total']) }} · {{ __('Success') }} {{ number_format($this->apiKeyStats['success']) }} · {{ __('Fail') }} {{ number_format($this->apiKeyStats['failed']) }}</span>
+                            </div>
                         </div>
-                        <div class="rounded-xl bg-white/5 p-4">
-                            <flux:text variant="subtle">{{ __('Used') }}</flux:text>
-                            <div class="text-2xl font-semibold tabular-nums">{{ number_format($this->apiKey->quota_used) }}</div>
-                        </div>
-                        <div class="rounded-xl bg-white/5 p-4">
-                            <flux:text variant="subtle">{{ __('Remaining') }}</flux:text>
-                            <div class="text-2xl font-semibold tabular-nums">{{ number_format($this->apiKey->quotaRemaining()) }}</div>
-                        </div>
-                    </div>
-
-                    <flux:progress max="{{ max($this->apiKey->quota_limit, 1) }}" value="{{ min($this->apiKey->quota_used, max($this->apiKey->quota_limit, 1)) }}" color="amber" />
+                    </flux:tooltip>
                 </flux:card>
 
-                <flux:card class="space-y-4">
-                    <flux:heading size="lg">{{ __('Request stats') }}</flux:heading>
-                    <div class="grid gap-3 sm:grid-cols-3">
-                        <div class="rounded-xl bg-white/5 p-4">
-                            <flux:text variant="subtle">{{ __('Total') }}</flux:text>
-                            <div class="text-2xl font-semibold tabular-nums">{{ number_format($this->apiKeyStats['total']) }}</div>
-                        </div>
-                        <div class="rounded-xl bg-white/5 p-4">
-                            <flux:text variant="subtle">{{ __('Success') }}</flux:text>
-                            <div class="text-2xl font-semibold tabular-nums">{{ number_format($this->apiKeyStats['success']) }}</div>
-                        </div>
-                        <div class="rounded-xl bg-white/5 p-4">
-                            <flux:text variant="subtle">{{ __('Fail') }}</flux:text>
-                            <div class="text-2xl font-semibold tabular-nums">{{ number_format($this->apiKeyStats['failed']) }}</div>
-                        </div>
-                    </div>
-                </flux:card>
-
-                <flux:card class="space-y-4">
-                    <flux:heading size="lg">{{ __('Latest logs') }}</flux:heading>
-                    <div class="space-y-2">
+                <flux:card class="space-y-2 p-3!">
+                    <flux:heading size="sm">{{ __('Latest logs') }}</flux:heading>
+                    <div class="max-h-40 space-y-1 overflow-y-auto">
                         @forelse ($this->apiKeyLogs as $log)
-                            <div class="rounded-xl bg-white/5 p-3 text-sm" wire:key="settings-api-log-{{ $log->id }}">
-                                <div class="font-medium">{{ $log->created_at?->format('Y-m-d H:i:s') }} · {{ $log->status }} · HTTP {{ $log->status_code }}</div>
-                                <flux:text variant="subtle">{{ number_format($log->duration_ms) }}ms · quota {{ $log->quota_charged ? 'charged' : 'free' }}</flux:text>
+                            <div class="rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs dark:bg-white/5" wire:key="settings-api-log-{{ $log->id }}">
+                                <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-medium">
+                                    <span class="tabular-nums text-zinc-500 dark:text-zinc-400">{{ $log->created_at?->format('m-d H:i') }}</span>
+                                    <span>{{ $log->status }}</span>
+                                    <span>HTTP {{ $log->status_code }}</span>
+                                    <span class="text-zinc-500 dark:text-zinc-400">{{ number_format($log->duration_ms) }}ms</span>
+                                </div>
                                 @if ($log->error)
-                                    <div class="mt-1 text-red-300">{{ Str::limit($log->error, 180) }}</div>
+                                    <flux:tooltip :content="$log->error" position="top">
+                                        <div class="mt-0.5 truncate text-red-600 dark:text-red-300">{{ Str::limit($log->error, 80) }}</div>
+                                    </flux:tooltip>
                                 @endif
                             </div>
                         @empty
-                            <flux:text variant="subtle">{{ __('No requests yet.') }}</flux:text>
+                            <flux:text class="text-xs" variant="subtle">{{ __('No requests yet.') }}</flux:text>
                         @endforelse
                     </div>
                 </flux:card>
             @else
-                <flux:card class="space-y-4">
-                    <flux:text variant="subtle">{{ __('No API key yet.') }}</flux:text>
-                    <div class="flex flex-wrap gap-2">
-                        <flux:button type="button" variant="primary" wire:click="generateApiKey">{{ __('Generate API key') }}</flux:button>
-                        @if ($this->upgradeUrl !== '')
-                            <flux:button :href="$this->upgradeUrl" target="_blank" rel="noopener noreferrer" variant="filled">
-                                {{ __('Upgrade quota') }}
+                <flux:card class="space-y-3 p-3!">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            @if ($this->upgradeUrl !== '')
+                                <flux:button :href="$this->upgradeUrl" target="_blank" rel="noopener noreferrer" size="sm" variant="primary" icon="arrow-up-right">
+                                    {{ __('Upgrade quota') }}
+                                </flux:button>
+                            @endif
+                        </div>
+                        <flux:modal.trigger name="api-usage-guide">
+                            <flux:button type="button" size="sm" variant="filled" icon="book-open">
+                                {{ __('Guide') }}
                             </flux:button>
-                        @endif
+                        </flux:modal.trigger>
+                    </div>
+                    <div class="space-y-3 text-center">
+                        <flux:text variant="subtle">{{ __('No API key yet.') }}</flux:text>
+                        <flux:button type="button" size="sm" variant="primary" wire:click="generateApiKey">{{ __('Generate API key') }}</flux:button>
                     </div>
                 </flux:card>
             @endif

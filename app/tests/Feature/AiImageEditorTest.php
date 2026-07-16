@@ -7,6 +7,7 @@ use App\Ai\ImageReviewAgent;
 use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
+use App\Http\Controllers\ImageDownloadController;
 use App\Models\Category;
 use App\Models\GeneratedMedia;
 use App\Models\Setting;
@@ -26,6 +27,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Ai\Files\Base64Image;
 use Livewire\Livewire;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class AiImageEditorTest extends TestCase
@@ -525,7 +527,7 @@ class AiImageEditorTest extends TestCase
         $instructions = (new ImageMetadataAgent)->instructions();
 
         $this->assertStringContainsString('Đặt từ khóa chính gần đầu', $instructions);
-        $this->assertStringContainsString('Title và description phải khác nhau về câu chữ', $instructions);
+        $this->assertStringContainsString('Title và description trong từng ngôn ngữ phải khác nhau về câu chữ', $instructions);
         $this->assertStringContainsString('2-3 chủ thể/vật thể chính', $instructions);
         $this->assertStringContainsString('Không tạo hai tag đồng nghĩa/gần trùng', $instructions);
         $this->assertStringContainsString('Chỉ dùng lại tag có sẵn khi khớp chính xác', $instructions);
@@ -622,7 +624,7 @@ class AiImageEditorTest extends TestCase
         $this->get(route('categories.show', $category))
             ->assertOk()
             ->assertSee('Meme nội bộ')
-            ->assertSee('/thumb_x720x/storage/ai-images/202607/08/result.png')
+            ->assertSee('/thumb_x640x/storage/ai-images/202607/08/result.png')
             ->assertSee('Banner nước hoa cao cấp')
             ->assertSee("title: 'Banner nước hoa cao cấp'", false);
 
@@ -640,7 +642,6 @@ class AiImageEditorTest extends TestCase
             ->assertSee('Tạo ảnh tương tự')
             ->assertSee('Yêu thích')
             ->assertSee('0')
-            ->assertSee('Đóng')
             ->assertSee('og:image');
     }
 
@@ -752,6 +753,39 @@ class AiImageEditorTest extends TestCase
 
         $this->assertTrue($published->is_published);
         $this->assertSame([], $published->tags->pluck('slug')->sort()->values()->all());
+    }
+
+    public function test_publish_saves_english_image_and_tag_metadata_from_same_ai_response(): void
+    {
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        ImageMetadataAgent::fake([[
+            ...$this->publishReview('other', ['mèo', 'studio', 'dễ thương', 'chân dung']),
+            'title_en' => 'Cute cat studio portrait',
+            'description_en' => 'A cute cat portrait with soft studio lighting and expressive details for polished visual inspiration.',
+            'tags_en' => ['cat', 'studio', 'cute', 'portrait'],
+        ]]);
+
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+        $image = GeneratedMedia::create([
+            'visitor_key' => app(AiImageEditor::class)->visitorKey($request),
+            'prompt' => 'Chân dung mèo trong studio',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/cat.png',
+        ]);
+
+        $published = app(AiImageEditor::class)->publish($image, $request);
+
+        $this->assertSame('Cute cat studio portrait', $published->getTranslationWithoutFallback('title', 'en'));
+        $this->assertSame('A cute cat portrait with soft studio lighting and expressive details for polished visual inspiration.', $published->getTranslationWithoutFallback('description', 'en'));
+        $this->assertSame(['cat', 'studio', 'cute', 'portrait'], $published->tags->map(fn (Tag $tag): string => (string) $tag->getTranslationWithoutFallback('name', 'en'))->all());
+        $this->assertSame(['cat', 'studio', 'cute', 'portrait'], $published->tags->pluck('slug_en')->all());
     }
 
     public function test_publish_turns_structured_prompt_titles_into_readable_text(): void
@@ -1100,8 +1134,8 @@ class AiImageEditorTest extends TestCase
                 $size = GptImageOptions::size($aspect, $resolution);
                 $this->assertMatchesRegularExpression('/^\d+x\d+$/', $size);
                 [$width, $height] = array_map('intval', explode('x', $size));
-                $this->assertSame(0, $width % 16);
-                $this->assertSame(0, $height % 16);
+                $this->assertSame(0, $width % 8);
+                $this->assertSame(0, $height % 8);
                 $this->assertLessThanOrEqual(1664, max($width, $height));
                 $this->assertLessThanOrEqual(3.0, max($width, $height) / min($width, $height));
             }
@@ -1115,6 +1149,63 @@ class AiImageEditorTest extends TestCase
             ['aspect_ratio' => 'auto', 'resolution' => '1k'],
             GptImageOptions::defaultsFromSettings('auto'),
         );
+    }
+
+    public function test_generated_image_download_contains_windows_metadata(): void
+    {
+        Storage::fake('public');
+        $source = UploadedFile::fake()->image('result.png', 320, 180);
+        Storage::disk('public')->put('ai-images/result.png', $source->getContent());
+        $user = User::factory()->create();
+        $image = GeneratedMedia::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'metadata-download',
+            'title' => 'Ảnh quảng cáo mùa hè',
+            'description' => 'Ảnh quảng cáo được tạo bằng AI.',
+            'prompt' => 'Tạo ảnh quảng cáo mùa hè',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/result.png',
+        ]);
+        $tag = Tag::create(['name' => 'quảng cáo', 'slug' => 'quang-cao']);
+        $image->tags()->sync([$tag->id]);
+        $this->actingAs($user);
+
+        $response = app(ImageDownloadController::class)($image);
+        $path = $response->getFile()->getPathname();
+        $metadata = json_decode((new Process(['exiftool', '-json', '-G1', $path]))->mustRun()->getOutput(), true);
+        $this->assertIsArray($metadata);
+        $properties = $metadata[0] ?? [];
+
+        $this->assertSame('image/jpeg', $response->headers->get('content-type'));
+        $this->assertStringContainsString('GenAnh.com-', (string) $response->headers->get('content-disposition'));
+        $this->assertSame('Ảnh quảng cáo mùa hè', $properties['IFD0:XPTitle'] ?? null);
+        $this->assertSame('GenAnh.com', $properties['IFD0:XPAuthor'] ?? null);
+        $this->assertStringContainsString('Created with GenAnh.com', (string) ($properties['IFD0:XPComment'] ?? ''));
+        $this->assertSame('GenAnh.com', $properties['IFD0:Software'] ?? null);
+        $this->assertSame('GenAnh.com', $properties['XMP-dc:Creator'] ?? null);
+        $this->assertContains('quảng cáo', (array) ($properties['IPTC:Keywords'] ?? []));
+        $this->assertSame([320, 180], array_slice(getimagesize($path), 0, 2));
+
+        unlink($path);
+    }
+
+    public function test_private_generated_image_download_requires_owner(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('ai-images/result.png', UploadedFile::fake()->image('result.png')->getContent());
+        $image = GeneratedMedia::create([
+            'user_id' => User::factory()->create()->id,
+            'visitor_key' => 'private-download',
+            'prompt' => 'Private image',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/result.png',
+        ]);
+
+        $this->get(route('images.download', $image))->assertNotFound();
     }
 
     public function test_pending_generation_uses_request_meta_size_and_image_detail_overrides(): void

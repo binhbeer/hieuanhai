@@ -12,7 +12,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-new #[Title('Ảnh của bạn')] class extends Component {
+new #[Title('Created images')] class extends Component {
     use WithPagination;
 
     #[Url]
@@ -484,7 +484,13 @@ new #[Title('Ảnh của bạn')] class extends Component {
                                     <flux:button size="sm" variant="ghost" icon="ellipsis-horizontal" :aria-label="__('Actions')" />
                                     <flux:menu>
                                         @if ($originalUrl)
-                                            <flux:menu.item :href="$originalUrl" download="{{ $image->downloadName() }}" icon="arrow-down-tray">{{ __('Download') }}</flux:menu.item>
+                                            <flux:menu.item :href="route('images.download', $image)" x-on:click.prevent.stop="downloadImage($event.currentTarget.href, $event.currentTarget)" data-download-error="{{ __('Could not download image.') }}">
+                                                <x-slot name="icon">
+                                                    <flux:icon.arrow-down-tray class="me-2 size-5" data-download-idle />
+                                                    <flux:icon.loading class="me-2 hidden size-5" data-download-loading />
+                                                </x-slot>
+                                                {{ __('Download') }}
+                                            </flux:menu.item>
                                         @endif
                                         <flux:menu.item as="button" type="button" variant="danger" icon="trash" wire:click="deleteImage({{ $image->id }})" wire:confirm="{{ __('Delete this image?') }}">{{ __('Delete') }}</flux:menu.item>
                                     </flux:menu>

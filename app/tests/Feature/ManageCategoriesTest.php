@@ -45,9 +45,9 @@ class ManageCategoriesTest extends TestCase
         $this->assertLessThan($first->fresh()->sort_order, $second->fresh()->sort_order);
         $this->assertDatabaseHas('categories', [
             'id' => $first->id,
-            'name' => 'Danh mục test',
+            'name->vi' => 'Danh mục test',
             'slug' => 'danh-muc-test',
-            'description' => 'Mô tả SEO mới hiển thị ngay trong danh sách sau khi lưu danh mục.',
+            'description->vi' => 'Mô tả SEO mới hiển thị ngay trong danh sách sau khi lưu danh mục.',
             'status' => 'hidden',
         ]);
 
@@ -70,7 +70,7 @@ class ManageCategoriesTest extends TestCase
             ->assertSet('newName', '');
 
         $this->assertDatabaseHas('categories', [
-            'name' => 'Meme mới',
+            'name->vi' => 'Meme mới',
             'slug' => 'meme-moi',
             'status' => 'active',
         ]);
@@ -88,7 +88,7 @@ class ManageCategoriesTest extends TestCase
             ->assertHasNoErrors();
 
         $this->assertDatabaseHas('categories', [
-            'name' => 'Thể loại ẩn',
+            'name->vi' => 'Thể loại ẩn',
             'slug' => 'hidden-cat',
             'status' => 'hidden',
         ]);

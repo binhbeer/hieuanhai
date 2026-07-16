@@ -14,10 +14,14 @@
     </flux:tabs>
 
     <div>
-        <flux:heading>{{ $heading ?? '' }}</flux:heading>
-        <flux:subheading>{{ $subheading ?? '' }}</flux:subheading>
+        @if (filled($heading ?? null) || filled($subheading ?? null))
+            <flux:heading>{{ $heading ?? '' }}</flux:heading>
+            @if (filled($subheading ?? null))
+                <flux:subheading>{{ $subheading }}</flux:subheading>
+            @endif
+        @endif
 
-        <div class="mt-5 w-full">
+        <div @class(['w-full', 'mt-5' => filled($heading ?? null) || filled($subheading ?? null)])>
             {{ $slot }}
         </div>
     </div>

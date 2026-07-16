@@ -120,3 +120,7 @@ select:focus[data-flux-control] {
 .dark::-webkit-scrollbar-track {
     background: var(--color-neutral-800);
 }
+
+button {
+    @apply cursor-pointer;
+}

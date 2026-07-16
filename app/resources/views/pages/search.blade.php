@@ -3,7 +3,7 @@
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Tìm kiếm')] class extends Component { }; ?>
+new #[Title('Search')] class extends Component { }; ?>
 
 @php($search = is_string(request('q')) ? trim(request('q')) : '')
 

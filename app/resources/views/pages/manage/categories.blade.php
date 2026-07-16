@@ -63,8 +63,13 @@ new #[Title('Manage categories')] class extends Component
             'status' => ['required', Rule::in(['active', 'hidden'])],
         ]);
 
-        $data['description'] = filled($data['description'] ?? null) ? trim((string) $data['description']) : null;
-        Category::query()->whereKey($this->editingId)->update($data);
+        $category = Category::query()->findOrFail($this->editingId);
+        $category
+            ->setTranslation('name', 'vi', trim((string) $data['name']))
+            ->setTranslation('description', 'vi', filled($data['description'] ?? null) ? trim((string) $data['description']) : null);
+        $category->slug = $data['slug'];
+        $category->status = $data['status'];
+        $category->save();
 
         $this->cancelEdit();
         unset($this->categories);
@@ -128,7 +133,7 @@ new #[Title('Manage categories')] class extends Component
     {
         $ordered = Category::query()
             ->orderBy('sort_order')
-            ->orderBy('name')
+            ->orderBy('id')
             ->pluck('id')
             ->reject(fn (int $categoryId): bool => $categoryId === $id)
             ->values();
@@ -148,13 +153,13 @@ new #[Title('Manage categories')] class extends Component
         return Category::query()
             ->withCount(['media as images_count'])
             ->orderBy('sort_order')
-            ->orderBy('name')
+            ->orderBy('id')
             ->get();
     }
 
 }; ?>
 
-<section class="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
+<section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div class="space-y-1">
 			<flux:heading size="xl">{{ __('Manage categories') }}</flux:heading>

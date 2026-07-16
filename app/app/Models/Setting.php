@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\AppSettings;
+use GeneaLabs\LaravelModelCaching\CachedBuilder;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Support\Facades\Crypt;
@@ -19,6 +20,10 @@ class Setting extends BaseModel
         'site.home_title' => null,
         'site.description' => 'Chỉnh ảnh AI chất lượng cao miễn phí không cần đăng ký.',
         'site.keywords' => 'chỉnh ảnh AI, tạo ảnh AI',
+        'site.home_title.en' => null,
+        'site.description.en' => null,
+        'site.keywords.en' => null,
+        'locales.en.enabled' => false,
         'analytics.google_measurement_id' => null,
         'contact.zalo_url' => 'http://zalo.me/0963559309',
         'auth.registration_enabled' => true,
@@ -65,7 +70,10 @@ class Setting extends BaseModel
     {
         $values = static::DEFAULTS;
 
-        foreach (static::query()->disableModelCaching()->get(['key', 'value']) as $setting) {
+        /** @var CachedBuilder $query */
+        $query = static::query();
+
+        foreach ($query->disableModelCaching()->get(['key', 'value']) as $setting) {
             if ($setting->value === null) {
                 continue;
             }
@@ -78,7 +86,9 @@ class Setting extends BaseModel
 
     public static function getValue(string $key, mixed $default = null): mixed
     {
-        $setting = static::query()->disableModelCaching()->whereKey($key)->first(['key', 'value']);
+        /** @var CachedBuilder $query */
+        $query = static::query();
+        $setting = $query->disableModelCaching()->whereKey($key)->first(['key', 'value']);
 
         if ($setting?->value !== null) {
             return self::decodeValue($key, $setting->value);

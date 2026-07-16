@@ -9,6 +9,7 @@ use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
 use App\Events\AiImageCompleted;
 use App\Jobs\CreateAiImage;
+use App\Models\ApiKey;
 use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\User;
@@ -34,12 +35,30 @@ class CreatedImagesTest extends TestCase
             ->assertRedirect(route('login', absolute: false));
     }
 
-    public function test_usage_card_navigates_to_created_images(): void
+    public function test_usage_card_navigates_to_created_images_and_opens_api_key_settings(): void
     {
-        Livewire::actingAs(User::factory()->create())
+        $user = User::factory()->create();
+
+        $component = Livewire::actingAs($user)
             ->test('gallery.usage')
             ->assertSee(route('history.index'), false)
-            ->assertSee('wire:navigate', false);
+            ->assertSee('wire:navigate', false)
+            ->assertSee(__('API key quota'))
+            ->assertSee(__('No API key yet.'))
+            ->assertSee("component: 'settings.api-key'", false);
+
+        ApiKey::create([
+            'user_id' => $user->id,
+            'token_hash' => ApiKey::hashToken('test-key'),
+            'token_prefix' => 'test-key',
+            'quota_limit' => 100,
+            'quota_used' => 25,
+        ]);
+
+        $component
+            ->dispatch('api-key-updated')
+            ->assertSee('25/100')
+            ->assertSee(__('Remaining :count', ['count' => 75]));
     }
 
     public function test_created_images_show_thirty_day_usage_for_current_user(): void

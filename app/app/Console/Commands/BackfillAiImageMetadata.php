@@ -26,10 +26,10 @@ class BackfillAiImageMetadata extends Command
         $query = GeneratedMedia::query()
             ->publiclyVisible()
             ->where(fn ($query) => $query
-                ->whereNull('title')
-                ->orWhere('title', '')
-                ->orWhereNull('description')
-                ->orWhere('description', '')
+                ->whereNull('title->vi')
+                ->orWhere('title->vi', '')
+                ->orWhereNull('description->vi')
+                ->orWhere('description->vi', '')
                 ->orWhereNull('category_id')
                 ->orWhereDoesntHave('tags'));
         $total = $limit > 0 ? min($limit, $query->count()) : $query->count();

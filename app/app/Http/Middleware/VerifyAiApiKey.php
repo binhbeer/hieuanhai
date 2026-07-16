@@ -34,7 +34,7 @@ class VerifyAiApiKey
         }
 
         if ($user->isBanned()) {
-            return response()->json(['message' => 'Tài khoản đã bị khóa.'], 403);
+            return response()->json(['message' => 'This account has been suspended.'], 403);
         }
 
         $key->forceFill(['last_used_at' => now()])->save();
@@ -47,6 +47,6 @@ class VerifyAiApiKey
 
     private function unauthorized(): Response
     {
-        return response()->json(['message' => 'API key không hợp lệ.'], 401);
+        return response()->json(['message' => 'The API key is invalid.'], 401);
     }
 }

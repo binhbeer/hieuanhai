@@ -106,7 +106,7 @@ new #[Title('Manage users')] class extends Component
     }
 }; ?>
 
-<section class="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
+<section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div class="space-y-1">
 			<flux:heading size="xl">{{ __('Manage users') }}</flux:heading>

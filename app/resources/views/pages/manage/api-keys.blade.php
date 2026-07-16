@@ -161,7 +161,7 @@ new #[Title('Manage API keys')] class extends Component
     }
 }; ?>
 
-<section class="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
+<section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
 	<div class="space-y-1">
 		<flux:heading size="xl">{{ __('Manage API keys') }}</flux:heading>
 		<flux:text variant="subtle">{{ __('Each user has one API key. Generating again replaces the old token while keeping usage stats.') }}

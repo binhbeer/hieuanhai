@@ -111,7 +111,8 @@ class ProfileUpdateTest extends TestCase
 
         $component = Livewire::test('settings.api-key')
             ->call('generateApiKey')
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertDispatched('api-key-updated');
 
         $firstPlain = $component->get('newApiToken');
         $key = ApiKey::query()->where('user_id', $user->id)->firstOrFail();
@@ -134,10 +135,15 @@ class ProfileUpdateTest extends TestCase
             ->assertSee('HTTP 201')
             ->assertSee('99');
 
-        $component->call('generateApiKey');
+        $component
+            ->call('generateApiKey')
+            ->assertSee($component->get('newApiToken'), false)
+            ->assertSee(substr((string) $component->get('newApiToken'), 0, 12), false);
+
         $secondPlain = $component->get('newApiToken');
 
         $this->assertIsString($secondPlain);
+        $this->assertNotSame($firstPlain, $secondPlain);
         $this->assertSame(1, ApiKey::query()->where('user_id', $user->id)->count());
         $this->assertDatabaseMissing('api_keys', [
             'id' => $key->id,

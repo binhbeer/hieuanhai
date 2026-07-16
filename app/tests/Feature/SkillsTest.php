@@ -22,9 +22,9 @@ class SkillsTest extends TestCase
     {
         $this->get(route('skills.index'))
             ->assertOk()
-            ->assertSee('Công cụ AI')
-            ->assertSee('Ảnh sản phẩm')
-            ->assertSee('Poster quảng cáo')
+            ->assertSee(__('AI tools'))
+            ->assertSee(__('Product detail images'))
+            ->assertSee(__('Marketing poster'))
             ->assertDontSee('Nền trắng');
 
         $this->get(route('home'))

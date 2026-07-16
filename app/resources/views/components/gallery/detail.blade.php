@@ -49,7 +49,7 @@ new class extends Component
             return;
         }
 
-        if (request()->routeIs('history.index')) {
+        if (\App\Support\LocalizedRoute::is('history.index')) {
             $id = request()->integer('image');
 
             if (! $id && request()->boolean('composer')) {
@@ -648,7 +648,10 @@ new class extends Component
             </header>
 
             <div class="flex-1 p-4 md:min-h-0 md:overflow-y-auto">
-                @if ($selected->is_featured)
+                    @if (filled($selected->description))
+                        <p class="w-full text-sm text-zinc-500 dark:text-zinc-400">{{ $selected->description }}</p>
+                    @endif
+                    @if ($selected->is_featured)
                     <div class="mb-5 flex flex-wrap gap-1">
                         <flux:badge size="sm" color="amber">{{ __('Featured') }}</flux:badge>
                     </div>
@@ -736,8 +739,11 @@ new class extends Component
             <footer class="sticky bottom-0 z-10 shrink-0 border-t border-zinc-200 bg-white p-2 dark:border-white/10 dark:bg-zinc-950 md:static">
                 <div class="grid gap-2 {{ $this->canEdit($selected) && $selectedUrl ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-2' }}">
                     @if ($selectedUrl)
-                        <flux:button :href="$selectedUrl" download="{{ $selected->downloadName() }}">
-                            <x-slot name="icon"><x-iconsax-two-document-download class="size-5" /></x-slot>
+                        <flux:button :href="route('images.download', $selected)" x-on:click.prevent="downloadImage($event.currentTarget.href, $event.currentTarget)" data-download-error="{{ __('Could not download image.') }}">
+                            <x-slot name="icon">
+                                <x-iconsax-two-document-download class="size-5" data-download-idle />
+                                <flux:icon.loading class="hidden size-5" data-download-loading />
+                            </x-slot>
                             {{ __('Download') }}
                         </flux:button>
                     @endif

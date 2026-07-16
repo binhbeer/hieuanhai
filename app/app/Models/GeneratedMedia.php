@@ -11,6 +11,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\Translatable\Attributes\Translatable;
+use Spatie\Translatable\HasTranslations;
 
 /**
  * @property int $id
@@ -64,9 +66,13 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'request_meta',
     'response_meta',
 ])]
+#[Translatable('title', 'description')]
 class GeneratedMedia extends BaseModel implements HasMedia
 {
+    use HasTranslations;
     use InteractsWithMedia;
+
+    protected bool $useFallbackLocale = false;
 
     protected $table = 'generated_media';
 
@@ -84,15 +90,27 @@ class GeneratedMedia extends BaseModel implements HasMedia
     public function resolveRouteBinding($value, $field = null)
     {
         $key = is_string($value) ? Str::before($value, '-') : $value;
+        $image = parent::resolveRouteBinding($key, $field);
 
-        return parent::resolveRouteBinding($key, $field);
+        return app()->getLocale() === 'en' && $image instanceof self && ! $image->englishReady()
+            ? null
+            : $image;
     }
 
     public function routeKeySlug(): string
     {
-        $slug = Str::limit(Str::slug($this->title ?: $this->prompt, '-', 'vi'), 100, '') ?: 'image';
+        $locale = app()->getLocale();
+        $title = $this->getTranslationWithoutFallback('title', $locale);
+        $language = $locale === 'en' ? 'en' : 'vi';
+        $slug = Str::limit(Str::slug($title ?: $this->prompt, '-', $language), 100, '') ?: 'image';
 
         return $this->id.'-'.$slug;
+    }
+
+    public function englishReady(): bool
+    {
+        return filled($this->getTranslationWithoutFallback('title', 'en'))
+            && filled($this->getTranslationWithoutFallback('description', 'en'));
     }
 
     public function downloadName(): string
@@ -129,6 +147,19 @@ class GeneratedMedia extends BaseModel implements HasMedia
             ->where('is_published', true)
             ->where('status', 'succeeded')
             ->whereNotNull('result_path');
+    }
+
+    /**
+     * @param  Builder<GeneratedMedia>  $query
+     * @return Builder<GeneratedMedia>
+     */
+    public function scopeEnglishReady(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('title->en')
+            ->where('title->en', '!=', '')
+            ->whereNotNull('description->en')
+            ->where('description->en', '!=', '');
     }
 
     /**

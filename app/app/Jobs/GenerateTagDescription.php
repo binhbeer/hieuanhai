@@ -41,9 +41,10 @@ class GenerateTagDescription implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        app()->setLocale('vi');
         $tag = Tag::query()->find($this->tagId);
 
-        if (! $tag || filled($tag->description)) {
+        if (! $tag || filled($tag->getTranslationWithoutFallback('description', 'vi'))) {
             return;
         }
 
@@ -86,6 +87,10 @@ class GenerateTagDescription implements ShouldBeUnique, ShouldQueue
             ->squish()
             ->limit(160, '')
             ->toString();
+        $descriptionEn = Str::of(is_string($data['description_en'] ?? null) ? $data['description_en'] : '')
+            ->squish()
+            ->limit(160, '')
+            ->toString();
 
         if ($description === '') {
             throw new RuntimeException('AI trả về description tag rỗng.');
@@ -93,8 +98,14 @@ class GenerateTagDescription implements ShouldBeUnique, ShouldQueue
 
         $tag->refresh();
 
-        if (blank($tag->description)) {
-            $tag->update(['description' => $description]);
+        if (blank($tag->getTranslationWithoutFallback('description', 'vi'))) {
+            $tag->setTranslation('description', 'vi', $description);
         }
+
+        if ($descriptionEn !== '' && blank($tag->getTranslationWithoutFallback('description', 'en'))) {
+            $tag->setTranslation('description', 'en', $descriptionEn);
+        }
+
+        $tag->save();
     }
 }

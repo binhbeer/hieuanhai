@@ -42,6 +42,7 @@ RUN apk add --no-cache \
   nginx \
   nodejs \
   npm \
+  exiftool \
   optipng \
   pngquant \
   runit \

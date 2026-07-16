@@ -15,6 +15,43 @@ window.Echo = new Echo({
 
 Lightbox.init();
 
+window.downloadImage = async (url, trigger) => {
+    if (trigger.hasAttribute('data-flux-loading')) return;
+
+    const idleIcon = trigger.querySelector('[data-download-idle]');
+    const loadingIcon = trigger.querySelector('[data-download-loading]');
+    trigger.setAttribute('data-flux-loading', '');
+    trigger.setAttribute('aria-disabled', 'true');
+    trigger.classList.add('pointer-events-none', 'opacity-75');
+    idleIcon?.classList.add('hidden');
+    loadingIcon?.classList.remove('hidden');
+
+    try {
+        const response = await fetch(url);
+
+        if (! response.ok) throw new Error(response.statusText);
+
+        const disposition = response.headers.get('content-disposition') ?? '';
+        const fileName = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? 'GenAnh.com-image.jpg';
+        const objectUrl = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+    } catch {
+        window.Flux?.toast({ text: trigger.dataset.downloadError, variant: 'danger' });
+    } finally {
+        trigger.removeAttribute('data-flux-loading');
+        trigger.removeAttribute('aria-disabled');
+        trigger.classList.remove('pointer-events-none', 'opacity-75');
+        idleIcon?.classList.remove('hidden');
+        loadingIcon?.classList.add('hidden');
+    }
+};
+
 window.accountForm = () => ({
     submitting: false,
     errors: {},

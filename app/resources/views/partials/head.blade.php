@@ -3,10 +3,11 @@
 <meta name="csrf-token" content="{{ csrf_token() }}" />
 
 @php
+    $locale = app()->getLocale() === 'en' ? 'en' : 'vi';
     $siteName = \App\Support\AppSettings::string('site.name', config('app.name', 'GenAnh'));
-    $homeTitle = \App\Support\AppSettings::string('site.home_title', '');
-    $siteDescription = \App\Support\AppSettings::string('site.description', '');
-    $siteKeywords = \App\Support\AppSettings::string('site.keywords', '');
+    $homeTitle = \App\Support\AppSettings::string($locale === 'en' ? 'site.home_title.en' : 'site.home_title', '');
+    $siteDescription = \App\Support\AppSettings::string($locale === 'en' ? 'site.description.en' : 'site.description', '');
+    $siteKeywords = \App\Support\AppSettings::string($locale === 'en' ? 'site.keywords.en' : 'site.keywords', '');
     $googleMeasurementId = trim(\App\Support\AppSettings::string('analytics.google_measurement_id', ''));
     $assetVersion = is_file(public_path('build/manifest.json')) ? filemtime(public_path('build/manifest.json')) : filemtime(public_path('logo.png'));
     $routeImage = request()->route('image');
@@ -15,15 +16,25 @@
     $metaImage = $routeImage instanceof \App\Models\GeneratedMedia && $routeImage->is_published && $routeImage->status === 'succeeded' && filled($routeImage->result_path) ? $routeImage : null;
     $metaCategory = $routeCategory instanceof \App\Models\Category ? $routeCategory : null;
     $metaTag = $routeTag instanceof \App\Models\Tag ? $routeTag : null;
-    $isIndexable = request()->routeIs('home', 'skills.index', 'categories.show', 'tags.show', 'images.show');
+    $baseRouteName = \App\Support\LocalizedRoute::name();
+    $isPrivateSkillsView = $baseRouteName === 'skills.index' && (request()->query('view') === 'projects' || request()->filled('project'));
+    $isIndexable = in_array($baseRouteName, ['home', 'skills.index', 'categories.show', 'tags.show', 'images.show'], true) && ! $isPrivateSkillsView;
+    $englishEnabled = \App\Support\AppSettings::bool('locales.en.enabled');
+    $englishReady = match (true) {
+        $metaImage !== null => $metaImage->englishReady(),
+        $metaCategory !== null => $metaCategory->englishReady(),
+        $metaTag !== null => $metaTag->englishReady(),
+        default => true,
+    };
+    $routeParameters = array_filter(['image' => $metaImage, 'category' => $metaCategory, 'tag' => $metaTag]);
 
     $metaTitle = match (true) {
         $metaImage !== null => \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 70, ''),
         $metaCategory !== null => $metaCategory->name,
         $metaTag !== null => '#'.$metaTag->name,
-        request()->routeIs('home') => $homeTitle,
-        request()->routeIs('skills.index') => __('AI tools'),
-        default => $title ?? null,
+        \App\Support\LocalizedRoute::is('home') => $homeTitle,
+        \App\Support\LocalizedRoute::is('skills.index') => __('AI tools'),
+        default => isset($title) ? __($title) : null,
     };
 
     $metaDescription = match (true) {
@@ -33,12 +44,12 @@
             '',
         ),
         $metaCategory !== null => \Illuminate\Support\Str::limit(
-            filled($metaCategory->description) ? $metaCategory->description : 'Ảnh AI chủ đề '.$metaCategory->name.'. Khám phá các ảnh cộng đồng đã publish.',
+            filled($metaCategory->description) ? $metaCategory->description : __('AI images about :name. Browse published community images.', ['name' => $metaCategory->name]),
             160,
             '',
         ),
         $metaTag !== null => \Illuminate\Support\Str::limit(
-            filled($metaTag->description) ? $metaTag->description : 'Ảnh AI gắn thẻ #'.$metaTag->name.'. Khám phá các ảnh cộng đồng đã publish.',
+            filled($metaTag->description) ? $metaTag->description : __('AI images tagged #:name. Browse published community images.', ['name' => $metaTag->name]),
             160,
             '',
         ),
@@ -49,8 +60,8 @@
         $metaImage !== null => route('images.show', $metaImage),
         $metaCategory !== null => route('categories.show', $metaCategory),
         $metaTag !== null => route('tags.show', $metaTag),
-        request()->routeIs('home') => route('home'),
-        request()->routeIs('skills.index') => route('skills.index'),
+        \App\Support\LocalizedRoute::is('home') => route('home'),
+        \App\Support\LocalizedRoute::is('skills.index') => route('skills.index'),
         default => url()->current(),
     };
 
@@ -61,21 +72,25 @@
     $metaImageUrl = $metaImageUrl && ! \Illuminate\Support\Str::startsWith($metaImageUrl, ['http://', 'https://']) ? url($metaImageUrl) : $metaImageUrl;
     $metaImageAlt = $metaImage ? \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 120, '') : null;
     $metaKeywords = $metaImage
-        ? $metaImage->tags()->pluck('name')->filter()->implode(', ')
+        ? $metaImage->tags->map(fn (\App\Models\Tag $tag): string => (string) $tag->getTranslationWithoutFallback('name', $locale))->filter()->implode(', ')
         : $siteKeywords;
     $metaRobots = $isIndexable ? 'index,follow,max-image-preview:large' : 'noindex,nofollow';
-    $metaLocale = str_replace('-', '_', str_replace('_', '-', app()->getLocale()));
+    $metaLocale = $locale === 'en' ? 'en_US' : 'vi_VN';
+    $alternateLocale = $locale === 'en' ? 'vi_VN' : 'en_US';
+    $viUrl = $isIndexable && $baseRouteName ? \App\Support\LocalizedRoute::url($baseRouteName, $routeParameters, 'vi') : null;
+    $enUrl = $isIndexable && $baseRouteName && $englishEnabled && $englishReady ? \App\Support\LocalizedRoute::url($baseRouteName, $routeParameters, 'en') : null;
     $publishedAt = $metaImage?->published_at?->toIso8601String();
     $modifiedAt = $metaImage?->updated_at?->toIso8601String();
     $schema = [];
 
-    if (request()->routeIs('home')) {
+    if (\App\Support\LocalizedRoute::is('home')) {
         $schema[] = [
             '@context' => 'https://schema.org',
             '@type' => 'WebSite',
             'name' => $siteName,
             'url' => route('home'),
             'description' => $siteDescription,
+            'inLanguage' => $locale,
         ];
     }
 
@@ -86,6 +101,7 @@
             'name' => filled($metaTitle) ? $metaTitle : $siteName,
             'url' => $metaUrl,
             'description' => $metaDescription,
+            'inLanguage' => $locale,
         ];
     }
 
@@ -100,6 +116,7 @@
             'description' => $metaDescription,
             'datePublished' => $publishedAt,
             'dateModified' => $modifiedAt,
+            'inLanguage' => $locale,
         ];
 
         if ($metaImage->user?->name) {
@@ -118,6 +135,13 @@
 </title>
 
 <link rel="canonical" href="{{ $metaUrl }}">
+@if ($viUrl)
+    <link rel="alternate" hreflang="vi" href="{{ $viUrl }}">
+    <link rel="alternate" hreflang="x-default" href="{{ $viUrl }}">
+@endif
+@if ($enUrl)
+    <link rel="alternate" hreflang="en" href="{{ $enUrl }}">
+@endif
 <meta name="robots" content="{{ $metaRobots }}">
 @if (filled($metaDescription))
     <meta name="description" content="{{ $metaDescription }}">
@@ -127,6 +151,9 @@
 @endif
 <meta property="og:site_name" content="{{ $siteName }}">
 <meta property="og:locale" content="{{ $metaLocale }}">
+@if ($enUrl)
+    <meta property="og:locale:alternate" content="{{ $alternateLocale }}">
+@endif
 <meta property="og:type" content="{{ $metaImage ? 'article' : 'website' }}">
 <meta property="og:title" content="{{ filled($metaTitle) ? $metaTitle : $siteName }}">
 @if (filled($metaDescription))
@@ -163,7 +190,7 @@
 @if ($schema !== [])
     <script type="application/ld+json">{!! json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
 @endif
-@if (! app()->isLocal() && filled($googleMeasurementId) && ! request()->routeIs('manage.*'))
+@if (! app()->isLocal() && filled($googleMeasurementId) && ! \App\Support\LocalizedRoute::is('manage.*'))
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ $googleMeasurementId }}"></script>
     <script>
         window.dataLayer = window.dataLayer || [];

@@ -29,6 +29,7 @@
 						{{ $setting['label'] }}
 					</flux:menu.item>
 				@endforeach
+				<x-language-switcher />
 				<form class="w-full" method="POST" action="{{ route('logout') }}">
 					@csrf
 					<flux:menu.item class="w-full cursor-pointer" data-test="logout-button" as="button" type="submit">
@@ -40,7 +41,21 @@
 		</flux:menu>
 	</flux:dropdown>
 @else
-	<div class="grid grid-cols-2 gap-2" {{ $attributes }}>
+	<div class="space-y-2" {{ $attributes }}>
+		@if (! \App\Support\LocalizedRoute::is('manage.*') && \Illuminate\Support\Facades\Route::isLocalized())
+			@php($routeName = \App\Support\LocalizedRoute::name())
+			@php($routeParameters = request()->route()?->parameters() ?? [])
+			@php($query = request()->getQueryString())
+			@php($localizedUrl = fn (string $locale): string => \App\Support\LocalizedRoute::url($routeName, $routeParameters, $locale).($query ? '?'.$query : ''))
+			<div class="flex justify-end text-sm">
+				@if (app()->getLocale() === 'en')
+					<a class="text-zinc-500 hover:text-zinc-900 dark:hover:text-white" href="{{ $localizedUrl('vi') }}">Tiếng Việt</a>
+				@elseif (\App\Support\AppSettings::bool('locales.en.enabled'))
+					<a class="text-zinc-500 hover:text-zinc-900 dark:hover:text-white" href="{{ $localizedUrl('en') }}">English</a>
+				@endif
+			</div>
+		@endif
+		<div class="grid grid-cols-2 gap-2">
 		<flux:button class="w-full" type="button" variant="outline" x-data x-on:click="Livewire.dispatch('open-account-modal', { component: 'auth.login' })">
 			{{ __('Log in') }}
 		</flux:button>
@@ -49,5 +64,6 @@
 				{{ __('Register') }}
 			</flux:button>
 		@endif
+		</div>
 	</div>
 @endauth

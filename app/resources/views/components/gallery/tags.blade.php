@@ -41,7 +41,7 @@ new class extends Component {
             ->when($this->mode === 'popular', fn($query) => $query
                 ->whereHas('media', $recentImages)
                 ->orderByDesc('recent_images_count'))
-            ->orderBy('name')
+            ->orderBy('id')
             ->limit(20)
             ->get();
     }

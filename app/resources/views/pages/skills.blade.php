@@ -16,7 +16,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new #[Title('Công cụ AI')] class extends Component {
+new #[Title('AI tools')] class extends Component {
     use WithFileUploads;
 
     #[Url]

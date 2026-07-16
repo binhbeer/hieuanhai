@@ -8,7 +8,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Ảnh yêu thích')] class extends Component
+new #[Title('Favorite images')] class extends Component
 {
     #[Computed]
     public function images()
@@ -75,7 +75,7 @@ new #[Title('Ảnh yêu thích')] class extends Component
 		<main class="min-w-0">
 			<div class="mb-5 flex flex-wrap items-end justify-between gap-3 pr-28">
 				<div>
-					<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Ảnh yêu thích') }}</h1>
+					<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Favorite images') }}</h1>
 					<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Images you favorited in the gallery.') }}</p>
 				</div>
 			</div>
@@ -86,8 +86,8 @@ new #[Title('Ảnh yêu thích')] class extends Component
 						<div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-white/10">
 							<x-iconsax-two-heart class="size-7 text-zinc-500" />
 						</div>
-						<h2 class="text-lg font-semibold">{{ __('Chưa có ảnh yêu thích') }}</h2>
-						<p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Bấm trái tim trong gallery để lưu ảnh vào đây.') }}</p>
+						<h2 class="text-lg font-semibold">{{ __('No favorite images yet') }}</h2>
+						<p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Click the heart in the gallery to save images here.') }}</p>
 					</div>
 				</div>
 			@else

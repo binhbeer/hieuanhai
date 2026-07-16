@@ -10,6 +10,7 @@ use App\Models\GeneratedMedia;
 use App\Models\Tag;
 use App\Services\AiImageEditor;
 use App\Support\AppSettings;
+use App\Support\LocalizedRoute;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -33,8 +34,15 @@ class AiImageController extends Controller
         return response()->json([
             'data' => Category::query()
                 ->active()
+                ->englishReady()
                 ->ordered()
-                ->get(['id', 'name', 'slug']),
+                ->get()
+                ->map(fn (Category $category): array => [
+                    'id' => $category->id,
+                    'name' => $category->getTranslationWithoutFallback('name', 'en'),
+                    'slug' => $category->slug_en,
+                ])
+                ->values(),
         ]);
     }
 
@@ -52,7 +60,7 @@ class AiImageController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Dữ liệu không hợp lệ.',
+                'message' => 'The provided data is invalid.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -67,16 +75,17 @@ class AiImageController extends Controller
         $images = GeneratedMedia::query()
             ->with(['category', 'tags', 'user'])
             ->publiclyVisible()
+            ->englishReady()
             ->when($keyword !== '', function ($query) use ($keyword): void {
                 $query->where(function ($query) use ($keyword): void {
-                    $query->where('title', 'like', '%'.$keyword.'%')
+                    $query->where('title->en', 'like', '%'.$keyword.'%')
                         ->orWhere('prompt', 'like', '%'.$keyword.'%')
-                        ->orWhereHas('category', fn ($query) => $query->where('name', 'like', '%'.$keyword.'%'))
-                        ->orWhereHas('tags', fn ($query) => $query->where('name', 'like', '%'.$keyword.'%'));
+                        ->orWhereHas('category', fn ($query) => $query->where('name->en', 'like', '%'.$keyword.'%'))
+                        ->orWhereHas('tags', fn ($query) => $query->where('name->en', 'like', '%'.$keyword.'%'));
                 });
             })
-            ->when($category !== '', fn ($query) => $query->whereHas('category', fn ($query) => $query->where('slug', $category)->where('status', 'active')))
-            ->when($tag !== '', fn ($query) => $query->whereHas('tags', fn ($query) => $query->where('slug', $tag)))
+            ->when($category !== '', fn ($query) => $query->whereHas('category', fn ($query) => $query->where('slug_en', $category)->where('status', 'active')))
+            ->when($tag !== '', fn ($query) => $query->whereHas('tags', fn ($query) => $query->where('slug_en', $tag)))
             ->when($source !== '', fn ($query) => $query->where('source', $source))
             ->when($userId > 0, fn ($query) => $query->where('user_id', $userId))
             ->latest('published_at')
@@ -100,16 +109,16 @@ class AiImageController extends Controller
         $key = $request->attributes->get('ai_api_key');
 
         if (! $key instanceof ApiKey) {
-            return response()->json(['message' => 'API key không hợp lệ.'], 401);
+            return response()->json(['message' => 'The API key is invalid.'], 401);
         }
 
         if (! $key->hasQuota()) {
-            $this->logRequest($key, $request, $startedAt, 429, 'quota_exceeded', false, null, 'API key đã hết quota.', [
+            $this->logRequest($key, $request, $startedAt, 429, 'quota_exceeded', false, null, 'The API key quota has been exhausted.', [
                 'quota' => $this->quotaPayload($key),
             ]);
 
             return response()->json([
-                'message' => 'API key đã hết quota.',
+                'message' => 'The API key quota has been exhausted.',
                 'quota' => $this->quotaPayload($key),
             ], 429);
         }
@@ -122,12 +131,12 @@ class AiImageController extends Controller
         ]);
 
         if ($validator->fails()) {
-            $this->logRequest($key, $request, $startedAt, 422, 'validation_failed', false, null, 'Dữ liệu không hợp lệ.', [
+            $this->logRequest($key, $request, $startedAt, 422, 'validation_failed', false, null, 'The provided data is invalid.', [
                 'errors' => $validator->errors()->toArray(),
             ]);
 
             return response()->json([
-                'message' => 'Dữ liệu không hợp lệ.',
+                'message' => 'The provided data is invalid.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -161,8 +170,14 @@ class AiImageController extends Controller
             $responseMeta = $errorCode ? ['error_code' => $errorCode] : [];
             $this->logRequest($key, $request, $startedAt, $statusCode, $status, false, $image?->id, $e->getMessage(), $responseMeta);
 
+            $message = match ($errorCode) {
+                'IMAGE_REVIEW_BLOCKED_SEXUAL', 'IMAGE_REVIEW_BLOCKED_POLITICAL' => 'The prompt is not eligible for image generation or publication.',
+                'IMAGE_REVIEW_UNAVAILABLE' => 'Image review is temporarily unavailable. Please try again later.',
+                default => 'The request could not be processed.',
+            };
+
             return response()->json(array_filter([
-                'message' => $e->getMessage(),
+                'message' => $message,
                 'error_code' => $errorCode,
             ]), $statusCode);
         } catch (Throwable $e) {
@@ -170,7 +185,7 @@ class AiImageController extends Controller
 
             $this->logRequest($key, $request, $startedAt, 500, 'failed', false, $image?->id, $e->getMessage());
 
-            return response()->json(['message' => 'Không tạo được ảnh lúc này. Vui lòng thử lại sau.'], 500);
+            return response()->json(['message' => 'Could not create an image right now. Please try again later.'], 500);
         }
     }
 
@@ -181,22 +196,26 @@ class AiImageController extends Controller
     {
         return [
             'id' => $image->id,
-            'title' => $image->title,
-            'description' => $image->description,
+            'title' => $image->getTranslationWithoutFallback('title', 'en'),
+            'description' => $image->getTranslationWithoutFallback('description', 'en'),
             'prompt_preview' => Str::limit($image->prompt, 160),
             'url' => $editor->resultUrl($image),
-            'public_url' => route('images.show', $image),
+            'public_url' => $image->englishReady()
+                ? LocalizedRoute::url('images.show', $image, 'en')
+                : LocalizedRoute::url('images.show', $image, 'vi'),
             'source' => $image->source,
-            'category' => $image->category ? [
+            'category' => $image->category?->englishReady() ? [
                 'id' => $image->category->id,
-                'name' => $image->category->name,
-                'slug' => $image->category->slug,
+                'name' => $image->category->getTranslationWithoutFallback('name', 'en'),
+                'slug' => $image->category->slug_en,
             ] : null,
-            'tags' => $image->tags->map(fn (Tag $tag): array => [
-                'id' => $tag->id,
-                'name' => $tag->name,
-                'slug' => $tag->slug,
-            ])->values()->all(),
+            'tags' => $image->tags
+                ->filter(fn (Tag $tag): bool => $tag->englishReady())
+                ->map(fn (Tag $tag): array => [
+                    'id' => $tag->id,
+                    'name' => $tag->getTranslationWithoutFallback('name', 'en'),
+                    'slug' => $tag->slug_en,
+                ])->values()->all(),
             'user' => $image->user ? [
                 'id' => $image->user->id,
                 'name' => $image->user->name,
@@ -211,7 +230,7 @@ class AiImageController extends Controller
      */
     private function promptRules(): array
     {
-        return AppSettings::promptRules('Prompt không được vượt quá 1200 từ.');
+        return AppSettings::promptRules('The prompt may not exceed 1200 words.');
     }
 
     /**
@@ -249,16 +268,22 @@ class AiImageController extends Controller
 
         return [
             ...$payload,
-            'title' => $image->title,
-            'description' => $image->description,
-            'public_url' => route('images.show', $image),
+            'title' => $image->getTranslationWithoutFallback('title', 'en'),
+            'description' => $image->getTranslationWithoutFallback('description', 'en'),
+            'public_url' => $image->englishReady()
+                ? LocalizedRoute::url('images.show', $image, 'en')
+                : LocalizedRoute::url('images.show', $image, 'vi'),
             'published' => $image->is_published,
-            'category' => $image->category ? [
+            'category' => $image->category?->englishReady() ? [
                 'id' => $image->category->id,
-                'name' => $image->category->name,
-                'slug' => $image->category->slug,
+                'name' => $image->category->getTranslationWithoutFallback('name', 'en'),
+                'slug' => $image->category->slug_en,
             ] : null,
-            'tags' => $image->tags->pluck('name')->values()->all(),
+            'tags' => $image->tags
+                ->filter(fn (Tag $tag): bool => $tag->englishReady())
+                ->map(fn (Tag $tag): string => (string) $tag->getTranslationWithoutFallback('name', 'en'))
+                ->values()
+                ->all(),
         ];
     }
 
@@ -281,12 +306,18 @@ class AiImageController extends Controller
 
         return [
             ...$meta,
-            'title' => $image->title,
-            'description' => $image->description,
+            'title' => $image->getTranslationWithoutFallback('title', 'en'),
+            'description' => $image->getTranslationWithoutFallback('description', 'en'),
             'published' => $image->is_published,
-            'public_url' => route('images.show', $image),
-            'category' => $image->category?->slug,
-            'tags' => $image->tags->pluck('name')->values()->all(),
+            'public_url' => $image->englishReady()
+                ? LocalizedRoute::url('images.show', $image, 'en')
+                : LocalizedRoute::url('images.show', $image, 'vi'),
+            'category' => $image->category?->englishReady() ? $image->category->slug_en : null,
+            'tags' => $image->tags
+                ->filter(fn (Tag $tag): bool => $tag->englishReady())
+                ->map(fn (Tag $tag): string => (string) $tag->getTranslationWithoutFallback('name', 'en'))
+                ->values()
+                ->all(),
         ];
     }
 

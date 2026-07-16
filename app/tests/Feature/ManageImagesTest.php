@@ -108,4 +108,54 @@ class ManageImagesTest extends TestCase
         $this->assertSame(3, collect($stats)->sum('users'));
         $this->assertSame(2, collect($stats)->sum('images'));
     }
+
+    public function test_images_page_groups_publish_status_activity_for_the_last_thirty_days(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+
+        foreach ([
+            ['published' => true, 'status' => 'succeeded', 'path' => 'ai-images/pub.png'],
+            ['published' => false, 'status' => 'succeeded', 'path' => 'ai-images/unpub.png'],
+            ['published' => false, 'status' => 'failed', 'path' => null],
+        ] as $index => $attrs) {
+            $image = GeneratedMedia::create([
+                'visitor_key' => 'manage-images-'.$index,
+                'prompt' => 'Manage images chart '.$index,
+                'provider' => 'openai',
+                'model' => 'cx/gpt-5.5-image',
+                'status' => $attrs['status'],
+                'result_path' => $attrs['path'],
+                'is_published' => $attrs['published'],
+            ]);
+            $image->forceFill(['created_at' => now()->subDay()])->save();
+        }
+
+        $oldImage = GeneratedMedia::create([
+            'visitor_key' => 'manage-images-old',
+            'prompt' => 'Old manage images chart',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/old.png',
+            'is_published' => true,
+        ]);
+        $oldImage->forceFill(['created_at' => now()->subDays(30)])->save();
+
+        $component = Livewire::actingAs($admin)->test('pages::manage.images');
+        $stats = $component->get('dailyStats');
+        $imageDay = collect($stats)->first(fn (array $day): bool => $day['date']->isSameDay(now()->subDay()));
+
+        $this->assertCount(30, $stats);
+        $this->assertSame(3, $imageDay['total']);
+        $this->assertSame(1, $imageDay['published']);
+        $this->assertSame(1, $imageDay['unpublished']);
+        $this->assertSame(1, $imageDay['failed']);
+        $this->assertSame(3, collect($stats)->sum('total'));
+        $component
+            ->assertSee(__('Total images'))
+            ->assertSee(__('Published'))
+            ->assertSee(__('Unpublished'))
+            ->assertSee(__('Failed'))
+            ->assertSee(__('Last 30 days'));
+    }
 }

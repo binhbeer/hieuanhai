@@ -93,7 +93,7 @@ new #[Title('Manage created images')] class extends Component {
 	#[Computed]
 	public function categories()
 	{
-		return Category::query()->orderBy('sort_order')->orderBy('name')->get();
+		return Category::query()->ordered()->get();
 	}
 
 	#[Computed]
@@ -112,6 +112,31 @@ new #[Title('Manage created images')] class extends Component {
 	}
 
 	#[Computed]
+	public function dailyStats(): array
+	{
+		$from = today()->subDays(29);
+		$images = GeneratedMedia::query()
+			->where('created_at', '>=', $from)
+			->selectRaw("DATE(created_at) as date, COUNT(*) as total, SUM(is_published = 1) as published, SUM(is_published = 0 AND status = 'succeeded' AND result_path IS NOT NULL) as unpublished, SUM(status = 'failed') as failed")
+			->groupByRaw('DATE(created_at)')
+			->get()
+			->keyBy('date');
+
+		return collect(range(0, 29))->map(function (int $offset) use ($from, $images): array {
+			$date = $from->copy()->addDays($offset);
+			$image = $images->get($date->toDateString());
+
+			return [
+				'date' => $date,
+				'total' => (int) ($image->total ?? 0),
+				'published' => (int) ($image->published ?? 0),
+				'unpublished' => (int) ($image->unpublished ?? 0),
+				'failed' => (int) ($image->failed ?? 0),
+			];
+		})->all();
+	}
+
+	#[Computed]
 	public function images()
 	{
 		return GeneratedMedia::query()
@@ -121,7 +146,7 @@ new #[Title('Manage created images')] class extends Component {
 				$like = '%' . $search . '%';
 
 				$query->where(function ($query) use ($search, $like): void {
-					$query->where('title', 'like', $like)
+					$query->where('title->vi', 'like', $like)
 						->orWhere('prompt', 'like', $like)
 						->orWhere('custom_prompt', 'like', $like)
 						->orWhere('visitor_key', 'like', $like)
@@ -156,11 +181,11 @@ new #[Title('Manage created images')] class extends Component {
 
 	private function refreshData(): void
 	{
-		unset($this->images, $this->stats);
+		unset($this->images, $this->stats, $this->dailyStats);
 	}
 }; ?>
 
-<section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6">
+<section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div class="space-y-1">
 			<flux:heading size="xl">{{ __('Manage created images') }}</flux:heading>
@@ -169,24 +194,124 @@ new #[Title('Manage created images')] class extends Component {
 		<flux:button :href="route('manage.index')" variant="filled" wire:navigate>{{ __('Manage') }}</flux:button>
 	</div>
 
-	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-		<div class="rounded-xl bg-white/5 p-4">
-			<flux:text variant="subtle">{{ __('Total images') }}</flux:text>
-			<div class="text-2xl font-semibold tabular-nums">{{ number_format($this->stats['total']) }}</div>
-		</div>
-		<div class="rounded-xl bg-white/5 p-4">
-			<flux:text variant="subtle">Published</flux:text>
-			<div class="text-2xl font-semibold tabular-nums">{{ number_format($this->stats['published']) }}</div>
-		</div>
-		<div class="rounded-xl bg-white/5 p-4">
-			<flux:text variant="subtle">Unpublish</flux:text>
-			<div class="text-2xl font-semibold tabular-nums">{{ number_format($this->stats['unpublished']) }}</div>
-		</div>
-		<div class="rounded-xl bg-white/5 p-4">
-			<flux:text variant="subtle">Failed</flux:text>
-			<div class="text-2xl font-semibold tabular-nums">{{ number_format($this->stats['failed']) }}</div>
-		</div>
+	<div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+		<flux:card class="h-full p-3! sm:p-5!">
+			<div class="flex items-start justify-between gap-4">
+				<div class="space-y-3">
+					<div class="flex size-9 items-center justify-center rounded-xl bg-zinc-500/10 text-zinc-600 sm:size-11 sm:rounded-2xl dark:text-zinc-300">
+						<x-iconsax-two-gallery class="size-5" />
+					</div>
+					<div>
+						<flux:text variant="subtle">{{ __('Total images') }}</flux:text>
+						<div class="mt-1 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{{ number_format($this->stats['total']) }}</div>
+					</div>
+				</div>
+			</div>
+			<flux:text class="mt-3 hidden text-sm! sm:mt-5 sm:block" variant="subtle">{{ __('All created images in the system.') }}</flux:text>
+		</flux:card>
+
+		<flux:card class="h-full p-3! sm:p-5!">
+			<div class="flex items-start justify-between gap-4">
+				<div class="space-y-3">
+					<div class="flex size-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 sm:size-11 sm:rounded-2xl dark:text-emerald-300">
+						<x-iconsax-two-tick-circle class="size-5" />
+					</div>
+					<div>
+						<flux:text variant="subtle">{{ __('Published') }}</flux:text>
+						<div class="mt-1 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{{ number_format($this->stats['published']) }}</div>
+					</div>
+				</div>
+			</div>
+			@php($publishedShare = $this->stats['total'] > 0 ? round($this->stats['published'] / $this->stats['total'] * 100) : 0)
+			<flux:badge class="mt-3 max-w-full sm:mt-5" color="emerald" size="sm">
+				{{ __(':percent of total', ['percent' => $publishedShare.'%']) }}
+			</flux:badge>
+		</flux:card>
+
+		<flux:card class="h-full p-3! sm:p-5!">
+			<div class="flex items-start justify-between gap-4">
+				<div class="space-y-3">
+					<div class="flex size-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 sm:size-11 sm:rounded-2xl dark:text-amber-300">
+						<x-iconsax-two-clock class="size-5" />
+					</div>
+					<div>
+						<flux:text variant="subtle">{{ __('Unpublished') }}</flux:text>
+						<div class="mt-1 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{{ number_format($this->stats['unpublished']) }}</div>
+					</div>
+				</div>
+			</div>
+			<flux:badge class="mt-3 max-w-full sm:mt-5" :color="$this->stats['unpublished'] > 0 ? 'amber' : 'zinc'" size="sm">
+				{{ __(':count awaiting publication', ['count' => number_format($this->stats['unpublished'])]) }}
+			</flux:badge>
+		</flux:card>
+
+		<flux:card class="h-full p-3! sm:p-5!">
+			<div class="flex items-start justify-between gap-4">
+				<div class="space-y-3">
+					<div class="flex size-9 items-center justify-center rounded-xl bg-red-500/10 text-red-600 sm:size-11 sm:rounded-2xl dark:text-red-300">
+						<x-iconsax-two-close-circle class="size-5" />
+					</div>
+					<div>
+						<flux:text variant="subtle">{{ __('Failed') }}</flux:text>
+						<div class="mt-1 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{{ number_format($this->stats['failed']) }}</div>
+					</div>
+				</div>
+			</div>
+			<flux:badge class="mt-3 max-w-full sm:mt-5" :color="$this->stats['failed'] > 0 ? 'red' : 'zinc'" size="sm">
+				{{ __(':count failed generations', ['count' => number_format($this->stats['failed'])]) }}
+			</flux:badge>
+		</flux:card>
 	</div>
+
+	@php($dailyStats = $this->dailyStats)
+	@php($maxDailyImages = max(1, collect($dailyStats)->max('total')))
+	@php($periodImages = collect($dailyStats)->sum('total'))
+	@php($periodPublished = collect($dailyStats)->sum('published'))
+	@php($periodUnpublished = collect($dailyStats)->sum('unpublished'))
+	@php($periodFailed = collect($dailyStats)->sum('failed'))
+
+	<flux:card class="space-y-5">
+		<div class="flex items-start justify-between gap-4">
+			<div>
+				<flux:text variant="subtle">{{ __('Created images') }}</flux:text>
+				<div class="mt-1 text-2xl font-semibold tabular-nums">{{ number_format($periodImages) }}</div>
+				<flux:text class="mt-1 text-xs!" variant="subtle">{{ __('Last 30 days') }}</flux:text>
+			</div>
+			<div class="flex size-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+				<x-iconsax-two-gallery class="size-5" />
+			</div>
+		</div>
+
+		<div class="flex h-40 items-end gap-1 border-b border-zinc-200 dark:border-white/10" role="img" aria-label="{{ __('Daily published, unpublished, and failed images for the last 30 days') }}">
+			@foreach ($dailyStats as $day)
+				@php($imageHeight = $day['total'] / $maxDailyImages * 100)
+				@php($publishedHeight = $day['total'] > 0 ? $day['published'] / $day['total'] * 100 : 0)
+				@php($unpublishedHeight = $day['total'] > 0 ? $day['unpublished'] / $day['total'] * 100 : 0)
+				@php($failedHeight = $day['total'] > 0 ? $day['failed'] / $day['total'] * 100 : 0)
+				<div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="daily-manage-images-{{ $day['date']->toDateString() }}">
+					<div class="flex w-full flex-col-reverse overflow-hidden rounded-t bg-zinc-200 dark:bg-zinc-800" style="height: {{ $day['total'] > 0 ? max(4, $imageHeight) : 0 }}%">
+						<div class="bg-emerald-500" style="height: {{ $publishedHeight }}%"></div>
+						<div class="bg-amber-500" style="height: {{ $unpublishedHeight }}%"></div>
+						<div class="bg-red-500" style="height: {{ $failedHeight }}%"></div>
+					</div>
+					<div class="pointer-events-none absolute bottom-full inset-s-1/2 z-10 mb-2 hidden w-max max-w-56 -translate-x-1/2 rounded-lg bg-zinc-950 px-2 py-1.5 text-xs text-white shadow-lg group-hover:block group-focus-within:block">
+						{{ $day['date']->format('d/m') }} · {{ __(':published published, :unpublished unpublished, :failed failed', ['published' => number_format($day['published']), 'unpublished' => number_format($day['unpublished']), 'failed' => number_format($day['failed'])]) }}
+					</div>
+				</div>
+			@endforeach
+		</div>
+
+		<div class="flex items-center justify-between gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+			<span>{{ $dailyStats[0]['date']->format('d/m') }}</span>
+			<span>{{ __('30 days') }}</span>
+			<span>{{ $dailyStats[29]['date']->format('d/m') }}</span>
+		</div>
+		<div class="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+			<span class="flex items-center gap-2"><span class="size-2.5 rounded-sm bg-emerald-500"></span>{{ __('Published') }} · {{ number_format($periodPublished) }}</span>
+			<span class="flex items-center gap-2"><span class="size-2.5 rounded-sm bg-amber-500"></span>{{ __('Unpublished') }} · {{ number_format($periodUnpublished) }}</span>
+			<span class="flex items-center gap-2"><span class="size-2.5 rounded-sm bg-red-500"></span>{{ __('Failed') }} · {{ number_format($periodFailed) }}</span>
+		</div>
+	</flux:card>
 
 	<flux:card class="space-y-4">
 		<div class="grid gap-3 lg:grid-cols-[1fr_12rem_12rem_14rem_auto]">

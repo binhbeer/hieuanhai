@@ -14,7 +14,7 @@
 		@endpersist
 
 		<flux:navbar class="-mb-px max-lg:hidden">
-			<flux:navbar.item :icon="svg('iconsax-bul-gallery', 'size-5')" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+			<flux:navbar.item :icon="svg('iconsax-bul-gallery', 'size-5')" :href="route('home')" :current="\App\Support\LocalizedRoute::is('home')" wire:navigate>
 				{{ __('Create image') }}
 			</flux:navbar.item>
 		</flux:navbar>
@@ -49,7 +49,7 @@
 
 		<flux:sidebar.nav>
 			<flux:sidebar.group :heading="__('Platform')">
-				<flux:sidebar.item :icon="svg('iconsax-bul-gallery', 'size-5')" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+				<flux:sidebar.item :icon="svg('iconsax-bul-gallery', 'size-5')" :href="route('home')" :current="\App\Support\LocalizedRoute::is('home')" wire:navigate>
 					{{ __('Create image') }}
 				</flux:sidebar.item>
 			</flux:sidebar.group>

@@ -193,6 +193,7 @@
     "Could not create an image right now. Please try again later.": "Không tạo được ảnh lúc này. Vui lòng thử lại sau.",
     "Could not create a prompt from this image right now. Please try again later.": "Không tạo được prompt từ ảnh lúc này. Vui lòng thử lại sau.",
     "Could not create this image.": "Không tạo được ảnh này.",
+    "Could not download image.": "Không thể tải ảnh.",
     "Could not publish the image right now.": "Không publish được ảnh lúc này.",
     "Could not rewrite the prompt right now. Please try again later.": "Không viết lại được prompt lúc này. Vui lòng thử lại sau.",
     "Could not translate the prompt right now. Please try again later.": "Không dịch được prompt lúc này. Vui lòng thử lại sau.",
@@ -584,5 +585,10 @@
     "Version :version": "Phiên bản :version",
     "New version :version": "Phiên bản mới :version",
     "Create new version": "Tạo phiên bản mới",
-    "Edit project :name": "Chỉnh sửa dự án :name"
+    "Edit project :name": "Chỉnh sửa dự án :name",
+    "All created images in the system.": "Tất cả ảnh đã tạo trong hệ thống.",
+    ":percent of total": ":percent tổng số",
+    ":count failed generations": ":count lần tạo thất bại",
+    "Daily published, unpublished, and failed images for the last 30 days": "Ảnh publish, chưa publish và thất bại theo ngày trong 30 ngày gần nhất",
+    ":published published, :unpublished unpublished, :failed failed": ":published đã publish, :unpublished chưa publish, :failed thất bại"
 }

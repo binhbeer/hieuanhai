@@ -60,7 +60,7 @@ new #[Title('Manage')] class extends Component {
 	}
 }; ?>
 
-<section class="mx-auto w-full max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+<section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
 
 	<div class="space-y-4">
 		<div class="flex flex-wrap items-end justify-between gap-2">

@@ -12,15 +12,15 @@
 			<flux:sidebar.collapse class="lg:hidden" />
 		</flux:sidebar.header>
 
-		@php($sidebarCategories = \App\Models\Category::query()->active()->ordered()->get())
+		@php($sidebarCategories = \App\Models\Category::query()->active()->when(app()->getLocale() === 'en', fn ($query) => $query->englishReady())->ordered()->get())
 		@php($selectedSidebarCategory = request()->route('category'))
-		@php($gallerySearch = request()->routeIs('search.*') && is_string(request('q')) ? request('q') : '')
+		@php($gallerySearch = \App\Support\LocalizedRoute::is('search.*') && is_string(request('q')) ? request('q') : '')
 		@php($gallerySort = is_string(request('sort')) && in_array(request('sort'), ['featured', 'new', 'popular'], true) ? request('sort') : 'new')
-		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : (request()->routeIs('search.*') ? route('search.index') : route('home')))
+		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : (\App\Support\LocalizedRoute::is('search.*') ? route('search.index') : route('home')))
 		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch, 'sort' => $sort === 'new' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
 
 		<div class="min-h-0 flex-1 overflow-y-auto">
-			@if (auth()->user()?->isAdmin() && request()->routeIs('manage.*'))
+			@if (auth()->user()?->isAdmin() && \App\Support\LocalizedRoute::is('manage.*'))
 				<flux:sidebar.nav>
 					<flux:sidebar.group class="grid">
 						<flux:sidebar.item :href="route('home')" wire:navigate>
@@ -31,27 +31,31 @@
 
 				<flux:sidebar.nav>
 					<flux:sidebar.group class="grid">
-						<flux:sidebar.item :href="route('manage.index')" :current="request()->routeIs('manage.index')" wire:navigate>
+						<flux:sidebar.item :href="route('manage.index')" :current="\App\Support\LocalizedRoute::is('manage.index')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-chart class="size-5" /></x-slot>
 							{{ __('Overview') }}
 						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('manage.users.index')" :current="request()->routeIs('manage.users.*')" wire:navigate>
+						<flux:sidebar.item :href="route('manage.users.index')" :current="\App\Support\LocalizedRoute::is('manage.users.*')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-people class="size-5" /></x-slot>
 							{{ __('Users') }}
 						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('manage.api-keys.index')" :current="request()->routeIs('manage.api-keys.*')" wire:navigate>
+						<flux:sidebar.item :href="route('manage.api-keys.index')" :current="\App\Support\LocalizedRoute::is('manage.api-keys.*')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-key class="size-5" /></x-slot>
 							{{ __('API keys') }}
 						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('manage.images.index')" :current="request()->routeIs('manage.images.*')" wire:navigate>
+						<flux:sidebar.item :href="route('manage.images.index')" :current="\App\Support\LocalizedRoute::is('manage.images.*')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-gallery class="size-5" /></x-slot>
 							{{ __('Images') }}
 						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('manage.categories.index')" :current="request()->routeIs('manage.categories.*')" wire:navigate>
+						<flux:sidebar.item :href="route('manage.categories.index')" :current="\App\Support\LocalizedRoute::is('manage.categories.*')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-category class="size-5" /></x-slot>
 							{{ __('Categories') }}
 						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('manage.settings.index')" :current="request()->routeIs('manage.settings.*')" wire:navigate>
+						<flux:sidebar.item :href="route('manage.languages.index')" :current="\App\Support\LocalizedRoute::is('manage.languages.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-global class="size-5" /></x-slot>
+							Ngôn ngữ
+						</flux:sidebar.item>
+						<flux:sidebar.item :href="route('manage.settings.index')" :current="\App\Support\LocalizedRoute::is('manage.settings.*')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-setting-2 class="size-5" /></x-slot>
 							{{ __('Settings') }}
 						</flux:sidebar.item>
@@ -60,20 +64,20 @@
 			@else
 				<flux:sidebar.nav>
 					<flux:sidebar.group class="grid">
-						<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+						<flux:sidebar.item :href="route('home')" :current="\App\Support\LocalizedRoute::is('home')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-home class="size-4" /></x-slot>
 							{{ __('Home') }}
 						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('skills.index')" :current="request()->routeIs('skills.*')" wire:navigate>
+						<flux:sidebar.item :href="route('skills.index')" :current="\App\Support\LocalizedRoute::is('skills.*')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-star class="size-4" /></x-slot>
 							{{ __('AI tools') }}
 						</flux:sidebar.item>
 						@auth
-							<flux:sidebar.item :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
+							<flux:sidebar.item :href="route('search.index')" :current="\App\Support\LocalizedRoute::is('search.*')" wire:navigate>
 								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-4" /></x-slot>
 								{{ __('Search') }}
 							</flux:sidebar.item>
-							<flux:sidebar.item :href="route('favorites.index')" :current="request()->routeIs('favorites.*')" wire:navigate>
+							<flux:sidebar.item :href="route('favorites.index')" :current="\App\Support\LocalizedRoute::is('favorites.*')" wire:navigate>
 								<x-slot name="icon"><x-iconsax-bul-heart class="size-4" /></x-slot>
 								{{ __('Favorite images') }}
 							</flux:sidebar.item>
@@ -96,7 +100,7 @@
 				<flux:sidebar.nav>
 					<flux:sidebar.group class="grid" expandable heading="{{ __('Categories') }}">
 						<x-slot name="icon"><x-iconsax-bul-folder-open class="size-4" /></x-slot>
-						<flux:sidebar.item :href="route('home')" :current="request()->routeIs('home')" wire:navigate>
+						<flux:sidebar.item :href="route('home')" :current="\App\Support\LocalizedRoute::is('home')" wire:navigate>
 							{{ __('All') }}
 						</flux:sidebar.item>
 						@foreach ($sidebarCategories as $category)
@@ -118,20 +122,20 @@
 		</div>
 	</flux:sidebar>
 
-	@if (!request()->routeIs('images.show'))
+	@if (!\App\Support\LocalizedRoute::is('images.show'))
 		<flux:header class="sticky top-0 border-b border-zinc-200 bg-white/70 px-3! md:px-4! dark:border-zinc-700 dark:bg-zinc-900/70 backdrop-blur">
 			<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
-			@if (request()->routeIs('home', 'categories.show') || (request()->routeIs('search.*') && $gallerySearch !== ''))
+			@if (\App\Support\LocalizedRoute::is('home', 'categories.show') || (\App\Support\LocalizedRoute::is('search.*') && $gallerySearch !== ''))
 				<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
 					<flux:tab :href="$galleryTabUrl('new')" :selected="$gallerySort === 'new'" wire:navigate>
-						{{ __('Mới') }}
+						{{ __('New') }}
 					</flux:tab>
 					{{-- <flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
-																{{ __('Phổ biến') }}
+																{{ __('Popular') }}
 					</flux:tab> --}}
 					<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
-						{{ __('Nổi bật') }}
+						{{ __('Featured') }}
 					</flux:tab>
 				</flux:tabs>
 			@endif
@@ -154,11 +158,11 @@
 
 	{{ $slot }}
 
-	@unless (request()->routeIs('login', 'register', 'password.*', 'verification.*', 'two-factor.*', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit'))
+	@unless (\App\Support\LocalizedRoute::is('login', 'register', 'password.*', 'verification.*', 'two-factor.*', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit'))
 		<livewire:account-modal :initial="session('account-modal')" />
 	@endunless
 
-	@if (!request()->routeIs('images.show', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit', 'manage.settings.*'))
+	@if (!\App\Support\LocalizedRoute::is('images.show', 'profile.edit', 'security.edit', 'api-key.edit', 'appearance.edit', 'manage.settings.*'))
 		<livewire:gallery.detail />
 	@endif
 

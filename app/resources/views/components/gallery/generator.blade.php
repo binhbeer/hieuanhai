@@ -464,7 +464,7 @@ new class extends Component {
     $resultUrl = $resultImage ? $this->imageUrl($resultImage) : null;
     $resultThumbUrl = $resultImage ? $this->imageUrl($resultImage, 'md') : null;
     $resultImageSize = $resultImage ? $this->imageSize($resultImage, 'md') : null;
-    $resultDownloadName = $resultImage?->downloadName();
+    $resultDownloadUrl = $resultImage ? route('images.download', $resultImage) : null;
     $maxReferencePhotos = $this->maxReferencePhotos();
     $referenceImages = $this->referenceImages;
     $parentReferenceImages = $this->parentReferenceImages;
@@ -505,7 +505,13 @@ new class extends Component {
 
                 <div class="shrink-0 border-t border-zinc-200 p-4 dark:border-white/10">
                     <div class="grid grid-cols-2 gap-2">
-                        <flux:button :href="$resultUrl" download="{{ $resultDownloadName }}">{{ __('Download') }}</flux:button>
+                        <flux:button :href="$resultDownloadUrl" x-on:click.prevent="downloadImage($event.currentTarget.href, $event.currentTarget)" data-download-error="{{ __('Could not download image.') }}">
+                            <x-slot name="icon">
+                                <flux:icon.arrow-down-tray class="size-5" data-download-idle />
+                                <flux:icon.loading class="hidden size-5" data-download-loading />
+                            </x-slot>
+                            {{ __('Download') }}
+                        </flux:button>
                         <flux:button type="button" variant="outline" wire:click="createNew">{{ __('Create new image') }}</flux:button>
                         @php($publishError = is_string(data_get($resultImage?->response_meta, 'publish_error')) ? data_get($resultImage?->response_meta, 'publish_error') : null)
                         @php($publishDisabled = $publishError && !auth()->user()?->isAdmin())

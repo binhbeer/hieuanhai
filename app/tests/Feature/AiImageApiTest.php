@@ -30,7 +30,7 @@ class AiImageApiTest extends TestCase
     {
         $this->postJson('/api/ai/images')
             ->assertUnauthorized()
-            ->assertJson(['message' => 'API key không hợp lệ.']);
+            ->assertJson(['message' => 'The API key is invalid.']);
     }
 
     public function test_legacy_hai_api_key_remains_valid(): void
@@ -99,6 +99,11 @@ class AiImageApiTest extends TestCase
         Setting::putValue('ai.openai_api_key', 'test-key');
         ImageReviewAgent::fake([$this->allowedReview(), $this->allowedReview()]);
         ImageMetadataAgent::fake([$this->publishReview('portraits', ['avatar', 'studio'])]);
+        Category::query()->where('slug', 'portraits')->firstOrFail()
+            ->setTranslation('name', 'en', 'Portraits')
+            ->setTranslation('description', 'en', 'Browse expressive AI portraits with varied lighting and visual styles for creative inspiration.')
+            ->forceFill(['slug_en' => 'portraits'])
+            ->save();
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
                 'data' => [['b64_json' => base64_encode(UploadedFile::fake()->image('result.png')->getContent())]],
@@ -124,13 +129,12 @@ class AiImageApiTest extends TestCase
             ->assertJsonPath('title', 'Public avatar portrait')
             ->assertJsonPath('source', 'meigen-123')
             ->assertJsonPath('category.slug', 'portraits')
-            ->assertJsonPath('tags.0', 'avatar')
-            ->assertJsonPath('tags.1', 'studio')
+            ->assertJsonPath('tags', [])
             ->assertJsonPath('quota.used', 1)
             ->assertJsonPath('quota.remaining', 1)
             ->assertJson(fn ($json) => $json
                 ->where('public_url', route('images.show', $image))
-                ->where('public_url', fn (string $url): bool => str_contains($url, '/anh/'.$image->id.'-public-avatar-portrait'))
+                ->where('public_url', fn (string $url): bool => str_contains($url, '/en/images/'.$image->id.'-public-avatar-portrait'))
                 ->has('url')
                 ->has('download_name')
                 ->etc()
@@ -173,7 +177,7 @@ class AiImageApiTest extends TestCase
                 'prompt' => 'Unsafe public image',
             ])
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Prompt không phù hợp để tạo hoặc publish ảnh.')
+            ->assertJsonPath('message', 'The prompt is not eligible for image generation or publication.')
             ->assertJsonPath('error_code', 'IMAGE_REVIEW_BLOCKED_SEXUAL');
 
         $key->refresh();
@@ -192,8 +196,21 @@ class AiImageApiTest extends TestCase
 
     public function test_categories_api_returns_active_categories_without_key(): void
     {
-        Category::create(['name' => 'ZZZ Hidden', 'slug' => 'hidden', 'sort_order' => 1, 'status' => 'inactive']);
-        Category::create(['name' => 'AAA Public', 'slug' => 'aaa-public', 'sort_order' => 1, 'status' => 'active']);
+        Category::create(['name' => ['vi' => 'Ẩn', 'en' => 'ZZZ Hidden'], 'description' => ['vi' => 'Ẩn', 'en' => 'Hidden category description'], 'slug' => 'hidden', 'slug_en' => 'hidden', 'sort_order' => 1, 'status' => 'inactive']);
+        $category = Category::create(['name' => ['vi' => 'Công khai', 'en' => 'AAA Public'], 'description' => ['vi' => 'Công khai', 'en' => 'Public category description'], 'slug' => 'aaa-public', 'slug_en' => 'aaa-public', 'sort_order' => 1, 'status' => 'active']);
+        GeneratedMedia::create([
+            'category_id' => $category->id,
+            'title' => ['vi' => 'Ảnh công khai', 'en' => 'Public image'],
+            'description' => ['vi' => 'Mô tả ảnh công khai', 'en' => 'Public image description'],
+            'visitor_key' => 'category-api-ready',
+            'prompt' => 'Public image',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/public.png',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
 
         $response = $this->getJson('/api/categories');
 
@@ -219,14 +236,15 @@ class AiImageApiTest extends TestCase
     {
         $user = User::factory()->create(['name' => 'Search User']);
         $otherUser = User::factory()->create();
-        $category = Category::create(['name' => 'Search Portraits', 'slug' => 'search-portraits', 'sort_order' => 1, 'status' => 'active']);
-        $otherCategory = Category::create(['name' => 'Search Products', 'slug' => 'search-products', 'sort_order' => 2, 'status' => 'active']);
-        $tag = Tag::create(['name' => 'Meigen Tag', 'slug' => 'meigen-tag']);
-        $otherTag = Tag::create(['name' => 'Other Tag', 'slug' => 'other-tag']);
+        $category = Category::create(['name' => ['vi' => 'Chân dung', 'en' => 'Search Portraits'], 'description' => ['vi' => 'Chân dung', 'en' => 'Search portrait category description'], 'slug' => 'search-portraits', 'slug_en' => 'search-portraits', 'sort_order' => 1, 'status' => 'active']);
+        $otherCategory = Category::create(['name' => ['vi' => 'Sản phẩm', 'en' => 'Search Products'], 'description' => ['vi' => 'Sản phẩm', 'en' => 'Search product category description'], 'slug' => 'search-products', 'slug_en' => 'search-products', 'sort_order' => 2, 'status' => 'active']);
+        $tag = Tag::create(['name' => ['vi' => 'Meigen Tag', 'en' => 'Meigen Tag'], 'description' => ['vi' => 'Tag Meigen', 'en' => 'Meigen tag description'], 'slug' => 'meigen-tag', 'slug_en' => 'meigen-tag']);
+        $otherTag = Tag::create(['name' => ['vi' => 'Tag khác', 'en' => 'Other Tag'], 'description' => ['vi' => 'Tag khác', 'en' => 'Other tag description'], 'slug' => 'other-tag', 'slug_en' => 'other-tag']);
         $image = GeneratedMedia::create([
             'user_id' => $user->id,
             'category_id' => $category->id,
-            'title' => 'Meigen portrait result',
+            'title' => ['vi' => 'Kết quả chân dung Meigen', 'en' => 'Meigen portrait result'],
+            'description' => ['vi' => 'Mô tả chân dung Meigen', 'en' => 'Meigen portrait result description'],
             'visitor_key' => 'visitor-search-a',
             'prompt' => 'A searchable prompt with meigen keyword',
             'source' => 'meigen-456',
@@ -241,7 +259,8 @@ class AiImageApiTest extends TestCase
         $other = GeneratedMedia::create([
             'user_id' => $otherUser->id,
             'category_id' => $otherCategory->id,
-            'title' => 'Other result',
+            'title' => ['vi' => 'Kết quả khác', 'en' => 'Other result'],
+            'description' => ['vi' => 'Mô tả kết quả khác', 'en' => 'Other result description'],
             'visitor_key' => 'visitor-search-b',
             'prompt' => 'Different prompt',
             'source' => 'other-456',
@@ -256,7 +275,8 @@ class AiImageApiTest extends TestCase
         GeneratedMedia::create([
             'user_id' => $user->id,
             'category_id' => $category->id,
-            'title' => 'Hidden meigen result',
+            'title' => ['vi' => 'Kết quả Meigen ẩn', 'en' => 'Hidden meigen result'],
+            'description' => ['vi' => 'Mô tả kết quả ẩn', 'en' => 'Hidden meigen result description'],
             'visitor_key' => 'visitor-search-c',
             'prompt' => 'Hidden prompt',
             'source' => 'meigen-456',
@@ -422,7 +442,7 @@ class AiImageApiTest extends TestCase
                 'prompt' => 'Tạo ảnh bôi xấu lãnh tụ',
             ])
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Prompt không phù hợp để tạo hoặc publish ảnh.')
+            ->assertJsonPath('message', 'The prompt is not eligible for image generation or publication.')
             ->assertJsonPath('error_code', 'IMAGE_REVIEW_BLOCKED_POLITICAL');
 
         Http::assertNothingSent();
@@ -447,7 +467,7 @@ class AiImageApiTest extends TestCase
             ->withHeader('Authorization', 'Bearer '.$plain)
             ->postJson('/api/ai/images', ['prompt' => 'Tạo ảnh phong cảnh'])
             ->assertServiceUnavailable()
-            ->assertJsonPath('message', 'Không duyệt được prompt ảnh. Vui lòng thử lại sau.')
+            ->assertJsonPath('message', 'Image review is temporarily unavailable. Please try again later.')
             ->assertJsonPath('error_code', 'IMAGE_REVIEW_UNAVAILABLE');
 
         $key->refresh();
@@ -641,7 +661,8 @@ class AiImageApiTest extends TestCase
     {
         $admin = User::factory()->create(['id' => 1]);
         $user = User::factory()->create();
-        [, $key] = $this->apiKey($user, quotaLimit: 20, quotaUsed: 3);
+        $keyPair = $this->apiKey($user, quotaLimit: 20, quotaUsed: 3);
+        $key = $keyPair[1];
 
         foreach ([
             [now(), true],
@@ -1083,9 +1104,9 @@ class AiImageApiTest extends TestCase
 
     /**
      * @param  list<string>  $tags
-     * @return array{allowed: bool, blocked_policy: string, reason: string, title: string, category: string, tags: list<string>}
+     * @return array{allowed: bool, blocked_policy: string, reason: string, title: string, description: string, title_en: string, description_en: string, category: string, tags: list<string>, tags_en: list<string>}
      */
-    private function publishReview(string $category = 'portraits', array $tags = [], string $title = 'Public avatar portrait', string $description = 'Chân dung avatar studio công khai, ánh sáng mềm, nền sạch, phù hợp hồ sơ và gallery ảnh AI Việt Nam.'): array
+    private function publishReview(string $category = 'portraits', array $tags = [], string $title = 'Chân dung avatar công khai', string $description = 'Chân dung avatar studio công khai, ánh sáng mềm, nền sạch, phù hợp hồ sơ và gallery ảnh AI Việt Nam.'): array
     {
         return [
             'allowed' => true,
@@ -1093,8 +1114,11 @@ class AiImageApiTest extends TestCase
             'reason' => 'An toàn.',
             'title' => $title,
             'description' => $description,
+            'title_en' => 'Public avatar portrait',
+            'description_en' => 'A public studio avatar portrait with soft lighting and a clean background for polished profile inspiration.',
             'category' => $category,
             'tags' => $tags,
+            'tags_en' => $tags,
         ];
     }
 

@@ -41,9 +41,10 @@ class GenerateCategoryDescription implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        app()->setLocale('vi');
         $category = Category::query()->find($this->categoryId);
 
-        if (! $category || filled($category->description)) {
+        if (! $category || filled($category->getTranslationWithoutFallback('description', 'vi'))) {
             return;
         }
 
@@ -93,8 +94,8 @@ class GenerateCategoryDescription implements ShouldBeUnique, ShouldQueue
 
         $category->refresh();
 
-        if (blank($category->description)) {
-            $category->update(['description' => $description]);
+        if (blank($category->getTranslationWithoutFallback('description', 'vi'))) {
+            $category->setTranslation('description', 'vi', $description)->save();
         }
     }
 }
