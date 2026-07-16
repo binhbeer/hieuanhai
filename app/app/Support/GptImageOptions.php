@@ -8,6 +8,7 @@ class GptImageOptions
         'auto',
         '1:1',
         '3:4',
+        '4:5',
         '2:3',
         '9:16',
         '4:3',
@@ -34,7 +35,7 @@ class GptImageOptions
      *
      * Observed ceilings (runtime): ~1254 square, ~1672 long edge for non-square.
      *
-     * @var array<string, array{1k: string, 2k: string, 4k: string}>
+     * @var array<string, array{'1k': string, '2k': string, '4k': string}>
      */
     private const SIZES = [
         'auto' => [
@@ -51,6 +52,11 @@ class GptImageOptions
             '1k' => '768x1024',
             '2k' => '1152x1536',
             '4k' => '1248x1664',
+        ],
+        '4:5' => [
+            '1k' => '816x1024',
+            '2k' => '1224x1536',
+            '4k' => '1328x1664',
         ],
         '2:3' => [
             '1k' => '688x1024',
@@ -90,6 +96,9 @@ class GptImageOptions
             'auto' => ['aspect_ratio' => 'auto', 'resolution' => '1k'],
             '1024x1024' => ['aspect_ratio' => '1:1', 'resolution' => '1k'],
             '1024x1536' => ['aspect_ratio' => '2:3', 'resolution' => '2k'],
+            '816x1024' => ['aspect_ratio' => '4:5', 'resolution' => '1k'],
+            '1224x1536' => ['aspect_ratio' => '4:5', 'resolution' => '2k'],
+            '1328x1664' => ['aspect_ratio' => '4:5', 'resolution' => '4k'],
             '1536x1024' => ['aspect_ratio' => '3:2', 'resolution' => '2k'],
             '1024x1792', '576x1024' => ['aspect_ratio' => '9:16', 'resolution' => '1k'],
             '1792x1024', '1024x576' => ['aspect_ratio' => '16:9', 'resolution' => '1k'],

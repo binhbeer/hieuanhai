@@ -35,7 +35,7 @@ new class extends Component {
 
 @auth
     @if ($buttonOnly)
-        <flux:sidebar.item :href="route('images.index')" :current="request()->routeIs('images.*')" wire:navigate>
+        <flux:sidebar.item :href="route('history.index')" :current="request()->routeIs('history.*')" wire:navigate>
             <x-slot name="icon"><x-iconsax-bul-gallery class="size-4" /></x-slot>
             {{ __(':count images created', ['count' => number_format($this->userImageCount)]) }}
         </flux:sidebar.item>
@@ -45,7 +45,7 @@ new class extends Component {
             $dailyLimit = $this->dailyLimit;
         @endphp
 
-        <a class="block space-y-3 rounded-md bg-zinc-200 p-3 transition hover:bg-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:bg-white/10 dark:hover:bg-white/15" href="{{ route('images.index') }}" wire:navigate>
+        <a class="block space-y-3 rounded-md bg-zinc-200 p-3 transition hover:bg-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:bg-white/10 dark:hover:bg-white/15" href="{{ route('history.index') }}" wire:navigate>
             <flux:field>
                 <flux:label>
                     {{ __('Remaining today') }}

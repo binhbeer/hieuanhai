@@ -36,6 +36,7 @@
         "mike-bronner/laravel-model-caching": "13.1.5",
         "resend/resend-php": "^1.5",
         "saade/blade-iconsax": "^1.2",
+        "spatie/laravel-medialibrary": "^11.23",
         "spatie/laravel-sitemap": "^8.2"
     },
     "require-dev": {

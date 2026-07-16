@@ -49,13 +49,11 @@ new class extends Component {
         ]);
 
         $user = Auth::user();
-        $oldAvatar = $user->avatar_path;
-        $user->avatar_path = $this->avatar->store('avatars', 'public');
+        $media = $user->addMedia($this->avatar->getRealPath())
+            ->usingFileName($this->avatar->hashName())
+            ->toMediaCollection('avatar');
+        $user->avatar_path = $media->getPathRelativeToRoot();
         $user->save();
-
-        if ($oldAvatar) {
-            Storage::disk('public')->delete($oldAvatar);
-        }
 
         $this->reset('avatar');
         Flux::toast(variant: 'success', text: __('Avatar updated.'));

@@ -46,7 +46,7 @@ new class extends Component {
             return;
         }
 
-        if (request()->routeIs('images.index')) {
+        if (request()->routeIs('history.index')) {
             $id = request()->integer('image');
 
             if (!$id && request()->boolean('composer')) {

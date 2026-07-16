@@ -47,7 +47,7 @@ new #[Title('Settings')] class extends Component
     public string $imageQuality = 'auto';
     public string $imageDetail = 'high';
     public string $imageReferenceField = 'image';
-    public int $maxReferencePhotos = 1;
+    public int $maxReferencePhotos = 5;
     public int $uploadMaxKb = 32768;
     public string $openaiUrl = '';
     public string $openaiApiKey = '';
@@ -359,7 +359,7 @@ new #[Title('Settings')] class extends Component
             'imageQuality' => ['required', 'string', 'in:auto,low,medium,high,standard,hd'],
             'imageDetail' => ['required', 'string', 'in:auto,low,high,original'],
             'imageReferenceField' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z_][A-Za-z0-9_]*$/'],
-            'maxReferencePhotos' => ['required', 'integer', 'min:1', 'max:3'],
+            'maxReferencePhotos' => ['required', 'integer', 'min:1', 'max:5'],
             'uploadMaxKb' => ['required', 'integer', 'min:1', 'max:102400'],
             'openaiUrl' => ['required', 'url:http,https', 'max:255'],
             'openaiApiKey' => ['nullable', 'string', 'max:2000'],
@@ -534,7 +534,7 @@ new #[Title('Settings')] class extends Component
 				<flux:heading size="sm">{{ __('Request limits') }}</flux:heading>
 				<div class="grid gap-4 sm:grid-cols-3">
 					<flux:input wire:model="aiTimeout" type="number" min="10" max="1200" :label="__('Timeout seconds')" required />
-					<flux:input wire:model="maxReferencePhotos" type="number" min="1" max="3" :label="__('Maximum reference images')" required />
+					<flux:input wire:model="maxReferencePhotos" type="number" min="1" max="5" :label="__('Maximum reference images')" required />
 					<flux:input wire:model="uploadMaxKb" type="number" min="1" max="102400" :label="__('Maximum upload KB')" required />
 				</div>
 			</div>

@@ -44,7 +44,7 @@ class Setting extends BaseModel
         'ai.image_quality' => 'auto',
         'ai.image_detail' => 'high',
         'ai.image_reference_field' => 'image',
-        'ai.image_max_reference_photos' => 1,
+        'ai.image_max_reference_photos' => 5,
         'ai.image_upload_max_kb' => 32768,
         'ai.openai_url' => 'http://42.112.31.227:22150/v1',
         'ai.openai_api_key' => null,

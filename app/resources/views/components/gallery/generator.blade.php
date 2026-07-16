@@ -242,7 +242,7 @@ new class extends Component {
             'referenceImageIds.*' => ['integer'],
             'parentId' => ['nullable', 'integer'],
             'parentReferenceIndexes' => ['array', 'max:' . $this->maxReferencePhotos()],
-            'parentReferenceIndexes.*' => ['integer', 'min:0', 'max:2'],
+            'parentReferenceIndexes.*' => ['integer', 'min:0', 'max:'.($this->maxReferencePhotos() - 1)],
             'photos' => ['array', 'max:' . max(0, $this->maxReferencePhotos() - count($this->referenceImageIds) - count($this->parentReferenceIndexes))],
             'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:' . AppSettings::imageUploadMaxKb()],
         ]);
@@ -293,7 +293,7 @@ new class extends Component {
         $this->resultId = null;
         unset($this->remainingToday, $this->resultImage);
         $this->dispatch('image-usage-updated');
-        $this->redirectRoute('images.index', ['image' => $image->id], navigate: true);
+        $this->redirectRoute('history.index', ['image' => $image->id], navigate: true);
     }
 
     public function rewritePrompt(AiImageEditor $editor): void

@@ -290,8 +290,8 @@ class AiImageEditorTest extends TestCase
             && $request['output_format'] === 'png');
 
         Storage::disk('public')->assertExists($image->result_path);
-        $this->assertMatchesRegularExpression('#^ai-images/\d{6}/\d{2}/#', (string) $image->result_path);
-        $this->assertMatchesRegularExpression('#^ai-image-sources/\d{6}/\d{2}/#', (string) ($image->response_meta['source_paths'][0] ?? ''));
+        $this->assertMatchesRegularExpression('#^image/generatedmedia/\d{6}/\d{2}/\d+/\d+/[\w-]+\.png$#', (string) $image->result_path);
+        $this->assertMatchesRegularExpression('#^image/generatedmedia/\d{6}/\d{2}/\d+/\d+/[\w-]+\.jpg$#', (string) ($image->response_meta['source_paths'][0] ?? ''));
         $this->assertSame('succeeded', $image->status);
     }
 
@@ -312,22 +312,20 @@ class AiImageEditorTest extends TestCase
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
         $request->setLaravelSession($session);
-        $photos = [
-            UploadedFile::fake()->image('one.png'),
-            UploadedFile::fake()->image('two.png'),
-            UploadedFile::fake()->image('three.png'),
-        ];
+        $photos = collect(range(1, 5))
+            ->map(fn (int $index): UploadedFile => UploadedFile::fake()->image($index.'.png'))
+            ->all();
 
         $image = app(AiImageEditor::class)->create($request, $photos, 'Merge these references');
 
         Http::assertSent(fn (HttpRequest $request) => is_array($request['images'])
-            && count($request['images']) === 3
+            && count($request['images']) === 5
             && ! isset($request['image'])
             && str_starts_with($request['images'][0], 'data:image/jpeg;base64,')
-            && str_starts_with($request['images'][2], 'data:image/jpeg;base64,'));
+            && str_starts_with($request['images'][4], 'data:image/jpeg;base64,'));
 
         $this->assertSame('succeeded', $image->status);
-        $this->assertCount(3, $image->response_meta['source_paths']);
+        $this->assertCount(5, $image->response_meta['source_paths']);
     }
 
     public function test_pending_image_can_be_completed_later(): void
@@ -370,6 +368,51 @@ class AiImageEditorTest extends TestCase
         $this->assertSame('succeeded', $image->status);
         Storage::disk('public')->assertExists($image->result_path);
         Storage::disk('public')->assertMissing($pendingPath);
+    }
+
+    public function test_product_detail_pending_generation_uses_reference_role_contract(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $paths = [];
+
+        foreach (['product', 'logo', 'model', 'side', 'back'] as $name) {
+            $path = 'ai-image-pending/'.$name.'.png';
+            Storage::disk('public')->put($path, UploadedFile::fake()->image($name.'.png')->getContent());
+            $paths[] = ['path' => $path, 'name' => $name.'.png', 'mime' => 'image/png'];
+        }
+
+        $image = GeneratedMedia::create([
+            'user_id' => $user->id,
+            'visitor_key' => 'role-contract',
+            'prompt' => 'Create a branded lifestyle image.',
+            'preset' => 'product-detail',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'pending',
+            'request_meta' => [
+                'pending_uploads' => $paths,
+                'prompt_contract' => 'product-detail-v2',
+                'reference_roles' => ['product', 'logo', 'model', 'additional_product', 'additional_product'],
+            ],
+        ]);
+
+        app(AiImageEditor::class)->completePending($image);
+
+        Http::assertSent(fn (HttpRequest $request): bool => count($request['images']) === 5
+            && str_contains($request['prompt'], 'PRIMARY_PRODUCT')
+            && str_contains($request['prompt'], 'BRAND_LOGO')
+            && str_contains($request['prompt'], 'MODEL_IDENTITY')
+            && str_contains($request['prompt'], 'SUPPLEMENTAL_PRODUCT_VIEW'));
     }
 
     public function test_child_generation_uses_parent_and_edit_prompts(): void

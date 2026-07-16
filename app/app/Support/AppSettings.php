@@ -40,7 +40,7 @@ class AppSettings
 
     public static function maxReferencePhotos(): int
     {
-        return min(3, max(1, self::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 1))));
+        return min(5, max(1, self::int('ai.image_max_reference_photos', (int) config('ai.image_max_reference_photos', 5))));
     }
 
     public static function imageUploadMaxKb(): int

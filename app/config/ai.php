@@ -35,7 +35,7 @@ return [
     'image_quality' => 'auto',
     'image_detail' => 'high',
     'image_reference_field' => 'image',
-    'image_max_reference_photos' => 1,
+    'image_max_reference_photos' => 5,
     'image_upload_max_kb' => 32768,
 
     /*

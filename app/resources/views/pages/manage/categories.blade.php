@@ -16,7 +16,11 @@ new #[Title('Manage categories')] class extends Component
 
     public string $slug = '';
 
+    public string $description = '';
+
     public string $status = 'active';
+
+    public bool $showEditFlyout = false;
 
     public string $newName = '';
 
@@ -36,12 +40,14 @@ new #[Title('Manage categories')] class extends Component
         $this->editingId = $category->id;
         $this->name = $category->name;
         $this->slug = $category->slug;
+        $this->description = (string) $category->description;
         $this->status = $category->status;
+        $this->showEditFlyout = true;
     }
 
     public function cancelEdit(): void
     {
-        $this->reset('editingId', 'name', 'slug', 'status');
+        $this->reset('editingId', 'name', 'slug', 'description', 'status', 'showEditFlyout');
     }
 
     public function save(): void
@@ -53,9 +59,11 @@ new #[Title('Manage categories')] class extends Component
         $data = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9-]+$/', Rule::unique('categories', 'slug')->ignore($this->editingId)],
+            'description' => ['nullable', 'string', 'max:160'],
             'status' => ['required', Rule::in(['active', 'hidden'])],
         ]);
 
+        $data['description'] = filled($data['description'] ?? null) ? trim((string) $data['description']) : null;
         Category::query()->whereKey($this->editingId)->update($data);
 
         $this->cancelEdit();
@@ -199,43 +207,26 @@ new #[Title('Manage categories')] class extends Component
 									<span class="tabular-nums">{{ $category->sort_order }}</span>
 								</button>
 							</td>
-							@if ($editingId === $category->id)
-								<td class="px-3 py-3 align-top">
-									<flux:input wire:model="name" size="sm" :label="__('Name')" />
-								</td>
-								<td class="px-3 py-3 align-top">
-									<flux:input wire:model="slug" size="sm" :label="__('Slug')" />
-								</td>
-								<td class="w-44 px-3 py-3 align-top">
-									<flux:select wire:model="status" size="sm" :label="__('Status')">
-										<flux:select.option value="active">{{ __('Active') }}</flux:select.option>
-										<flux:select.option value="hidden">{{ __('Hidden') }}</flux:select.option>
-									</flux:select>
-								</td>
-								<td class="px-3 py-3 align-top tabular-nums">{{ number_format($category->images_count) }}</td>
-								<td class="space-x-2 px-3 py-3 align-top">
-									<flux:button type="button" size="sm" variant="primary" wire:click="save">{{ __('Save') }}</flux:button>
-									<flux:button type="button" size="sm" variant="ghost" wire:click="cancelEdit">{{ __('Cancel') }}</flux:button>
-								</td>
-							@else
-								<td class="px-3 py-3 align-top">
-									<div class="font-medium">{{ $category->name }}</div>
-									@if ($category->status === 'hidden')
-										<flux:text class="mt-1 text-xs" variant="subtle">{{ __('Hidden') }}</flux:text>
-									@endif
-								</td>
-								<td class="px-3 py-3 align-top font-mono text-xs text-zinc-400">{{ $category->slug }}</td>
-								<td class="w-44 px-3 py-3 align-top">
-									<flux:select size="sm" :label="__('Status')" wire:change="updateStatus({{ $category->id }}, $event.target.value)">
-										<flux:select.option value="active" :selected="$category->status === 'active'">{{ __('Active') }}</flux:select.option>
-										<flux:select.option value="hidden" :selected="$category->status === 'hidden'">{{ __('Hidden') }}</flux:select.option>
-									</flux:select>
-								</td>
-								<td class="px-3 py-3 align-top tabular-nums">{{ number_format($category->images_count) }}</td>
-								<td class="px-3 py-3 align-top">
-									<flux:button type="button" size="sm" variant="filled" wire:click="edit({{ $category->id }})">{{ __('Edit') }}</flux:button>
-								</td>
-							@endif
+							<td class="px-3 py-3 align-top">
+								<div class="font-medium">{{ $category->name }}</div>
+								@if (filled($category->description))
+									<flux:text class="mt-1 line-clamp-2 max-w-md text-xs" variant="subtle">{{ $category->description }}</flux:text>
+								@endif
+								@if ($category->status === 'hidden')
+									<flux:text class="mt-1 text-xs" variant="subtle">{{ __('Hidden') }}</flux:text>
+								@endif
+							</td>
+							<td class="px-3 py-3 align-top font-mono text-xs text-zinc-400">{{ $category->slug }}</td>
+							<td class="w-44 px-3 py-3 align-top">
+								<flux:select size="sm" :label="__('Status')" wire:change="updateStatus({{ $category->id }}, $event.target.value)">
+									<flux:select.option value="active" :selected="$category->status === 'active'">{{ __('Active') }}</flux:select.option>
+									<flux:select.option value="hidden" :selected="$category->status === 'hidden'">{{ __('Hidden') }}</flux:select.option>
+								</flux:select>
+							</td>
+							<td class="px-3 py-3 align-top tabular-nums">{{ number_format($category->images_count) }}</td>
+							<td class="px-3 py-3 align-top">
+								<flux:button type="button" size="sm" variant="filled" wire:click="edit({{ $category->id }})">{{ __('Edit') }}</flux:button>
+							</td>
 						</tr>
 					@empty
 						<tr>
@@ -246,4 +237,28 @@ new #[Title('Manage categories')] class extends Component
 			</table>
 		</div>
 	</flux:card>
+
+	<flux:modal name="edit-category" flyout variant="floating" class="md:w-lg" wire:model.self="showEditFlyout" @close="cancelEdit">
+		<form class="space-y-6" wire:submit="save">
+			<div>
+				<flux:heading size="xl">{{ __('Edit category') }}</flux:heading>
+				<flux:text class="mt-2" variant="subtle">{{ __('Update category details and SEO description.') }}</flux:text>
+			</div>
+
+			<flux:input wire:model="name" :label="__('Name')" required autofocus />
+			<flux:input wire:model="slug" :label="__('Slug')" class:input="font-mono" required />
+			<flux:textarea wire:model="description" :label="__('Description')" :description="__('Used as the category meta description. Maximum 160 characters.')" rows="5" maxlength="160" />
+			<flux:select wire:model="status" :label="__('Status')">
+				<flux:select.option value="active">{{ __('Active') }}</flux:select.option>
+				<flux:select.option value="hidden">{{ __('Hidden') }}</flux:select.option>
+			</flux:select>
+
+			<div class="flex justify-end gap-2">
+				<flux:modal.close>
+					<flux:button type="button" variant="ghost">{{ __('Cancel') }}</flux:button>
+				</flux:modal.close>
+				<flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
+			</div>
+		</form>
+	</flux:modal>
 </section>

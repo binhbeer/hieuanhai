@@ -30,7 +30,7 @@ class CreatedImagesTest extends TestCase
 
     public function test_guest_is_redirected_from_created_images(): void
     {
-        $this->get(route('images.index'))
+        $this->get(route('history.index'))
             ->assertRedirect(route('login', absolute: false));
     }
 
@@ -38,7 +38,7 @@ class CreatedImagesTest extends TestCase
     {
         Livewire::actingAs(User::factory()->create())
             ->test('gallery.usage')
-            ->assertSee(route('images.index'), false)
+            ->assertSee(route('history.index'), false)
             ->assertSee('wire:navigate', false);
     }
 
@@ -106,7 +106,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->get(route('images.index'))
+        $this->get(route('history.index'))
             ->assertOk()
             ->assertSee('Pending portrait image')
             ->assertSee(__('Creating'))
@@ -130,7 +130,7 @@ class CreatedImagesTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->get(route('images.index', ['image' => $image->id]))
+            ->get(route('history.index', ['image' => $image->id]))
             ->assertOk()
             ->assertSee(__('Task interrupted. Please try again.'));
     }
@@ -219,7 +219,7 @@ class CreatedImagesTest extends TestCase
             'error' => 'Safety review failed',
         ]);
 
-        $this->get(route('images.index', ['composer' => 1]))
+        $this->get(route('history.index', ['composer' => 1]))
             ->assertOk()
             ->assertSee('image-detail-'.$image->id, false)
             ->assertSee('Latest failed composer image')
@@ -343,7 +343,7 @@ class CreatedImagesTest extends TestCase
         $child = GeneratedMedia::query()->where('parent_id', $parent->id)->firstOrFail();
         $pendingPath = data_get($child->request_meta, 'pending_uploads.0.path');
 
-        $component->assertRedirect(route('images.index', ['image' => $child->id], absolute: false));
+        $component->assertRedirect(route('history.index', ['image' => $child->id], absolute: false));
         $this->assertSame('Make the lighting warmer', $child->prompt);
         $this->assertIsString($pendingPath);
         Storage::disk('public')->assertExists($pendingPath);
@@ -504,12 +504,12 @@ class CreatedImagesTest extends TestCase
             ->assertSet('prompt', 'Create a small cat');
 
         $image = GeneratedMedia::query()->latest()->firstOrFail();
-        $component->assertRedirect(route('images.index', ['image' => $image->id], absolute: false));
+        $component->assertRedirect(route('history.index', ['image' => $image->id], absolute: false));
         $this->assertSame('pending', $image->status);
         $this->assertSame('Create a small cat', $image->prompt);
         Bus::assertDispatched(CreateAiImage::class, fn (CreateAiImage $job) => $job->imageId === $image->id);
 
-        $this->get(route('images.index', ['image' => $image->id]))
+        $this->get(route('history.index', ['image' => $image->id]))
             ->assertOk()
             ->assertSee('image-detail-'.$image->id, false)
             ->assertSee('Create a small cat');
@@ -704,7 +704,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->get(route('images.index'))
+        $this->get(route('history.index'))
             ->assertOk()
             ->assertSee(__('Created images'))
             ->assertSee('/thumb_x320x/storage/ai-images/202607/08/created.png')

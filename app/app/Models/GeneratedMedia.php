@@ -9,12 +9,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * @property int $id
  * @property int|null $user_id
  * @property int|null $parent_id
  * @property int|null $category_id
+ * @property int|null $skill_project_id
  * @property string|null $title
  * @property string|null $description
  * @property string $visitor_key
@@ -41,6 +44,7 @@ use Illuminate\Support\Str;
     'user_id',
     'parent_id',
     'category_id',
+    'skill_project_id',
     'title',
     'description',
     'visitor_key',
@@ -60,9 +64,17 @@ use Illuminate\Support\Str;
     'request_meta',
     'response_meta',
 ])]
-class GeneratedMedia extends BaseModel
+class GeneratedMedia extends BaseModel implements HasMedia
 {
+    use InteractsWithMedia;
+
     protected $table = 'generated_media';
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('result')->singleFile();
+        $this->addMediaCollection('sources');
+    }
 
     public function getRouteKey(): string
     {
@@ -125,6 +137,14 @@ class GeneratedMedia extends BaseModel
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * @return BelongsTo<SkillProject, $this>
+     */
+    public function skillProject(): BelongsTo
+    {
+        return $this->belongsTo(SkillProject::class);
     }
 
     /**

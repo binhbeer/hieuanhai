@@ -2,8 +2,11 @@
 
 namespace Tests;
 
+use App\Jobs\GenerateCategoryDescription;
+use App\Jobs\GenerateTagDescription;
 use App\Support\AppSettings;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Fortify\Features;
 
@@ -15,6 +18,7 @@ abstract class TestCase extends BaseTestCase
 
         AppSettings::flush();
         Cache::flush();
+        Bus::fake([GenerateCategoryDescription::class, GenerateTagDescription::class]);
     }
 
     protected function skipUnlessFortifyHas(string $feature, ?string $message = null): void

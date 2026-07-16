@@ -8,6 +8,7 @@ use App\Ai\ImageToPromptAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
 use App\Events\AiImageCompleted;
+use App\Jobs\GenerateTagDescription;
 use App\Models\Category;
 use App\Models\GeneratedMedia;
 use App\Models\Tag;
@@ -94,20 +95,20 @@ class AiImageEditor
         ]);
 
         try {
-            $result = $this->generateImage($photos, $finalPrompt, $provider, $model);
-            $storedPath = $this->datedPath('ai-images', Str::uuid().$this->extensionFor($result['mime']));
+            $result = $this->generateImage($image, $photos, $finalPrompt, $provider, $model);
             $content = base64_decode($result['base64'], true);
 
             if ($content === false) {
                 throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
             }
 
-            if (! Storage::disk('public')->put($storedPath, $content, ['visibility' => 'public'])) {
-                throw new \RuntimeException('Không lưu được ảnh đã tạo.');
-            }
+            $media = $image->addMediaFromString($content)
+                ->usingFileName(Str::uuid().$this->extensionFor($result['mime']))
+                ->withProperties(['mime_type' => $result['mime']])
+                ->toMediaCollection('result');
 
             $image->update([
-                'result_path' => $storedPath,
+                'result_path' => $media->getPathRelativeToRoot(),
                 'status' => 'succeeded',
                 'response_meta' => [
                     'provider' => $provider,
@@ -192,9 +193,9 @@ class AiImageEditor
             $parentReferenceUploads = $parent
                 ? $this->storeParentReferenceUploads($parent, $parentReferenceIndexes)
                 : [];
-            $referenceImageIds = array_slice(array_values(array_unique(array_map('intval', $referenceImageIds))), 0, max(0, 3 - count($parentReferenceUploads)));
+            $referenceImageIds = array_slice(array_values(array_unique(array_map('intval', $referenceImageIds))), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads)));
             $referenceUploads = $this->storeReferenceImageUploads($referenceImageIds);
-            $photos = array_slice(array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile)), 0, max(0, 3 - count($parentReferenceUploads) - count($referenceUploads)));
+            $photos = array_slice(array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile)), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads) - count($referenceUploads)));
             $pendingUploads = [...$parentReferenceUploads, ...$referenceUploads, ...$this->storePendingUploads($photos)];
             $photo = $photos[0] ?? null;
 
@@ -309,7 +310,7 @@ class AiImageEditor
             $photos = $this->pendingUploadedFiles($pendingUploads);
             $parentPrompt = $requestMeta['parent_prompt'] ?? null;
             $finalPrompt = trim(implode("\n\n", array_filter([
-                $photos === [] ? null : 'Use the provided reference image as the source. Edit that image according to the instructions. Preserve the original subjects, identities, composition, pose, and count unless explicitly asked to change them. Do not create an unrelated new image.',
+                $photos === [] ? null : $this->referencePrompt($requestMeta),
                 is_string($parentPrompt) ? 'Original prompt: '.$parentPrompt : null,
                 $image->parent_id ? 'Edit instructions: '.$image->prompt : $image->prompt,
             ])));
@@ -326,7 +327,7 @@ class AiImageEditor
 
             $size = is_string($requestMeta['size'] ?? null) ? $requestMeta['size'] : null;
             $imageDetail = is_string($requestMeta['image_detail'] ?? null) ? $requestMeta['image_detail'] : null;
-            $result = $this->generateImage($photos, $finalPrompt, $image->provider, $image->model, $sourcePaths, $size, $imageDetail);
+            $result = $this->generateImage($image, $photos, $finalPrompt, $image->provider, $image->model, $sourcePaths, $size, $imageDetail);
 
             if ($image->fresh()->status !== 'pending') {
                 if ($sourcePaths !== []) {
@@ -356,16 +357,17 @@ class AiImageEditor
                 return $image->refresh();
             }
 
-            $storedPath = $this->datedPath('ai-images', Str::uuid().$this->extensionFor($result['mime']));
             $content = base64_decode($result['base64'], true);
 
             if ($content === false) {
                 throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
             }
 
-            if (! Storage::disk('public')->put($storedPath, $content, ['visibility' => 'public'])) {
-                throw new \RuntimeException('Không lưu được ảnh đã tạo.');
-            }
+            $media = $image->addMediaFromString($content)
+                ->usingFileName(Str::uuid().$this->extensionFor($result['mime']))
+                ->withProperties(['mime_type' => $result['mime']])
+                ->toMediaCollection('result');
+            $storedPath = $media->getPathRelativeToRoot();
 
             unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads'], $requestMeta['progress']);
 
@@ -708,9 +710,6 @@ class AiImageEditor
             return;
         }
 
-        $sourcePaths = is_array($image->response_meta) ? ($image->response_meta['source_paths'] ?? []) : [];
-
-        Storage::disk('public')->delete(array_values(array_filter([...$sourcePaths, $image->result_path])));
         $image->delete();
     }
 
@@ -801,6 +800,39 @@ class AiImageEditor
     /**
      * @return array<int, string>
      */
+    /**
+     * @param  array<string, mixed>  $requestMeta
+     */
+    private function referencePrompt(array $requestMeta): string
+    {
+        $roles = is_array($requestMeta['reference_roles'] ?? null) ? $requestMeta['reference_roles'] : [];
+
+        if (($requestMeta['prompt_contract'] ?? null) !== 'product-detail-v2' || $roles === []) {
+            return 'Use the provided reference image as the source. Edit that image according to the instructions. Preserve the original subjects, identities, composition, pose, and count unless explicitly asked to change them. Do not create an unrelated new image.';
+        }
+
+        $descriptions = [
+            'product' => 'PRIMARY_PRODUCT: authoritative source for the sole product identity and SKU. Preserve its exact shape, construction, proportions, colors, materials, labels, hardware, and distinctive details.',
+            'logo' => 'BRAND_LOGO: show this logo in the output. Preserve its text, colors, proportions, and mark as closely as possible. Never use its background or canvas as a product or scene reference.',
+            'model' => 'MODEL_IDENTITY: show this same person in the output. Preserve recognizable face, skin tone, hair, body features, and identity. Never transfer human features to the product.',
+            'additional_product' => 'SUPPLEMENTAL_PRODUCT_VIEW: another view of the same SKU. Use only to verify geometry, construction, material, texture, and hidden details; never create another product or a hybrid.',
+        ];
+        $lines = ['REFERENCE IMAGE ROLE CONTRACT', 'Images are ordered exactly as listed. Never merge, swap, or transfer traits between roles.'];
+
+        foreach ($roles as $index => $role) {
+            if (is_string($role) && isset($descriptions[$role])) {
+                $lines[] = 'Image '.($index + 1).' — '.$descriptions[$role];
+            }
+        }
+
+        $lines[] = 'Generate one coherent product identity. Logo and model must appear when provided. Scene, camera, pose, lighting, layout, and background come from output instructions, not reference backgrounds. Do not create a collage, extra product units, extra people, or variants unless requested. If references conflict, PRIMARY_PRODUCT wins for product identity, BRAND_LOGO only for branding, and MODEL_IDENTITY only for person identity.';
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @return array<int, string>
+     */
     public function referenceSourcePaths(GeneratedMedia $image): array
     {
         $paths = is_array($image->response_meta) ? ($image->response_meta['source_paths'] ?? []) : [];
@@ -809,7 +841,7 @@ class AiImageEditor
             return [];
         }
 
-        return array_slice(array_values(array_filter($paths, fn (mixed $path): bool => is_string($path) && $path !== '')), 0, 3, true);
+        return array_slice(array_values(array_filter($paths, fn (mixed $path): bool => is_string($path) && $path !== '')), 0, AppSettings::maxReferencePhotos(), true);
     }
 
     /**
@@ -819,7 +851,7 @@ class AiImageEditor
     private function storeParentReferenceUploads(GeneratedMedia $parent, array $indexes): array
     {
         $sourcePaths = $this->referenceSourcePaths($parent);
-        $indexes = array_slice(array_values(array_unique(array_map('intval', $indexes))), 0, 3);
+        $indexes = array_slice(array_values(array_unique(array_map('intval', $indexes))), 0, AppSettings::maxReferencePhotos());
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk('public');
         $uploads = [];
@@ -986,6 +1018,7 @@ class AiImageEditor
      * @return array{base64: string, mime: string, source_paths: array<int, string>, usage: array<string, mixed>}
      */
     private function generateImage(
+        GeneratedMedia $image,
         array $photos,
         string $prompt,
         string $provider,
@@ -997,19 +1030,18 @@ class AiImageEditor
         $sourcePaths = [];
         $referenceImages = [];
 
-        foreach (array_slice($photos, 0, 3) as $photo) {
+        foreach (array_slice($photos, 0, AppSettings::maxReferencePhotos()) as $photo) {
             if (! $photo instanceof UploadedFile) {
                 continue;
             }
 
             $sourceContent = $this->referenceImageContent($photo);
-            $sourcePath = $this->datedPath('ai-image-sources', Str::uuid().'.jpg');
+            $sourceMedia = $image->addMediaFromString($sourceContent)
+                ->usingFileName(Str::uuid().'.jpg')
+                ->withProperties(['mime_type' => 'image/jpeg'])
+                ->toMediaCollection('sources');
 
-            if (! Storage::disk('public')->put($sourcePath, $sourceContent, ['visibility' => 'public'])) {
-                throw new \RuntimeException('Không lưu được ảnh nguồn.');
-            }
-
-            $sourcePaths[] = $sourcePath;
+            $sourcePaths[] = $sourceMedia->getPathRelativeToRoot();
             $referenceImages[] = 'data:image/jpeg;base64,'.base64_encode($sourceContent);
         }
 
@@ -1555,10 +1587,19 @@ class AiImageEditor
             ->pluck('id', 'slug');
 
         $ids = $tagNames
-            ->map(fn (string $name, string $slug): int => (int) ($existing[$slug] ?? Tag::query()->firstOrCreate(
-                ['slug' => $slug],
-                ['name' => $name],
-            )->id))
+            ->map(function (string $name, string $slug) use ($existing): int {
+                if (isset($existing[$slug])) {
+                    return (int) $existing[$slug];
+                }
+
+                $tag = Tag::query()->firstOrCreate(['slug' => $slug], ['name' => $name]);
+
+                if ($tag->wasRecentlyCreated) {
+                    GenerateTagDescription::dispatch($tag->id)->afterCommit();
+                }
+
+                return (int) $tag->id;
+            })
             ->values()
             ->all();
 

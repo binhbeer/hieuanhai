@@ -333,6 +333,37 @@ class AiImageApiTest extends TestCase
         $this->assertSame(1, $key->quota_used);
     }
 
+    public function test_api_accepts_five_images_and_rejects_six_without_charging_quota(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode(UploadedFile::fake()->image('result.png')->getContent())]],
+            ]),
+        ]);
+        [$plain, $key] = $this->apiKey(quotaLimit: 2);
+        $fiveImages = collect(range(1, 5))->map(fn (int $index): UploadedFile => UploadedFile::fake()->image($index.'.jpg'))->all();
+
+        $this->withHeader('Authorization', 'Bearer '.$plain)
+            ->post('/api/ai/images', ['prompt' => 'Five references', 'images' => $fiveImages])
+            ->assertCreated();
+
+        Http::assertSent(fn (HttpRequest $request): bool => is_array($request['images']) && count($request['images']) === 5);
+        $key->refresh();
+        $this->assertSame(1, $key->quota_used);
+
+        $sixImages = collect(range(1, 6))->map(fn (int $index): UploadedFile => UploadedFile::fake()->image('six-'.$index.'.jpg'))->all();
+        $this->withHeader('Authorization', 'Bearer '.$plain)
+            ->post('/api/ai/images', ['prompt' => 'Six references', 'images' => $sixImages])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('images');
+
+        $this->assertSame(1, $key->fresh()->quota_used);
+    }
+
     public function test_api_requires_prompt_and_does_not_charge_quota_on_validation_error(): void
     {
         [$plain, $key] = $this->apiKey(quotaLimit: 1);
@@ -736,6 +767,7 @@ class AiImageApiTest extends TestCase
             ->set('promptRewriteModel', 'gpt-5.5-rewrite')
             ->set('imageToPromptModel', 'gpt-5.5-vision')
             ->set('imageSize', '1536x1024')
+            ->set('maxReferencePhotos', 5)
             ->set('imageQuality', 'medium')
             ->set('imageDetail', 'original')
             ->set('imageReferenceField', 'input_image')
@@ -765,6 +797,7 @@ class AiImageApiTest extends TestCase
         $this->assertSame('original', Setting::getValue('ai.image_detail'));
         $this->assertSame('input_image', Setting::getValue('ai.image_reference_field'));
         $this->assertSame('secret-key', Setting::getValue('ai.openai_api_key'));
+        $this->assertSame(5, Setting::getValue('ai.image_max_reference_photos'));
     }
 
     public function test_settings_reject_invalid_zalo_url(): void

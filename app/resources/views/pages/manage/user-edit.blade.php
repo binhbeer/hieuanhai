@@ -65,13 +65,11 @@ new #[Title('Edit user')] class extends Component
             'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
-        $oldAvatar = $this->user->avatar_path;
-        $this->user->avatar_path = $this->avatar->store('avatars', 'public');
+        $media = $this->user->addMedia($this->avatar->getRealPath())
+            ->usingFileName($this->avatar->hashName())
+            ->toMediaCollection('avatar');
+        $this->user->avatar_path = $media->getPathRelativeToRoot();
         $this->user->save();
-
-        if ($oldAvatar) {
-            Storage::disk('public')->delete($oldAvatar);
-        }
 
         $this->reset('avatar');
         Flux::toast(variant: 'success', text: __('Avatar updated.'));

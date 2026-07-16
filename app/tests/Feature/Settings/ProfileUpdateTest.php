@@ -57,6 +57,7 @@ class ProfileUpdateTest extends TestCase
 
         $path = $user->refresh()->avatar_path;
         $this->assertNotNull($path);
+        $this->assertMatchesRegularExpression('#^image/user/\d{6}/\d{2}/\d+/\d+/[\w-]+\.jpg$#', $path);
         Storage::disk('public')->assertExists($path);
     }
 

@@ -64,6 +64,10 @@
 							<x-slot name="icon"><x-iconsax-bul-home class="size-4" /></x-slot>
 							{{ __('Home') }}
 						</flux:sidebar.item>
+						<flux:sidebar.item :href="route('skills.index')" :current="request()->routeIs('skills.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-star class="size-4" /></x-slot>
+							{{ __('AI tools') }}
+						</flux:sidebar.item>
 						@auth
 							<flux:sidebar.item :href="route('search.index')" :current="request()->routeIs('search.*')" wire:navigate>
 								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-4" /></x-slot>
