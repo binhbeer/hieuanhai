@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'skills' => 'ai-tools',
+    'skills' => 'studio-ai',
     'huong-dan' => 'guide',
     'huong-dan/bat-dau' => 'guide/getting-started',
     'huong-dan/ung-dung-web' => 'guide/web-app',

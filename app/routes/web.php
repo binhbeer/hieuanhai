@@ -12,15 +12,7 @@ Route::bind('category', function (string $value): Category {
         ->where('status', 'active');
 
     if (app()->getLocale() === 'en') {
-        $query
-            ->whereNotNull('name->en')->where('name->en', '!=', '')
-            ->whereNotNull('description->en')->where('description->en', '!=', '')
-            ->whereHas('media', fn ($query) => $query
-                ->where('is_published', true)
-                ->where('status', 'succeeded')
-                ->whereNotNull('result_path')
-                ->whereNotNull('title->en')->where('title->en', '!=', '')
-                ->whereNotNull('description->en')->where('description->en', '!=', ''));
+        $query->whereNotNull('name->en')->where('name->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', '')->whereHas('media', fn($query) => $query->where('is_published', true)->where('status', 'succeeded')->whereNotNull('result_path')->whereNotNull('title->en')->where('title->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', ''));
     }
 
     $category = $query->firstOrFail();
@@ -32,15 +24,7 @@ Route::bind('tag', function (string $value): Tag {
     $query = Tag::query()->where(app()->getLocale() === 'en' ? 'slug_en' : 'slug', $value);
 
     if (app()->getLocale() === 'en') {
-        $query
-            ->whereNotNull('name->en')->where('name->en', '!=', '')
-            ->whereNotNull('description->en')->where('description->en', '!=', '')
-            ->whereHas('media', fn ($query) => $query
-                ->where('is_published', true)
-                ->where('status', 'succeeded')
-                ->whereNotNull('result_path')
-                ->whereNotNull('title->en')->where('title->en', '!=', '')
-                ->whereNotNull('description->en')->where('description->en', '!=', ''));
+        $query->whereNotNull('name->en')->where('name->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', '')->whereHas('media', fn($query) => $query->where('is_published', true)->where('status', 'succeeded')->whereNotNull('result_path')->whereNotNull('title->en')->where('title->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', ''));
     }
 
     $tag = $query->firstOrFail();
@@ -68,18 +52,21 @@ Route::localize(function (): void {
     Route::livewire('history', 'pages::history')->middleware('auth')->name('history.index');
 });
 
-Route::middleware(['auth'])->prefix('manage')->name('manage.')->group(function (): void {
-    Route::livewire('/', 'pages::manage.dashboard')->name('index');
-    Route::livewire('users', 'pages::manage.users')->name('users.index');
-    Route::livewire('users/{user}/edit', 'pages::manage.user-edit')->name('users.edit');
-    Route::livewire('api-keys', 'pages::manage.api-keys')->name('api-keys.index');
-    Route::livewire('images', 'pages::manage.images')->name('images.index');
-    Route::livewire('categories', 'pages::manage.categories')->name('categories.index');
-    Route::livewire('settings', 'pages::manage.settings')->name('settings.index');
-    Route::livewire('languages', 'pages::manage.languages')->name('languages.index');
-});
+Route::middleware(['auth'])
+    ->prefix('manage')
+    ->name('manage.')
+    ->group(function (): void {
+        Route::livewire('/', 'pages::manage.dashboard')->name('index');
+        Route::livewire('users', 'pages::manage.users')->name('users.index');
+        Route::livewire('users/{user}/edit', 'pages::manage.user-edit')->name('users.edit');
+        Route::livewire('api-keys', 'pages::manage.api-keys')->name('api-keys.index');
+        Route::livewire('images', 'pages::manage.images')->name('images.index');
+        Route::livewire('categories', 'pages::manage.categories')->name('categories.index');
+        Route::livewire('settings', 'pages::manage.settings')->name('settings.index');
+        Route::livewire('languages', 'pages::manage.languages')->name('languages.index');
+    });
 
 Route::redirect('api-keys', '/manage/api-keys')->middleware('auth')->name('api-keys.index');
 Route::redirect('dashboard', '/')->name('dashboard');
 
-require __DIR__.'/settings.php';
+require __DIR__ . '/settings.php';

@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -25,6 +26,24 @@ use Tests\TestCase;
 class AiImageApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        URL::forceRootUrl('https://api.'.parse_url((string) config('app.url'), PHP_URL_HOST));
+    }
+
+    public function test_api_routes_are_only_available_on_api_subdomain(): void
+    {
+        $apiUrl = URL::to('/api/categories');
+
+        URL::forceRootUrl((string) config('app.url'));
+        $this->getJson('/api/categories')->assertNotFound();
+
+        URL::forceRootUrl(strstr($apiUrl, '/api/categories', true));
+        $this->getJson('/api/categories')->assertOk();
+    }
 
     public function test_api_requires_a_valid_key(): void
     {

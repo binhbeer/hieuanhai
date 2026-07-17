@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'skills' => 'skills',
+    'skills' => 'studio-ai',
     'huong-dan' => 'huong-dan',
     'huong-dan/bat-dau' => 'huong-dan/bat-dau',
     'huong-dan/ung-dung-web' => 'huong-dan/ung-dung-web',
