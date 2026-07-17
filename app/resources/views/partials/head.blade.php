@@ -18,7 +18,8 @@
     $metaTag = $routeTag instanceof \App\Models\Tag ? $routeTag : null;
     $baseRouteName = \App\Support\LocalizedRoute::name();
     $isPrivateSkillsView = $baseRouteName === 'skills.index' && (request()->query('view') === 'projects' || request()->filled('project'));
-    $isIndexable = in_array($baseRouteName, ['home', 'skills.index', 'categories.show', 'tags.show', 'images.show'], true) && ! $isPrivateSkillsView;
+    $isGuide = $baseRouteName !== null && \Illuminate\Support\Str::is('guide.*', $baseRouteName);
+    $isIndexable = (in_array($baseRouteName, ['home', 'skills.index', 'categories.show', 'tags.show', 'images.show'], true) || $isGuide) && ! $isPrivateSkillsView;
     $englishEnabled = \App\Support\AppSettings::bool('locales.en.enabled');
     $englishReady = match (true) {
         $metaImage !== null => $metaImage->englishReady(),
@@ -34,6 +35,11 @@
         $metaTag !== null => '#'.$metaTag->name,
         \App\Support\LocalizedRoute::is('home') => $homeTitle,
         \App\Support\LocalizedRoute::is('skills.index') => __('AI tools'),
+        \App\Support\LocalizedRoute::is('guide.index') => __('User guide'),
+        \App\Support\LocalizedRoute::is('guide.getting-started') => __('Create your first AI image'),
+        \App\Support\LocalizedRoute::is('guide.web') => __('Manage your complete image workflow'),
+        \App\Support\LocalizedRoute::is('guide.api') => __('Create images through the API'),
+        \App\Support\LocalizedRoute::is('guide.faq') => __('Frequently asked questions'),
         default => isset($title) ? __($title) : null,
     };
 
@@ -53,6 +59,11 @@
             160,
             '',
         ),
+        \App\Support\LocalizedRoute::is('guide.index') => __('Step-by-step guides for image creation, workflow management, publishing, account security, and API integration.'),
+        \App\Support\LocalizedRoute::is('guide.getting-started') => __('From signing in to downloading a finished image, follow this practical workflow.'),
+        \App\Support\LocalizedRoute::is('guide.web') => __('Track generations, improve results, publish your best work, and collect ideas from the community.'),
+        \App\Support\LocalizedRoute::is('guide.api') => __('Generate a key, send a secure request, and understand quota and error responses.'),
+        \App\Support\LocalizedRoute::is('guide.faq') => __('Quick answers about quota, privacy, account access, and common generation problems.'),
         default => $siteDescription,
     };
 
@@ -62,6 +73,7 @@
         $metaTag !== null => route('tags.show', $metaTag),
         \App\Support\LocalizedRoute::is('home') => route('home'),
         \App\Support\LocalizedRoute::is('skills.index') => route('skills.index'),
+        $isGuide && $baseRouteName !== null => route($baseRouteName),
         default => url()->current(),
     };
 
@@ -102,6 +114,22 @@
             'url' => $metaUrl,
             'description' => $metaDescription,
             'inLanguage' => $locale,
+        ];
+    }
+
+    if ($isGuide) {
+        $schema[] = [
+            '@context' => 'https://schema.org',
+            '@type' => 'WebPage',
+            'name' => filled($metaTitle) ? $metaTitle : __('User guide'),
+            'url' => $metaUrl,
+            'description' => $metaDescription,
+            'inLanguage' => $locale,
+            'isPartOf' => [
+                '@type' => 'WebSite',
+                'name' => $siteName,
+                'url' => route('home'),
+            ],
         ];
     }
 

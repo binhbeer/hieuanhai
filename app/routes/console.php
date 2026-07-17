@@ -60,14 +60,23 @@ Artisan::command('sitemap:generate', function (): void {
     $index = SitemapIndex::create();
     $latestImageUpdate = $date($publicImages()->max('updated_at')) ?? now();
 
+    $guideRoutes = ['guide.index', 'guide.getting-started', 'guide.web', 'guide.api', 'guide.faq'];
     $pages = SitemapFile::create()
         ->add($url(LocalizedRoute::url('home', locale: 'vi'), $latestImageUpdate))
         ->add($url(LocalizedRoute::url('skills.index', locale: 'vi'), now()));
+
+    foreach ($guideRoutes as $guideRoute) {
+        $pages->add($url(LocalizedRoute::url($guideRoute, locale: 'vi'), now()));
+    }
 
     if ($englishEnabled) {
         $pages
             ->add($url(LocalizedRoute::url('home', locale: 'en'), $latestImageUpdate))
             ->add($url(LocalizedRoute::url('skills.index', locale: 'en'), now()));
+
+        foreach ($guideRoutes as $guideRoute) {
+            $pages->add($url(LocalizedRoute::url($guideRoute, locale: 'en'), now()));
+        }
     }
     $pagesLastModified = $write('sitemap-pages.xml', $pages, now());
     $index->add(SitemapEntry::create(url('/sitemap-pages.xml'))->setLastModificationDate($pagesLastModified));

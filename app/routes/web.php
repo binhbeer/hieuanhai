@@ -51,6 +51,11 @@ Route::bind('tag', function (string $value): Tag {
 Route::translate(function (): void {
     Route::livewire('/', 'pages::gallery')->name('home');
     Route::livewire(Localizer::url('skills'), 'pages::skills')->name('skills.index');
+    Route::livewire(Localizer::url('huong-dan'), 'pages::guide')->name('guide.index');
+    Route::livewire(Localizer::url('huong-dan/bat-dau'), 'pages::guide')->name('guide.getting-started');
+    Route::livewire(Localizer::url('huong-dan/ung-dung-web'), 'pages::guide')->name('guide.web');
+    Route::livewire(Localizer::url('huong-dan/api'), 'pages::guide')->name('guide.api');
+    Route::livewire(Localizer::url('huong-dan/faq'), 'pages::guide')->name('guide.faq');
     Route::livewire(Localizer::url('c/{category}'), 'pages::gallery')->name('categories.show');
     Route::livewire(Localizer::url('t/{tag}'), 'pages::gallery')->name('tags.show');
     Route::get(Localizer::url('anh/{image}/download'), ImageDownloadController::class)->name('images.download');

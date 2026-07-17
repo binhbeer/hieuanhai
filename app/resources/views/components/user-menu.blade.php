@@ -30,6 +30,11 @@
 					</flux:menu.item>
 				@endforeach
 				<x-language-switcher />
+				<flux:menu.separator />
+				<flux:menu.item :href="route('guide.index')" wire:navigate>
+					<x-slot name="icon"><x-iconsax-two-book class="size-5 mr-1.5" /></x-slot>
+					{{ __('User guide') }}
+				</flux:menu.item>
 				<form class="w-full" method="POST" action="{{ route('logout') }}">
 					@csrf
 					<flux:menu.item class="w-full cursor-pointer" data-test="logout-button" as="button" type="submit">
