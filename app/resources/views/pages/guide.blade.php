@@ -212,7 +212,7 @@ new #[Title('User guide')] class extends Component {
                     'id' => 'request',
                     'number' => '02',
                     'title' => __('Send a generation request'),
-                    'body' => __('Use JSON for prompt-only requests or multipart form data when you include reference images. The prompt is required and accepts up to 1200 words.'),
+                    'body' => __('Use JSON for prompt-only requests or multipart form data when you include reference images. Requests are accepted only through the API subdomain. The prompt is required and accepts up to 1200 words.'),
                     'tips' => [
                         __('POST /api/ai/images creates a private image.'),
                         __('POST /api/ai/images/publish creates and publishes the result.'),
@@ -419,7 +419,7 @@ new #[Title('User guide')] class extends Component {
                             <span>POST /api/ai/images</span>
                             <span>multipart/form-data</span>
                         </div>
-                        <pre class="overflow-x-auto p-5 text-sm leading-7 text-zinc-100"><code>curl -X POST {{ url('/api/ai/images') }} \
+                        <pre class="overflow-x-auto p-5 text-sm leading-7 text-zinc-100"><code>curl -X POST https://api.{{ parse_url((string) config('app.url'), PHP_URL_HOST) }}/api/ai/images \
   -H "Authorization: Bearer genanh_xxx" \
   -F "prompt=A cinematic product photo with soft studio lighting" \
   -F "images[]=@/path/to/reference.jpg"</code></pre>

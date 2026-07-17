@@ -236,11 +236,11 @@ new class extends Component {
         <div class="space-y-6">
             <div>
                 <flux:heading size="xl">{{ __('API usage guide') }}</flux:heading>
-                <flux:text class="mt-2">{{ __('Send JSON to create an image from a prompt, or multipart when reference images are included. Each successful request costs 1 quota.') }}</flux:text>
+                <flux:text class="mt-2">{{ __('Send JSON to create an image from a prompt, or multipart when reference images are included. Requests are accepted only through the API subdomain. Each successful request costs 1 quota.') }}</flux:text>
             </div>
 
             <flux:callout variant="secondary" icon="code-bracket">
-                <flux:callout.heading>POST {{ url('/api/ai/images') }}</flux:callout.heading>
+                <flux:callout.heading>POST https://api.{{ parse_url((string) config('app.url'), PHP_URL_HOST) }}/api/ai/images</flux:callout.heading>
                 <flux:callout.text><span class="font-mono text-xs">Authorization: Bearer genanh_xxx</span></flux:callout.text>
             </flux:callout>
 
@@ -261,7 +261,7 @@ new class extends Component {
 
             <div class="space-y-3">
                 <flux:heading size="lg">JSON</flux:heading>
-                <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST '{{ url('/api/ai/images') }}' \
+                <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST 'https://api.{{ parse_url((string) config('app.url'), PHP_URL_HOST) }}/api/ai/images' \
   -H 'Authorization: Bearer genanh_xxx' \
   -H 'Content-Type: application/json' \
   -d '{"prompt":"Create a comic-style portrait"}'</code></pre>
@@ -269,7 +269,7 @@ new class extends Component {
 
             <div class="space-y-3">
                 <flux:heading size="lg">Multipart</flux:heading>
-                <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST '{{ url('/api/ai/images') }}' \
+                <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST 'https://api.{{ parse_url((string) config('app.url'), PHP_URL_HOST) }}/api/ai/images' \
   -H 'Authorization: Bearer genanh_xxx' \
   -F 'prompt=Turn this image into a comic-style portrait' \
   -F 'images[]=@/path/to/source.jpg'</code></pre>

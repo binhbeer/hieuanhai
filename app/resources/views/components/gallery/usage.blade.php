@@ -72,7 +72,7 @@ new class extends Component {
                         <span class="truncate">{{ __('Remaining today') }}</span>
                         <span class="shrink-0 tabular-nums">{{ $remainingToday === null ? '∞' : $remainingToday . '/' . $dailyLimit }}</span>
                     </div>
-                    <flux:progress max="{{ max($dailyLimit, 1) }}" value="{{ $remainingToday ?? $dailyLimit }}" color="yellow" />
+                    <flux:progress max="{{ max($dailyLimit, 1) }}" value="{{ $remainingToday ?? $dailyLimit }}" color="yellow" class="h-1!" />
                 </a>
             </flux:tooltip>
 
@@ -88,11 +88,7 @@ new class extends Component {
                             @endif
                         </span>
                     </div>
-                    <flux:progress
-                        max="{{ max($apiKey?->quota_limit ?? 1, 1) }}"
-                        value="{{ $apiKey ? min($apiKey->quota_used, max($apiKey->quota_limit, 1)) : 0 }}"
-                        color="amber"
-                    />
+                    <flux:progress max="{{ max($apiKey?->quota_limit ?? 1, 1) }}" value="{{ $apiKey ? min($apiKey->quota_used, max($apiKey->quota_limit, 1)) : 0 }}" color="amber" class="h-1!" />
                 </button>
             </flux:tooltip>
         </div>
