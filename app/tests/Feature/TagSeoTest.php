@@ -64,7 +64,7 @@ class TagSeoTest extends TestCase
     {
         Bus::fake([GenerateTagDescription::class]);
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true]]);
         ImageMetadataAgent::fake([[
             'title' => 'Brownie socola mềm ẩm',
             'description' => 'Brownie socola mềm ẩm với mặt bánh nứt nhẹ, lớp ruột đậm vị và cách trình bày gần gũi trong ánh sáng tự nhiên.',

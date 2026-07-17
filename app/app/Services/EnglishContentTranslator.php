@@ -69,7 +69,7 @@ class EnglishContentTranslator
     private function request(array $records): array
     {
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
-        $model = AppSettings::string('ai.tag_model')
+        $model = AppSettings::string('ai.language_model')
             ?: AppSettings::string('ai.text_model', (string) config('ai.text_model', 'gpt-5.5'));
         $this->configureProvider($provider);
         $payload = array_map(fn (Category|Tag|GeneratedMedia $record): array => [

@@ -47,6 +47,10 @@
 							<x-slot name="icon"><x-iconsax-bul-gallery class="size-5" /></x-slot>
 							{{ __('Images') }}
 						</flux:sidebar.item>
+						<flux:sidebar.item :href="route('manage.skills.index')" :current="\App\Support\LocalizedRoute::is('manage.skills.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-bul-star class="size-5" /></x-slot>
+							{{ __('AI tools') }}
+						</flux:sidebar.item>
 						<flux:sidebar.item :href="route('manage.categories.index')" :current="\App\Support\LocalizedRoute::is('manage.categories.*')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-category class="size-5" /></x-slot>
 							{{ __('Categories') }}

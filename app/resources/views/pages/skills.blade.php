@@ -5,18 +5,21 @@ use App\Models\SkillProject;
 use App\Services\AiImageEditor;
 use App\Services\SkillProjectGenerator;
 use App\Support\AppSettings;
-use App\Support\GptImageOptions;
 use Flux\Flux;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new #[Title('AI tools')] class extends Component {
+new #[Title('AI tools')] class extends Component
+{
     use WithFileUploads;
 
     #[Url]
@@ -47,6 +50,8 @@ new #[Title('AI tools')] class extends Component {
 
     public string $aspectRatio = '4:5';
 
+    public string $imageModel = '';
+
     public string $language = 'vi';
 
     public array $imageTypes = ['hero', 'close-up', 'lifestyle'];
@@ -69,6 +74,8 @@ new #[Title('AI tools')] class extends Component {
 
     public function mount(): void
     {
+        $this->imageModel = AppSettings::defaultImageModel();
+
         if (! in_array($this->view, ['plaza', 'projects'], true)) {
             $this->view = 'plaza';
         }
@@ -97,7 +104,7 @@ new #[Title('AI tools')] class extends Component {
 
         $this->resetWizard();
         $this->tool = $tool;
-        $this->projectName = $tool === 'product-detail' ? __('Product detail images') : __('Marketing poster');
+        $this->projectName = '';
         $this->showWizard = true;
     }
 
@@ -228,7 +235,9 @@ new #[Title('AI tools')] class extends Component {
         $project = $this->draft();
         $name = trim($this->projectName);
         $project->update([
-            'name' => $name !== '' ? Str::limit($name, 255, '') : $this->defaultProjectName(),
+            'name' => $name !== ''
+                ? Str::limit($name, 255, '')
+                : (filled($project->name) ? $project->name : $this->defaultProjectName()),
             'form_data' => $this->formData(),
         ]);
         unset($this->draftProject);
@@ -272,7 +281,7 @@ new #[Title('AI tools')] class extends Component {
         $this->saveDraft();
     }
 
-    public function submit(SkillProjectGenerator $generator): void
+    public function submit(SkillProjectGenerator $generator, AiImageEditor $editor): void
     {
         $this->validateBasics();
 
@@ -288,12 +297,17 @@ new #[Title('AI tools')] class extends Component {
         }
 
         try {
+            if (! $this->isEditingProject() || trim($this->projectName) === '') {
+                $this->assignGeneratedProjectName($editor, $project);
+            }
+
             $images = $generator->create(
                 request(),
                 $project,
                 $this->generationOutputs(),
                 $this->aspectRatio,
                 '1k',
+                model: $this->imageModel,
             );
             $this->showWizard = false;
             $this->view = 'projects';
@@ -401,6 +415,15 @@ new #[Title('AI tools')] class extends Component {
         return app(AiImageEditor::class)->imageUrl($image, $size);
     }
 
+    public function skillLabel(string $skill): string
+    {
+        return match ($skill) {
+            'product-detail' => __('Product detail images'),
+            'marketing-poster' => __('Marketing poster'),
+            default => $skill,
+        };
+    }
+
     public function projectProgress(SkillProject $project): string
     {
         if ($project->submitted_at === null) {
@@ -434,7 +457,7 @@ new #[Title('AI tools')] class extends Component {
         $project = SkillProject::create([
             'user_id' => Auth::id(),
             'skill' => $this->tool,
-            'name' => $this->defaultProjectName(),
+            'name' => trim($this->projectName) !== '' ? Str::limit(trim($this->projectName), 255, '') : $this->defaultProjectName(),
             'form_data' => $this->formData(),
             'input_paths' => $this->tool === 'product-detail'
                 ? ['product' => null, 'logo' => null, 'model' => null, 'additional_products' => []]
@@ -464,6 +487,8 @@ new #[Title('AI tools')] class extends Component {
         $this->projectName = $project->name;
         $this->productName = (string) ($data['product_name'] ?? '');
         $this->aspectRatio = (string) ($data['aspect_ratio'] ?? '4:5');
+        $savedModel = is_string($data['image_model'] ?? null) ? $data['image_model'] : null;
+        $this->imageModel = in_array($savedModel, AppSettings::enabledImageModels(), true) ? $savedModel : AppSettings::defaultImageModel();
         $this->language = (string) ($data['language'] ?? 'vi');
         $this->imageTypes = is_array($data['image_types'] ?? null) ? $data['image_types'] : ['hero', 'close-up', 'lifestyle'];
         $this->notes = (string) ($data['notes'] ?? '');
@@ -481,8 +506,10 @@ new #[Title('AI tools')] class extends Component {
         $this->project = null;
         $this->step = 1;
         $this->reset('newPhotos', 'newProductPhoto', 'newLogoPhoto', 'newModelPhoto', 'newAdditionalProductPhotos');
+        $this->projectName = '';
         $this->productName = '';
         $this->aspectRatio = '4:5';
+        $this->imageModel = AppSettings::defaultImageModel();
         $this->language = 'vi';
         $this->imageTypes = ['hero', 'close-up', 'lifestyle'];
         $this->customImageType = '';
@@ -495,6 +522,60 @@ new #[Title('AI tools')] class extends Component {
         $this->errorMessage = null;
         $this->resetValidation();
         unset($this->draftProject);
+    }
+
+    public function isEditingProject(): bool
+    {
+        return $this->ownedProject()?->submitted_at !== null;
+    }
+
+    private function assignGeneratedProjectName(AiImageEditor $editor, SkillProject $project): void
+    {
+        $path = $this->primaryReferencePath($project);
+
+        if (! is_string($path) || ! Storage::disk('public')->exists($path)) {
+            $name = $this->defaultProjectName();
+            $this->projectName = $name;
+            $project->update(['name' => $name]);
+
+            return;
+        }
+
+        $hint = $this->tool === 'product-detail'
+            ? trim($this->productName)
+            : trim($this->posterTopic);
+
+        try {
+            $name = $editor->projectNameFromImage(
+                new UploadedFile(
+                    Storage::disk('public')->path($path),
+                    basename($path),
+                ),
+                $this->language,
+                $hint,
+            );
+        } catch (\Throwable $e) {
+            report($e);
+            $name = $this->defaultProjectName();
+        }
+
+        $this->projectName = $name;
+        $project->update(['name' => $name]);
+    }
+
+    private function primaryReferencePath(SkillProject $project): ?string
+    {
+        if ($project->skill === 'product-detail') {
+            $product = $this->productInputPaths($project)['product'];
+
+            return is_string($product) ? $product : null;
+        }
+
+        $references = collect($project->input_paths['references'] ?? [])
+            ->filter(fn (mixed $path): bool => is_string($path))
+            ->values();
+
+        return $references->first();
     }
 
     private function inputPaths(): array
@@ -589,6 +670,7 @@ new #[Title('AI tools')] class extends Component {
         return [
             'product_name' => trim($this->productName),
             'aspect_ratio' => $this->aspectRatio,
+            'image_model' => $this->imageModel,
             'language' => $this->language,
             'image_types' => array_values(array_unique($this->imageTypes)),
             'notes' => trim($this->notes),
@@ -605,6 +687,7 @@ new #[Title('AI tools')] class extends Component {
         $rules = [
             'projectName' => ['nullable', 'string', 'max:255'],
             'aspectRatio' => ['required', 'string', 'in:1:1,3:4,4:3,4:5,9:16,16:9'],
+            'imageModel' => ['required', 'string', 'max:120', Rule::in(AppSettings::enabledImageModels())],
             'language' => ['required', 'string', 'in:vi,en'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
@@ -616,7 +699,7 @@ new #[Title('AI tools')] class extends Component {
 
             if (! is_string($product) || ! Storage::disk('public')->exists($product)) {
                 $this->addError('newProductPhoto', __('Product image is required.'));
-                throw \Illuminate\Validation\ValidationException::withMessages(['newProductPhoto' => __('Product image is required.')]);
+                throw ValidationException::withMessages(['newProductPhoto' => __('Product image is required.')]);
             }
         } else {
             $rules['posterTopic'] = ['required', 'string', 'max:500'];

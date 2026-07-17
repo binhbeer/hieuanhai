@@ -11,6 +11,7 @@ use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\AppSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\UploadedFile;
@@ -111,6 +112,40 @@ class AiImageApiTest extends TestCase
         ]);
     }
 
+    public function test_api_accepts_enabled_model_and_rejects_disabled_model_without_charging_quota(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.image_models', ['cx/gpt-5.5-image', 'cx/alternate-image']);
+        Setting::putValue('ai.image_disabled_models', ['cx/gpt-5.5-image']);
+        Setting::putValue('ai.image_model', 'cx/alternate-image');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('fake-png')]],
+            ]),
+        ]);
+        [$plain, $key] = $this->apiKey(quotaLimit: 2);
+
+        $this->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images', ['prompt' => 'Create an image', 'model' => 'cx/gpt-5.5-image'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('model');
+
+        $this->assertSame(0, $key->refresh()->quota_used);
+        Http::assertNothingSent();
+
+        $this->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images', ['prompt' => 'Create an image', 'model' => 'cx/alternate-image'])
+            ->assertCreated()
+            ->assertJsonPath('model', 'cx/alternate-image');
+
+        Http::assertSent(fn (HttpRequest $request): bool => $request['model'] === 'cx/alternate-image');
+        $this->assertSame('cx/alternate-image', GeneratedMedia::query()->latest('id')->firstOrFail()->model);
+        $this->assertSame('cx/alternate-image', data_get(ApiRequest::query()->latest('id')->firstOrFail()->request_meta, 'model'));
+    }
+
     public function test_publish_api_creates_publishes_and_logs_image(): void
     {
         Storage::fake('public');
@@ -181,7 +216,7 @@ class AiImageApiTest extends TestCase
         Setting::putValue('ai.openai_api_key', 'test-key');
         ImageReviewAgent::fake([
             $this->allowedReview(),
-            ['allowed' => false, 'blocked_policy' => 'sexual', 'reason' => 'Không phù hợp.'],
+            ['allowed' => false, 'blocked_policy' => 'sexual', 'reason' => 'Không phù hợp.', 'matches_prompt' => true],
         ]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
@@ -451,7 +486,7 @@ class AiImageApiTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.']]);
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.', 'matches_prompt' => true]]);
         Http::fake();
         [$plain, $key] = $this->apiKey(quotaLimit: 2);
 
@@ -504,7 +539,7 @@ class AiImageApiTest extends TestCase
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true]]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
                 'data' => [['b64_json' => base64_encode('fake-png')]],
@@ -788,7 +823,8 @@ class AiImageApiTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test('pages::manage.settings')
-            ->assertSee(__('Image creation tools'))
+            ->assertSee(__('Prompt tools'))
+            ->assertSee(__('Language model'))
             ->assertSeeHtml('md:grid-cols-2')
             ->set('siteName', 'GenAnh Pro')
             ->set('homeTitle', 'Chỉnh ảnh AI miễn phí')
@@ -798,8 +834,9 @@ class AiImageApiTest extends TestCase
             ->set('emailVerificationRequired', false)
             ->set('memberRequestLimit', 250)
             ->set('verifiedDailyImageLimit', 12)
-            ->set('textModels', ['gpt-5.5', 'gpt-5.5-mini', 'gpt-5.5-translation', 'gpt-5.5-rewrite', 'gpt-5.5-vision'])
+            ->set('textModels', ['gpt-5.5', 'gpt-5.5-mini', 'gpt-5.5-language', 'gpt-5.5-translation', 'gpt-5.5-rewrite', 'gpt-5.5-vision'])
             ->set('aiReviewModel', 'gpt-5.5-mini')
+            ->set('languageModel', 'gpt-5.5-language')
             ->set('promptTranslationEnabled', false)
             ->set('promptRewriteEnabled', false)
             ->set('imageToPromptEnabled', false)
@@ -826,6 +863,7 @@ class AiImageApiTest extends TestCase
         $this->assertSame(100, $key->fresh()->quota_limit);
         $this->assertSame(20, $key->fresh()->quota_used);
         $this->assertSame('gpt-5.5-mini', Setting::getValue('ai.image_review_model'));
+        $this->assertSame('gpt-5.5-language', Setting::getValue('ai.language_model'));
         $this->assertFalse((bool) Setting::getValue('ai.prompt_translation_enabled'));
         $this->assertFalse((bool) Setting::getValue('ai.prompt_rewrite_enabled'));
         $this->assertFalse((bool) Setting::getValue('ai.image_to_prompt_enabled'));
@@ -887,6 +925,48 @@ class AiImageApiTest extends TestCase
             ->set('newModelId', 'gpt-new-text')
             ->call('addModel')
             ->assertHasErrors('newModelId');
+    }
+
+    public function test_admin_can_save_image_model_aliases_for_user_facing_selects(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+
+        $component = Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->set('newModelId', 'cx/friendly-image')
+            ->set('newModelAlias', 'Ảnh Chuyên Nghiệp')
+            ->call('addImageModel')
+            ->assertSet('imageModelAliases.cx/friendly-image', 'Ảnh Chuyên Nghiệp');
+
+        $index = array_search('cx/friendly-image', $component->get('imageModels'), true);
+        $this->assertIsInt($index);
+
+        $component
+            ->set('imageModelAliasInputs.'.$index, 'Ảnh Pro')
+            ->assertHasNoErrors();
+
+        $this->assertSame('Ảnh Pro', data_get(Setting::getValue('ai.image_model_aliases'), 'cx/friendly-image'));
+        $this->assertSame('Ảnh Pro', AppSettings::imageModelLabel('cx/friendly-image'));
+    }
+
+    public function test_admin_can_toggle_image_models_and_default_follows_enabled_models(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->set('imageModels', ['cx/gpt-5.5-image', 'cx/alternate-image'])
+            ->set('aiModel', 'cx/gpt-5.5-image')
+            ->call('toggleImageModel', 'cx/gpt-5.5-image', false)
+            ->assertSet('aiModel', 'cx/alternate-image')
+            ->assertSet('disabledImageModels', ['cx/gpt-5.5-image'])
+            ->call('toggleImageModel', 'cx/alternate-image', false)
+            ->assertSet('disabledImageModels', ['cx/gpt-5.5-image'])
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame(['cx/gpt-5.5-image'], Setting::getValue('ai.image_disabled_models'));
+        $this->assertSame('cx/alternate-image', Setting::getValue('ai.image_model'));
     }
 
     public function test_admin_can_add_custom_model_not_in_endpoint_catalog(): void
@@ -986,9 +1066,31 @@ class AiImageApiTest extends TestCase
 
         Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
             && $request['model'] === 'cx/gpt-5.5-image'
+            && $request['response_format'] === 'b64_json'
             && $request->hasHeader('Authorization', 'Bearer saved-key'));
         Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'http://42.112.31.227:22150/v1/chat/completions'
             && $request['model'] === 'gpt-5.5');
+    }
+
+    public function test_admin_tests_grok_image_model_with_current_endpoint(): void
+    {
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response(['data' => [['url' => 'https://cdn.example.test/grok.jpg']]]),
+        ]);
+        Setting::putValue('ai.openai_api_key', 'saved-key');
+        Setting::putValue('ai.image_models', ['cx/gpt-5.5-image', 'xai/grok-imagine-image-quality']);
+        $admin = User::factory()->create(['id' => 1]);
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.settings')
+            ->call('testModel', 'image', 'xai/grok-imagine-image-quality')
+            ->assertSet('modelTestStatuses', fn (array $statuses): bool => ($statuses['image:xai/grok-imagine-image-quality'] ?? null) === 'success')
+            ->assertSet('modelTestError', null);
+
+        Http::assertSent(fn (HttpRequest $request): bool => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
+            && $request['model'] === 'xai/grok-imagine-image-quality'
+            && $request->hasHeader('Authorization', 'Bearer saved-key')
+            && ! array_key_exists('response_format', $request->data()));
     }
 
     public function test_failed_model_test_shows_safe_error(): void
@@ -1116,11 +1218,11 @@ class AiImageApiTest extends TestCase
     }
 
     /**
-     * @return array{allowed: bool, blocked_policy: string, reason: string}
+     * @return array{allowed: bool, blocked_policy: string, reason: string, matches_prompt: bool}
      */
     private function allowedReview(): array
     {
-        return ['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.'];
+        return ['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true];
     }
 
     /**

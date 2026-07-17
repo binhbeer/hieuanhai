@@ -14,48 +14,96 @@ use Livewire\Component;
 new #[Title('Settings')] class extends Component
 {
     public string $siteName = '';
+
     public string $homeTitle = '';
+
     public string $siteDescription = '';
+
     public string $siteKeywords = '';
+
     public string $googleMeasurementId = '';
+
     public string $zaloUrl = '';
+
     public bool $registrationEnabled = true;
+
     public bool $emailVerificationRequired = true;
+
     public bool $autoVerifyEmail = false;
+
     public int $memberRequestLimit = 100;
+
     public int $verifiedDailyImageLimit = 5;
+
     public string $aiProvider = 'openai';
 
     /** @var list<string> */
     public array $imageModels = [];
 
     /** @var list<string> */
+    public array $disabledImageModels = [];
+
+    /** @var array<string, string> */
+    public array $imageModelAliases = [];
+
+    /** @var list<string> */
+    public array $imageModelAliasInputs = [];
+
+    /** @var list<string> */
     public array $textModels = [];
 
     public string $aiModel = '';
+
     public string $textModel = '';
+
     public string $aiReviewModel = '';
+
     public string $tagModel = '';
+
+    public string $languageModel = '';
+
     public bool $promptTranslationEnabled = true;
+
     public bool $promptRewriteEnabled = true;
+
     public bool $imageToPromptEnabled = true;
+
     public string $promptTranslationModel = '';
+
     public string $promptRewriteModel = '';
+
     public string $imageToPromptModel = '';
+
     public int $aiTimeout = 600;
+
     public string $imageSize = 'auto';
+
     public string $imageQuality = 'auto';
+
     public string $imageDetail = 'high';
+
     public string $imageReferenceField = 'image';
+
     public int $maxReferencePhotos = 5;
+
     public int $uploadMaxKb = 32768;
+
     public string $openaiUrl = '';
+
     public string $openaiApiKey = '';
+
     public bool $showModelsModal = false;
+
     public string $modelsModalType = 'image';
+
     public ?string $modelsModalTarget = null;
+
     public string $newModelId = '';
+
+    public string $newModelAlias = '';
+
     public string $modelSearch = '';
+
     public bool $useCustomModelId = false;
 
     /** @var list<string> */
@@ -89,6 +137,7 @@ new #[Title('Settings')] class extends Component
         $this->textModel = (string) $settings['ai.text_model'];
         $this->aiReviewModel = (string) $settings['ai.image_review_model'];
         $this->tagModel = (string) $settings['ai.tag_model'];
+        $this->languageModel = (string) $settings['ai.language_model'];
         $this->promptTranslationEnabled = (bool) $settings['ai.prompt_translation_enabled'];
         $this->promptRewriteEnabled = (bool) $settings['ai.prompt_rewrite_enabled'];
         $this->imageToPromptEnabled = (bool) $settings['ai.image_to_prompt_enabled'];
@@ -96,14 +145,11 @@ new #[Title('Settings')] class extends Component
         $this->promptRewriteModel = (string) $settings['ai.prompt_rewrite_model'];
         $this->imageToPromptModel = (string) $settings['ai.image_to_prompt_model'];
         $this->imageModels = $this->normalizedModels($settings['ai.image_models'] ?? [], [$this->aiModel]);
-        $this->textModels = $this->normalizedModels($settings['ai.text_models'] ?? [], [
-            $this->textModel,
-            $this->aiReviewModel,
-            $this->tagModel,
-            $this->promptTranslationModel,
-            $this->promptRewriteModel,
-            $this->imageToPromptModel,
-        ]);
+        $this->imageModelAliases = $this->normalizedImageModelAliases($settings['ai.image_model_aliases'] ?? []);
+        $this->syncImageModelAliasInputs();
+        $this->disabledImageModels = array_values(array_intersect($this->imageModels, $this->normalizedModels($settings['ai.image_disabled_models'] ?? [], [])));
+        $this->ensureEnabledImageModel();
+        $this->textModels = $this->normalizedModels($settings['ai.text_models'] ?? [], [$this->textModel, $this->aiReviewModel, $this->tagModel, $this->languageModel, $this->promptTranslationModel, $this->promptRewriteModel, $this->imageToPromptModel]);
         $this->aiTimeout = (int) $settings['ai.image_timeout'];
         $this->imageSize = (string) $settings['ai.image_size'];
         $this->imageQuality = (string) $settings['ai.image_quality'];
@@ -114,18 +160,26 @@ new #[Title('Settings')] class extends Component
         $this->openaiUrl = (string) $settings['ai.openai_url'];
     }
 
+    public function loadImageModelCatalog(): void
+    {
+        $this->modelsModalType = 'image';
+        $this->modelsModalTarget = null;
+        $this->loadAvailableModels();
+    }
+
     public function openModelsModal(string $type, ?string $target = null): void
     {
         abort_unless(in_array($type, ['image', 'text'], true), 404);
-        abort_unless($target === null || in_array($target, ['image', 'text_default', 'review', 'tag', 'translation', 'rewrite', 'image_to_prompt'], true), 404);
+        abort_unless($target === null || in_array($target, ['image', 'text_default', 'review', 'tag', 'language', 'translation', 'rewrite', 'image_to_prompt'], true), 404);
 
         $this->modelsModalType = $type;
         $this->modelsModalTarget = $target;
         $this->newModelId = '';
+        $this->newModelAlias = '';
         $this->modelSearch = '';
         $this->useCustomModelId = false;
         $this->modelCatalogError = null;
-        $this->resetValidation('newModelId');
+        $this->resetValidation(['newModelId', 'newModelAlias']);
         $this->showModelsModal = true;
         $this->loadAvailableModels();
     }
@@ -159,7 +213,7 @@ new #[Title('Settings')] class extends Component
             }
 
             $models = collect($response->json('data', []))
-                ->map(fn (mixed $item): mixed => is_array($item) ? ($item['id'] ?? null) : null)
+                ->map(fn (mixed $item): mixed => is_array($item) ? $item['id'] ?? null : null)
                 ->filter(fn (mixed $id): bool => is_string($id) && trim($id) !== '')
                 ->map(fn (string $id): string => trim($id))
                 ->unique()
@@ -172,7 +226,7 @@ new #[Title('Settings')] class extends Component
             if ($models === []) {
                 $this->modelCatalogError = __('The endpoint returned no models.');
             }
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             report($e);
             $this->modelCatalogError = __('Could not connect to the AI endpoint. Check the URL, API key, and server logs.');
         }
@@ -189,6 +243,21 @@ new #[Title('Settings')] class extends Component
         }
 
         return array_slice($models, 0, 100);
+    }
+
+    public function addImageModel(): void
+    {
+        $this->modelsModalType = 'image';
+        $this->modelsModalTarget = null;
+        $this->validateOnly('newModelAlias', [
+            'newModelAlias' => ['required', 'string', 'max:80'],
+        ]);
+        $model = trim($this->newModelId);
+        $this->addModel();
+        $this->imageModelAliases[$model] = trim($this->newModelAlias);
+        $this->syncImageModelAliasInputs();
+        $this->newModelAlias = '';
+        $this->persistImageModelAliases();
     }
 
     public function addModel(): void
@@ -208,13 +277,20 @@ new #[Title('Settings')] class extends Component
 
         if ($this->modelsModalType === 'image') {
             $this->imageModels = $models;
+            $this->disabledImageModels = array_values(array_diff($this->disabledImageModels, [$model]));
         } else {
             $this->textModels = $models;
         }
 
         $this->selectModelForTarget($model);
         $this->newModelId = '';
-        $this->resetValidation('newModelId');
+        $this->resetValidation(['newModelId', 'newModelAlias']);
+    }
+
+    public function removeImageModel(string $model): void
+    {
+        $this->modelsModalType = 'image';
+        $this->removeModel($model);
     }
 
     public function removeModel(string $model): void
@@ -229,11 +305,32 @@ new #[Title('Settings')] class extends Component
 
         if ($this->modelsModalType === 'image') {
             $this->imageModels = $models;
+            $this->disabledImageModels = array_values(array_diff($this->disabledImageModels, [$model]));
+            unset($this->imageModelAliases[$model]);
+            $this->syncImageModelAliasInputs();
         } else {
             $this->textModels = $models;
         }
 
         unset($this->modelTestStatuses[$this->modelTestKey($this->modelsModalType, $model)]);
+    }
+
+    public function toggleImageModel(string $model, bool $enabled): void
+    {
+        abort_unless(in_array($model, $this->imageModels, true), 404);
+
+        if ($enabled) {
+            $this->disabledImageModels = array_values(array_diff($this->disabledImageModels, [$model]));
+
+            return;
+        }
+
+        if (count($this->enabledImageModels()) <= 1) {
+            return;
+        }
+
+        $this->disabledImageModels = array_values(array_unique([...$this->disabledImageModels, $model]));
+        $this->ensureEnabledImageModel();
     }
 
     public function testModel(string $type, string $model): void
@@ -246,6 +343,7 @@ new #[Title('Settings')] class extends Component
         $this->modelTestError = null;
         unset($this->modelTestStatuses[$key]);
 
+        $isGrokImage = $type === 'image' && (str_contains(Str::lower($model), 'grok') || Str::startsWith(Str::lower($model), 'xai/'));
         $url = rtrim($this->openaiUrl, '/');
         $apiKey = filled($this->openaiApiKey) ? $this->openaiApiKey : AppSettings::string('ai.openai_api_key');
 
@@ -257,12 +355,10 @@ new #[Title('Settings')] class extends Component
         }
 
         try {
-            $request = Http::withToken($apiKey)
-                ->acceptJson()
-                ->asJson()
-                ->timeout($this->aiTimeout);
+            $request = Http::withToken($apiKey)->acceptJson()->asJson()->timeout($this->aiTimeout);
 
-            $response = $type === 'image'
+            $response =
+                $type === 'image'
                 ? $request->post($url.'/images/generations', [
                     'model' => $model,
                     'prompt' => 'A simple solid blue square.',
@@ -270,6 +366,7 @@ new #[Title('Settings')] class extends Component
                     'size' => $this->imageSize,
                     'quality' => $this->imageQuality,
                     'output_format' => 'png',
+                    ...($isGrokImage ? [] : ['response_format' => 'b64_json']),
                 ])
                 : $request->post($url.'/chat/completions', [
                     'model' => $model,
@@ -278,6 +375,17 @@ new #[Title('Settings')] class extends Component
                 ]);
 
             if ($response->successful()) {
+                if ($type === 'image') {
+                    $hasImage = filled(data_get($response->json(), 'data.0.b64_json')) || filled(data_get($response->json(), 'data.0.url'));
+
+                    if (! $hasImage) {
+                        $this->modelTestStatuses[$key] = 'error';
+                        $this->modelTestError = __('Model test failed: :error', ['error' => 'The endpoint returned no image.']);
+
+                        return;
+                    }
+                }
+
                 $this->modelTestStatuses[$key] = 'success';
 
                 return;
@@ -288,7 +396,7 @@ new #[Title('Settings')] class extends Component
             $this->modelTestError = __('Model test failed: :error', [
                 'error' => Str::limit(is_string($message) ? $message : 'HTTP '.$response->status(), 500),
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             report($e);
             $this->modelTestStatuses[$key] = 'error';
             $this->modelTestError = __('Could not connect to the AI endpoint. Check the URL, API key, and server logs.');
@@ -299,34 +407,36 @@ new #[Title('Settings')] class extends Component
     {
         $this->showModelsModal = false;
         $this->newModelId = '';
+        $this->newModelAlias = '';
         $this->modelSearch = '';
         $this->useCustomModelId = false;
         $this->availableModels = [];
         $this->modelCatalogError = null;
         $this->modelsModalTarget = null;
         unset($this->filteredAvailableModels);
-        $this->resetValidation('newModelId');
+        $this->resetValidation(['newModelId', 'newModelAlias']);
     }
 
     /** @return list<string> */
-    public function modelUsages(string $model): array
+    public function modelUsages(string $model, ?string $type = null): array
     {
-        if ($this->modelsModalType === 'image') {
+        $type ??= $this->modelsModalType;
+
+        if ($type === 'image') {
             return $model === $this->aiModel ? [__('Default')] : [];
         }
 
-        return array_values(array_filter([
-            $model === $this->textModel ? __('Default') : null,
-            $model === $this->aiReviewModel ? __('Review') : null,
-            $model === $this->tagModel ? __('Metadata and tags') : null,
-            $model === $this->promptTranslationModel ? __('Prompt translation') : null,
-            $model === $this->promptRewriteModel ? __('Prompt rewrite') : null,
-            $model === $this->imageToPromptModel ? __('Image to prompt') : null,
-        ]));
+        return array_values(array_filter([$model === $this->textModel ? __('Default') : null, $model === $this->aiReviewModel ? __('Review') : null, $model === $this->tagModel ? __('Metadata and tags') : null, $model === $this->languageModel ? __('Language') : null, $model === $this->promptTranslationModel ? __('Prompt translation') : null, $model === $this->promptRewriteModel ? __('Prompt rewrite') : null, $model === $this->imageToPromptModel ? __('Image to prompt') : null]));
     }
 
     public function save(): void
     {
+        if (count($this->imageModelAliasInputs) !== count($this->imageModels)) {
+            $this->syncImageModelAliasInputs();
+        }
+
+        $this->imageModelAliases = collect($this->imageModels)->mapWithKeys(fn (string $model, int $index): array => [$model => trim($this->imageModelAliasInputs[$index] ?? '')])->all();
+
         $validated = $this->validate([
             'siteName' => ['required', 'string', 'max:120'],
             'homeTitle' => ['nullable', 'string', 'max:120'],
@@ -342,12 +452,19 @@ new #[Title('Settings')] class extends Component
             'aiProvider' => ['required', 'string', 'in:openai'],
             'imageModels' => ['required', 'array', 'min:1'],
             'imageModels.*' => ['required', 'string', 'max:120', 'distinct', 'regex:/^[^\p{C}]+$/u'],
+            'disabledImageModels' => ['array'],
+            'disabledImageModels.*' => ['required', 'string', 'max:120', 'distinct', 'regex:/^[^\p{C}]+$/u'],
+            'imageModelAliases' => ['array'],
+            'imageModelAliases.*' => ['required', 'string', 'max:80'],
+            'imageModelAliasInputs' => ['required', 'array', 'size:'.count($this->imageModels)],
+            'imageModelAliasInputs.*' => ['required', 'string', 'max:80'],
             'textModels' => ['required', 'array', 'min:1'],
             'textModels.*' => ['required', 'string', 'max:120', 'distinct', 'regex:/^[^\p{C}]+$/u'],
             'aiModel' => ['required', 'string', 'max:120'],
             'textModel' => ['required', 'string', 'max:120'],
             'aiReviewModel' => ['nullable', 'string', 'max:120'],
             'tagModel' => ['nullable', 'string', 'max:120'],
+            'languageModel' => ['nullable', 'string', 'max:120'],
             'promptTranslationEnabled' => ['boolean'],
             'promptRewriteEnabled' => ['boolean'],
             'imageToPromptEnabled' => ['boolean'],
@@ -381,11 +498,14 @@ new #[Title('Settings')] class extends Component
             'auth.verified_daily_image_limit' => (int) $validated['verifiedDailyImageLimit'],
             'ai.image_provider' => $validated['aiProvider'],
             'ai.image_models' => array_values($validated['imageModels']),
+            'ai.image_model_aliases' => array_intersect_key($validated['imageModelAliases'], array_flip($validated['imageModels'])),
+            'ai.image_disabled_models' => array_values($validated['disabledImageModels']),
             'ai.text_models' => array_values($validated['textModels']),
             'ai.image_model' => $validated['aiModel'],
             'ai.text_model' => $validated['textModel'],
             'ai.image_review_model' => $validated['aiReviewModel'] ?? '',
             'ai.tag_model' => $validated['tagModel'] ?? '',
+            'ai.language_model' => $validated['languageModel'] ?? '',
             'ai.prompt_translation_enabled' => (bool) $validated['promptTranslationEnabled'],
             'ai.prompt_rewrite_enabled' => (bool) $validated['promptRewriteEnabled'],
             'ai.image_to_prompt_enabled' => (bool) $validated['imageToPromptEnabled'],
@@ -431,6 +551,72 @@ new #[Title('Settings')] class extends Component
         return $models;
     }
 
+    /** @return array<string, string> */
+    private function normalizedImageModelAliases(mixed $aliases): array
+    {
+        if (! is_array($aliases)) {
+            return [];
+        }
+
+        return collect($aliases)->filter(fn (mixed $alias, mixed $model): bool => is_string($model) && is_string($alias) && trim($alias) !== '')->mapWithKeys(fn (string $alias, string $model): array => [$model => trim($alias)])->all();
+    }
+
+    private function syncImageModelAliasInputs(): void
+    {
+        $this->imageModelAliasInputs = array_map(fn (string $model): string => $this->imageModelAliases[$model] ?? AppSettings::imageModelLabel($model), $this->imageModels);
+    }
+
+    public function updatedImageModelAliasInputs(): void
+    {
+        $this->persistImageModelAliases();
+    }
+
+    private function persistImageModelAliases(): void
+    {
+        if (count($this->imageModelAliasInputs) !== count($this->imageModels)) {
+            $this->syncImageModelAliasInputs();
+        }
+
+        $aliases = [];
+        $errors = [];
+
+        foreach ($this->imageModels as $index => $model) {
+            $alias = trim((string) ($this->imageModelAliasInputs[$index] ?? ''));
+
+            if ($alias === '' || mb_strlen($alias) > 80) {
+                $errors["imageModelAliasInputs.$index"] = __('Display name is required and must be at most 80 characters.');
+
+                continue;
+            }
+
+            $aliases[$model] = $alias;
+            $this->imageModelAliases[$model] = $alias;
+            $this->imageModelAliasInputs[$index] = $alias;
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        Setting::putValue('ai.image_model_aliases', $aliases);
+        Setting::putValue('ai.image_models', array_values($this->imageModels));
+    }
+
+    /** @return list<string> */
+    public function enabledImageModels(): array
+    {
+        return array_values(array_diff($this->imageModels, $this->disabledImageModels));
+    }
+
+    private function ensureEnabledImageModel(): void
+    {
+        $enabled = $this->enabledImageModels();
+
+        if (! in_array($this->aiModel, $enabled, true)) {
+            $this->aiModel = $enabled[0] ?? '';
+        }
+    }
+
     private function modelTestKey(string $type, string $model): string
     {
         return $type.':'.$model;
@@ -439,13 +625,14 @@ new #[Title('Settings')] class extends Component
     private function selectModelForTarget(string $model): void
     {
         match ($this->modelsModalTarget) {
-            'image' => $this->aiModel = $model,
-            'text_default' => $this->textModel = $model,
-            'review' => $this->aiReviewModel = $model,
-            'tag' => $this->tagModel = $model,
-            'translation' => $this->promptTranslationModel = $model,
-            'rewrite' => $this->promptRewriteModel = $model,
-            'image_to_prompt' => $this->imageToPromptModel = $model,
+            'image' => ($this->aiModel = $model),
+            'text_default' => ($this->textModel = $model),
+            'review' => ($this->aiReviewModel = $model),
+            'tag' => ($this->tagModel = $model),
+            'language' => ($this->languageModel = $model),
+            'translation' => ($this->promptTranslationModel = $model),
+            'rewrite' => ($this->promptRewriteModel = $model),
+            'image_to_prompt' => ($this->imageToPromptModel = $model),
             default => null,
         };
     }
@@ -455,15 +642,25 @@ new #[Title('Settings')] class extends Component
     {
         $errors = [];
 
-        if (! in_array($validated['aiModel'], $validated['imageModels'], true)) {
-            $errors['aiModel'] = __('Select an image model from the managed list.');
+        $enabledImageModels = array_values(array_diff($validated['imageModels'], $validated['disabledImageModels']));
+
+        if ($enabledImageModels === [] || ! in_array($validated['aiModel'], $enabledImageModels, true)) {
+            $errors['aiModel'] = __('Select an enabled image model.');
+        }
+
+        if (array_diff($validated['disabledImageModels'], $validated['imageModels']) !== []) {
+            $errors['disabledImageModels'] = __('Disabled image models must belong to the managed list.');
+        }
+
+        if (array_diff(array_keys($validated['imageModelAliases']), $validated['imageModels']) !== []) {
+            $errors['imageModelAliases'] = __('Model aliases must belong to the managed list.');
         }
 
         if (! in_array($validated['textModel'], $validated['textModels'], true)) {
             $errors['textModel'] = __('Select a text model from the managed list.');
         }
 
-        foreach (['aiReviewModel', 'tagModel', 'promptTranslationModel', 'promptRewriteModel', 'imageToPromptModel'] as $field) {
+        foreach (['aiReviewModel', 'tagModel', 'languageModel', 'promptTranslationModel', 'promptRewriteModel', 'imageToPromptModel'] as $field) {
             if (filled($validated[$field] ?? null) && ! in_array($validated[$field], $validated['textModels'], true)) {
                 $errors[$field] = __('Select a text model from the managed list or inherit the default.');
             }
@@ -476,228 +673,317 @@ new #[Title('Settings')] class extends Component
 }; ?>
 
 <section class="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-	<div class="flex flex-wrap items-start justify-between gap-3">
-		<div class="space-y-1">
-			<flux:heading size="xl">{{ __('Settings') }}</flux:heading>
-			<flux:text variant="subtle">{{ __('Site metadata, AI API, and registration.') }}</flux:text>
-		</div>
-		<flux:button :href="route('manage.index')" variant="filled" wire:navigate>{{ __('Manage') }}</flux:button>
-	</div>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-1">
+            <flux:heading size="xl">{{ __('Settings') }}</flux:heading>
+            <flux:text variant="subtle">{{ __('Site metadata, AI API, and registration.') }}</flux:text>
+        </div>
+        <flux:button :href="route('manage.index')" variant="filled" wire:navigate>{{ __('Manage') }}</flux:button>
+    </div>
 
-	<form class="space-y-6" wire:submit="save">
-		<flux:card class="space-y-4">
-			<div>
-				<flux:heading size="lg">Metadata site</flux:heading>
-				<flux:text variant="subtle">{{ __('Used for basic title/meta tags.') }}</flux:text>
-			</div>
-			<flux:input wire:model="siteName" :label="__('Site name')" required />
-			<flux:input wire:model="homeTitle" :label="__('Home title')" />
-			<flux:textarea wire:model="siteDescription" rows="3" label="Description" />
-			<flux:textarea wire:model="siteKeywords" rows="2" label="Keywords" />
-			<flux:input wire:model="googleMeasurementId" :label="__('Google Analytics measurement ID')" placeholder="G-SZ9BZEKLZ1" />
-			<flux:input wire:model="zaloUrl" type="url" :label="__('Upgrade Zalo URL')" :description="__('Leave blank to hide upgrade buttons.')" placeholder="http://zalo.me/0963559309" />
-		</flux:card>
+    <form class="space-y-6" wire:submit="save">
+        <flux:card class="space-y-4">
+            <div>
+                <flux:heading size="lg">Metadata site</flux:heading>
+                <flux:text variant="subtle">{{ __('Used for basic title/meta tags.') }}</flux:text>
+            </div>
+            <flux:input wire:model="siteName" :label="__('Site name')" required />
+            <flux:input wire:model="homeTitle" :label="__('Home title')" />
+            <flux:textarea wire:model="siteDescription" rows="3" label="Description" />
+            <flux:textarea wire:model="siteKeywords" rows="2" label="Keywords" />
+            <flux:input wire:model="googleMeasurementId" :label="__('Google Analytics measurement ID')" placeholder="G-SZ9BZEKLZ1" />
+            <flux:input wire:model="zaloUrl" type="url" :label="__('Upgrade Zalo URL')" :description="__('Leave blank to hide upgrade buttons.')" placeholder="http://zalo.me/0963559309" />
+        </flux:card>
 
-		<flux:card class="space-y-4">
-			<div>
-				<flux:heading size="lg">{{ __('Registration') }}</flux:heading>
-				<flux:text variant="subtle">{{ __('Turn off to disable the registration page and action.') }}</flux:text>
-			</div>
-			<div class="grid gap-4 md:grid-cols-2 md:items-start">
-				<div class="space-y-4">
-					<flux:checkbox wire:model="registrationEnabled" :label="__('Allow new user registration')" />
-					<flux:checkbox wire:model="emailVerificationRequired" :label="__('Require email verification after registration')" :description="__('Turn off to let new users log in immediately after registration.')" />
-					<flux:checkbox wire:model="autoVerifyEmail" :label="__('Automatically verify email on registration')" :description="__('Mark new accounts as verified immediately without sending a verification email.')" />
-				</div>
-				<div class="space-y-4">
-					<flux:input wire:model="memberRequestLimit" type="number" min="0" max="1000000000" :label="__('Requests per member')" :description="__('Default lifetime quota for newly created member API keys. Existing keys keep their own quota.')" required />
-					<flux:input wire:model="verifiedDailyImageLimit" type="number" min="0" max="1000" :label="__('Free images per day')" :description="__('Daily free web image generations for logged-in members (verified, or on registration day). Admins are unlimited.')" required />
-				</div>
-			</div>
-		</flux:card>
+        <flux:card class="space-y-4">
+            <div>
+                <flux:heading size="lg">{{ __('Registration') }}</flux:heading>
+                <flux:text variant="subtle">{{ __('Turn off to disable the registration page and action.') }}</flux:text>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2 md:items-start">
+                <div class="space-y-4">
+                    <flux:checkbox wire:model="registrationEnabled" :label="__('Allow new user registration')" />
+                    <flux:checkbox wire:model="emailVerificationRequired" :label="__('Require email verification after registration')" :description="__('Turn off to let new users log in immediately after registration.')" />
+                    <flux:checkbox wire:model="autoVerifyEmail" :label="__('Automatically verify email on registration')" :description="__('Mark new accounts as verified immediately without sending a verification email.')" />
+                </div>
+                <div class="space-y-4">
+                    <flux:input wire:model="memberRequestLimit" type="number" min="0" max="1000000000" :label="__('Requests per member')" :description="__('Default lifetime quota for newly created member API keys. Existing keys keep their own quota.')" required />
+                    <flux:input wire:model="verifiedDailyImageLimit" type="number" min="0" max="1000" :label="__('Free images per day')" :description="__('Daily free web image generations for logged-in members (verified, or on registration day). Admins are unlimited.')" required />
+                </div>
+            </div>
+        </flux:card>
 
-		<flux:card class="space-y-6">
-			<div>
-				<flux:heading size="lg">API AI</flux:heading>
-				<flux:text variant="subtle">{{ __('One OpenAI-compatible connection shared by all image and text models.') }}</flux:text>
-			</div>
+        <flux:card class="space-y-4">
+            <div>
+                <flux:heading size="lg">{{ __('AI connection') }}</flux:heading>
+                <flux:text variant="subtle">{{ __('Shared OpenAI-compatible endpoint for image and text models.') }}</flux:text>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:input wire:model="openaiUrl" type="url" label="OpenAI-compatible URL" required />
+                <flux:input wire:model="openaiApiKey" type="password" label="OpenAI API key" placeholder="{{ $this->hasOpenAiKey() ? __('Saved; enter a new key to change it') : __('No key saved') }}" viewable />
+            </div>
+        </flux:card>
 
-			<div class="space-y-4">
-				<flux:heading size="sm">{{ __('AI connection') }}</flux:heading>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<flux:input wire:model="openaiUrl" type="url" label="OpenAI-compatible URL" required />
-					<flux:input wire:model="openaiApiKey" type="password" label="OpenAI API key" placeholder="{{ $this->hasOpenAiKey() ? __('Saved; enter a new key to change it') : __('No key saved') }}" viewable />
-				</div>
-			</div>
+        <flux:card class="space-y-4">
+            <div>
+                <flux:heading size="lg">{{ __('Image generation') }}</flux:heading>
+                <flux:text variant="subtle">{{ __('Default image model, managed list, and request options.') }}</flux:text>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div class="space-y-3">
+                    <flux:select wire:model="aiModel" variant="listbox" :label="__('Default image model')" required>
+                        @foreach ($this->enabledImageModels() as $model)
+                            <flux:select.option :value="$model">{{ $imageModelAliases[$model] ?? $model }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
 
-			<div class="space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-700">
-				<flux:heading size="sm">{{ __('Request limits') }}</flux:heading>
-				<div class="grid gap-4 sm:grid-cols-3">
-					<flux:input wire:model="aiTimeout" type="number" min="10" max="1200" :label="__('Timeout seconds')" required />
-					<flux:input wire:model="maxReferencePhotos" type="number" min="1" max="5" :label="__('Maximum reference images')" required />
-					<flux:input wire:model="uploadMaxKb" type="number" min="1" max="102400" :label="__('Maximum upload KB')" required />
-				</div>
-			</div>
+                    <div wire:init="loadImageModelCatalog">
+                        <flux:switch wire:model.live="useCustomModelId" :label="__('Custom model ID')" :description="__('Enable when the model is not returned by the endpoint catalog.')" />
+                        <div class="grid items-end gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+                            @if ($useCustomModelId)
+                                <flux:input class="flex-1" wire:model="newModelId" wire:keydown.enter.prevent="addImageModel" :placeholder="__('Enter a custom model ID...')" />
+                            @else
+                                <flux:select class="flex-1" wire:model="newModelId" variant="combobox" :filter="false" :placeholder="__('Search and select a model...')">
+                                    <x-slot name="input">
+                                        <flux:select.input wire:model.live.debounce.250ms="modelSearch" :placeholder="__('Search models...')" />
+                                    </x-slot>
+                                    @foreach ($this->filteredAvailableModels as $model)
+                                        <flux:select.option :value="$model">{{ $model }}</flux:select.option>
+                                    @endforeach
+                                    <x-slot name="empty">
+                                        <flux:select.option.empty>{{ __('No matching models.') }}</flux:select.option.empty>
+                                    </x-slot>
+                                </flux:select>
+                            @endif
+                            <flux:input wire:model="newModelAlias" :placeholder="__('e.g. Image Pro')" />
+                            <flux:button type="button" variant="primary" wire:click="addImageModel" :disabled="$newModelId === '' || $newModelAlias === ''">{{ __('Add') }}</flux:button>
+                            @if (!$useCustomModelId)
+                                <flux:button type="button" variant="ghost" icon="arrow-path" wire:click="loadImageModelCatalog" :aria-label="__('Reload models')" />
+                            @endif
+                        </div>
+                        @if (!$useCustomModelId && $modelCatalogError)
+                            <flux:callout variant="warning" icon="exclamation-triangle">{{ $modelCatalogError }}</flux:callout>
+                        @endif
+                        @if ($modelTestError)
+                            <flux:callout variant="danger" icon="exclamation-triangle" :heading="__('Model test failed')">{{ $modelTestError }}</flux:callout>
+                        @endif
+                        @foreach ($imageModels as $index => $model)
+                        @php($enabled = !in_array($model, $disabledImageModels, true))
+                        @php($testStatus = $modelTestStatuses['image:' . $model] ?? null)
+                        <div class="space-y-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 my-3 grid md:grid-cols-2 items-start gap-3" wire:key="managed-image-model-{{ md5($model) }}">
+                            <div class="min-w-0 space-y-1">
+                                <flux:input size="sm" wire:model.blur="imageModelAliasInputs.{{ $index }}" :placeholder="__('Display name')" :aria-label="__('Display name')" />
+                                <code class="block truncate text-xs text-zinc-500 dark:text-zinc-400">{{ $model }}</code>
+                            </div>
+                            <div class="text-end space-y-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    @if ($testStatus === 'success')
+                                        <flux:icon.check-circle class="size-5 text-green-500" :aria-label="__('Model test passed')" />
+                                    @elseif ($testStatus === 'error')
+                                        <flux:icon.x-circle class="size-5 text-red-500" :aria-label="__('Model test failed')" />
+                                    @endif
+                                    <div class="ms-auto flex items-center gap-1">
+                                        <flux:switch :checked="$enabled" wire:change="toggleImageModel(@js($model), $event.target.checked)" :label="__('Enabled')" />
+                                        <flux:button type="button" size="sm" variant="ghost" icon="beaker" wire:click="testModel('image', @js($model))" wire:loading.attr="disabled" wire:target="testModel" :aria-label="__('Test model')" />
+                                        <flux:button type="button" size="sm" variant="ghost" icon="trash" wire:click="removeImageModel(@js($model))" :disabled="count($imageModels) <= 1 || $model === $aiModel" :aria-label="__('Delete model')" />
+                                    </div>
+                                </div>
+                                @if ($model === $aiModel)
+                                    <flux:badge size="sm">{{ __('Default') }}</flux:badge>
+                                @endif
+                            </div>
+                        </div>
+                        @endforeach
+                    </div>
+                </div>
+                <div>
+                    <div class="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        <div class="mb-3">
+                            <flux:heading size="sm">{{ __('Image request options') }}</flux:heading>
+                            <flux:text variant="subtle">{{ __('Size, quality, and upload limits for image generation.') }}</flux:text>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            <flux:select wire:model="imageSize" variant="listbox" :label="__('Size')" required>
+                                @foreach (['auto', '1024x1024', '1024x1536', '1536x1024', '1024x1792', '1792x1024'] as $size)
+                                    <flux:select.option :value="$size">{{ $size }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:select wire:model="imageQuality" variant="listbox" :label="__('Quality')" required>
+                                @foreach (['auto', 'low', 'medium', 'high', 'standard', 'hd'] as $quality)
+                                    <flux:select.option :value="$quality">{{ $quality }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:select wire:model="imageDetail" variant="listbox" :label="__('Image detail')" required>
+                                @foreach (['auto', 'low', 'high', 'original'] as $detail)
+                                    <flux:select.option :value="$detail">{{ $detail }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:input wire:model="imageReferenceField" :label="__('Reference image field')" required />
+                            <flux:input wire:model="aiTimeout" type="number" min="10" max="1200" :label="__('Timeout seconds')" required />
+                            <flux:input wire:model="maxReferencePhotos" type="number" min="1" max="5" :label="__('Maximum reference images')" required />
+                            <flux:input wire:model="uploadMaxKb" type="number" min="1" max="102400" :label="__('Maximum upload KB')" required />
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-			<div class="space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-700">
-				<div>
-					<flux:heading size="sm">{{ __('Image generation') }}</flux:heading>
-					<flux:text variant="subtle">{{ __('Image models are managed separately from text models.') }}</flux:text>
-				</div>
-				<div class="flex items-end gap-2">
-					<flux:select class="flex-1" wire:model="aiModel" variant="listbox" :label="__('Default image model')" required>
-						@foreach ($imageModels as $model)
-							<flux:select.option :value="$model">{{ $model }}</flux:select.option>
-						@endforeach
-					</flux:select>
-					<flux:button type="button" icon="cog-6-tooth" variant="ghost" wire:click="openModelsModal('image', 'image')" :aria-label="__('Manage image models')" />
-				</div>
-				<flux:heading size="sm">{{ __('Image request options') }}</flux:heading>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<flux:select wire:model="imageSize" variant="listbox" :label="__('Size')" required>
-						@foreach (['auto', '1024x1024', '1024x1536', '1536x1024', '1024x1792', '1792x1024'] as $size)
-							<flux:select.option :value="$size">{{ $size }}</flux:select.option>
-						@endforeach
-					</flux:select>
-					<flux:select wire:model="imageQuality" variant="listbox" :label="__('Quality')" required>
-						@foreach (['auto', 'low', 'medium', 'high', 'standard', 'hd'] as $quality)
-							<flux:select.option :value="$quality">{{ $quality }}</flux:select.option>
-						@endforeach
-					</flux:select>
-					<flux:select wire:model="imageDetail" variant="listbox" :label="__('Image detail')" required>
-						@foreach (['auto', 'low', 'high', 'original'] as $detail)
-							<flux:select.option :value="$detail">{{ $detail }}</flux:select.option>
-						@endforeach
-					</flux:select>
-					<flux:input wire:model="imageReferenceField" :label="__('Reference image field')" required />
-				</div>
-			</div>
 
-			<div class="space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-700">
-				<div>
-					<flux:heading size="sm">{{ __('Text AI') }}</flux:heading>
-					<flux:text variant="subtle">{{ __('Text tasks inherit the default model unless overridden.') }}</flux:text>
-				</div>
-				@foreach ([
-					['field' => 'textModel', 'label' => __('Default text model'), 'target' => 'text_default', 'inherit' => false],
-					['field' => 'aiReviewModel', 'label' => __('Review model'), 'target' => 'review', 'inherit' => true],
-					['field' => 'tagModel', 'label' => __('Metadata and tags model'), 'target' => 'tag', 'inherit' => true],
-				] as $row)
-					<div class="flex items-end gap-2" wire:key="text-model-{{ $row['target'] }}">
-						<flux:select class="flex-1" wire:model="{{ $row['field'] }}" variant="listbox" :label="$row['label']" :required="! $row['inherit']">
-							@if ($row['inherit'])
-								<flux:select.option value="">{{ __('Inherit default text model') }}</flux:select.option>
-							@endif
-							@foreach ($textModels as $model)
-								<flux:select.option :value="$model">{{ $model }}</flux:select.option>
-							@endforeach
-						</flux:select>
-						<flux:button type="button" icon="plus" variant="ghost" wire:click="openModelsModal('text', '{{ $row['target'] }}')" :aria-label="__('Manage text models')" />
-					</div>
-				@endforeach
-			</div>
-		</flux:card>
+        </flux:card>
 
-		<flux:card class="space-y-4">
-			<div>
-				<flux:heading size="lg">{{ __('Image creation tools') }}</flux:heading>
-				<flux:text variant="subtle">{{ __('Enable prompt tools and choose a text model for each one.') }}</flux:text>
-			</div>
-			<div class="grid gap-4 md:grid-cols-2">
-				@foreach ([
-					['enabled' => 'promptTranslationEnabled', 'field' => 'promptTranslationModel', 'label' => __('Prompt translation'), 'description' => __('Translate the current prompt to Vietnamese.'), 'modelLabel' => __('Prompt translation model'), 'target' => 'translation'],
-					['enabled' => 'promptRewriteEnabled', 'field' => 'promptRewriteModel', 'label' => __('Prompt rewrite'), 'description' => __('Rewrite the current prompt with AI instructions.'), 'modelLabel' => __('Prompt rewrite model'), 'target' => 'rewrite'],
-					['enabled' => 'imageToPromptEnabled', 'field' => 'imageToPromptModel', 'label' => __('Image to prompt'), 'description' => __('Create a prompt by analyzing an uploaded image.'), 'modelLabel' => __('Image to prompt model'), 'target' => 'image_to_prompt'],
-				] as $tool)
-					<div class="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700" wire:key="image-tool-{{ $tool['target'] }}">
-						<flux:checkbox wire:model="{{ $tool['enabled'] }}" :label="$tool['label']" :description="$tool['description']" />
-						<div class="flex items-end gap-2">
-							<flux:select class="flex-1" wire:model="{{ $tool['field'] }}" variant="listbox" :label="$tool['modelLabel']">
-								<flux:select.option value="">{{ __('Inherit default text model') }}</flux:select.option>
-								@foreach ($textModels as $model)
-									<flux:select.option :value="$model">{{ $model }}</flux:select.option>
-								@endforeach
-							</flux:select>
-							<flux:button type="button" icon="plus" variant="ghost" wire:click="openModelsModal('text', '{{ $tool['target'] }}')" :aria-label="__('Manage text models')" />
-						</div>
-					</div>
-				@endforeach
-			</div>
-		</flux:card>
+        <flux:card class="space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <flux:heading size="lg">{{ __('Text models') }}</flux:heading>
+                    <flux:text variant="subtle">{{ __('Registry of text model IDs available for assignment.') }}</flux:text>
+                </div>
+                <flux:button type="button" icon="plus" variant="filled" wire:click="openModelsModal('text')" :aria-label="__('Manage text models')">{{ __('Manage text models') }}</flux:button>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                @forelse ($textModels as $model)
+                @php($usages = $this->modelUsages($model, 'text'))
+                <div class="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700" wire:key="text-registry-{{ md5($model) }}">
+                    <code class="text-sm">{{ $model }}</code>
+                    @foreach ($usages as $usage)
+                        <flux:badge size="sm">{{ $usage }}</flux:badge>
+                    @endforeach
+                </div>
+                @empty
+                <flux:text variant="subtle">{{ __('No models yet.') }}</flux:text>
+                @endforelse
+            </div>
+        </flux:card>
 
-		<div class="flex gap-3">
-			<flux:button type="submit" variant="primary">{{ __('Save settings') }}</flux:button>
-			<flux:button :href="route('manage.index')" variant="ghost" wire:navigate>{{ __('Cancel') }}</flux:button>
-		</div>
-	</form>
+        <flux:card class="space-y-4">
+            <div>
+                <flux:heading size="lg">{{ __('Text model assignments') }}</flux:heading>
+                <flux:text variant="subtle">{{ __('Tasks inherit the default text model unless overridden.') }}</flux:text>
+            </div>
+            <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+                <div wire:key="text-model-text_default">
+                    <flux:select wire:model="textModel" variant="listbox" :label="__('Default text model')" required>
+                        @foreach ($textModels as $model)
+                            <flux:select.option :value="$model">{{ $model }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                </div>
 
-	<flux:modal name="manage-ai-models" wire:model.self="showModelsModal" class="w-full max-w-xl" @close="closeModelsModal">
-		<div class="space-y-6">
-			<div>
-				<flux:heading size="lg">{{ $modelsModalType === 'image' ? __('Manage image models') : __('Manage text models') }}</flux:heading>
-				<flux:text class="mt-2">{{ __('Add or remove model IDs available from the shared OpenAI-compatible endpoint.') }}</flux:text>
-			</div>
+                @foreach ([['field' => 'tagModel', 'label' => __('Metadata and tags model'), 'target' => 'tag'], ['field' => 'languageModel', 'label' => __('Language model'), 'target' => 'language']] as $row)
+                    <div wire:key="text-model-{{ $row['target'] }}">
+                        <flux:select wire:model="{{ $row['field'] }}" variant="listbox" :label="$row['label']">
+                            <flux:select.option value="">{{ __('Inherit default text model') }}</flux:select.option>
+                            @foreach ($textModels as $model)
+                                <flux:select.option :value="$model">{{ $model }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                    </div>
+                @endforeach
 
-			<div class="space-y-3">
-				<flux:switch wire:model.live="useCustomModelId" :label="__('Custom model ID')" :description="__('Enable when the model is not returned by the endpoint catalog.')" />
-				<div class="flex items-end gap-2">
-					@if ($useCustomModelId)
-						<flux:input class="flex-1" wire:model="newModelId" wire:keydown.enter.prevent="addModel" :label="__('Model ID')" :placeholder="__('Enter a custom model ID...')" />
-					@else
-						<flux:select class="flex-1" wire:model="newModelId" variant="combobox" :filter="false" :label="__('Model ID')" :placeholder="__('Search and select a model...')">
-							<x-slot name="input">
-								<flux:select.input wire:model.live.debounce.250ms="modelSearch" :placeholder="__('Search models...')" />
-							</x-slot>
-							@foreach ($this->filteredAvailableModels as $model)
-								<flux:select.option :value="$model">{{ $model }}</flux:select.option>
-							@endforeach
-							<x-slot name="empty">
-								<flux:select.option.empty>{{ __('No matching models.') }}</flux:select.option.empty>
-							</x-slot>
-						</flux:select>
-					@endif
-					<flux:button type="button" variant="primary" wire:click="addModel" :disabled="$newModelId === ''">{{ __('Add') }}</flux:button>
-					@if (! $useCustomModelId)
-						<flux:button type="button" variant="ghost" icon="arrow-path" wire:click="loadAvailableModels" :aria-label="__('Reload models')" />
-					@endif
-				</div>
-				@if (! $useCustomModelId && $modelCatalogError)
-					<flux:callout variant="warning" icon="exclamation-triangle">{{ $modelCatalogError }}</flux:callout>
-				@endif
-			</div>
+                <div wire:key="text-model-review">
+                    <flux:select wire:model="aiReviewModel" variant="listbox" :label="__('Review model')">
+                        <flux:select.option value="">{{ __('Inherit default text model') }}</flux:select.option>
+                        @foreach ($textModels as $model)
+                            <flux:select.option :value="$model">{{ $model }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                </div>
+            </div>
+        </flux:card>
 
-			@if ($modelTestError)
-				<flux:callout variant="danger" icon="exclamation-triangle" :heading="__('Model test failed')">
-					{{ $modelTestError }}
-				</flux:callout>
-			@endif
+        <flux:card class="space-y-4">
+            <div>
+                <flux:heading size="lg">{{ __('Prompt tools') }}</flux:heading>
+                <flux:text variant="subtle">{{ __('Enable prompt tools and choose a text model for each one.') }}</flux:text>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+                @foreach ([['enabled' => 'promptTranslationEnabled', 'field' => 'promptTranslationModel', 'label' => __('Prompt translation'), 'description' => __('Translate the current prompt to Vietnamese.'), 'modelLabel' => __('Prompt translation model'), 'target' => 'translation'], ['enabled' => 'promptRewriteEnabled', 'field' => 'promptRewriteModel', 'label' => __('Prompt rewrite'), 'description' => __('Rewrite the current prompt with AI instructions.'), 'modelLabel' => __('Prompt rewrite model'), 'target' => 'rewrite'], ['enabled' => 'imageToPromptEnabled', 'field' => 'imageToPromptModel', 'label' => __('Image to prompt'), 'description' => __('Create a prompt by analyzing an uploaded image.'), 'modelLabel' => __('Image to prompt model'), 'target' => 'image_to_prompt']] as $tool)
+                    <div class="grid gap-3 grid-cols-2 space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700" wire:key="image-tool-{{ $tool['target'] }}">
+                        <flux:checkbox wire:model="{{ $tool['enabled'] }}" :label="$tool['label']" :description="$tool['description']" />
+                        <div class="flex items-start gap-2">
+                            <flux:select class="flex-1" wire:model="{{ $tool['field'] }}" variant="listbox">
+                                <flux:select.option value="">{{ __('Inherit default text model') }}</flux:select.option>
+                                @foreach ($textModels as $model)
+                                    <flux:select.option :value="$model">{{ $model }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </flux:card>
 
-			<div class="max-h-80 space-y-2 overflow-y-auto">
-				@php($models = $modelsModalType === 'image' ? $imageModels : $textModels)
-				@forelse ($models as $model)
-					@php($usages = $this->modelUsages($model))
-					@php($testStatus = $modelTestStatuses[$modelsModalType.':'.$model] ?? null)
-					<div class="flex items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700" wire:key="managed-model-{{ $modelsModalType }}-{{ md5($model) }}">
-						<code class="min-w-0 flex-1 truncate text-sm">{{ $model }}</code>
-						@foreach ($usages as $usage)
-							<flux:badge size="sm">{{ $usage }}</flux:badge>
-						@endforeach
-						@if ($testStatus === 'success')
-							<flux:icon.check-circle class="size-5 text-green-500" :aria-label="__('Model test passed')" />
-						@elseif ($testStatus === 'error')
-							<flux:icon.x-circle class="size-5 text-red-500" :aria-label="__('Model test failed')" />
-						@endif
-						<flux:button type="button" size="sm" variant="ghost" icon="beaker" wire:click="testModel(@js($modelsModalType), @js($model))" wire:loading.attr="disabled" wire:target="testModel" :aria-label="__('Test model')" />
-						<flux:button type="button" size="sm" variant="ghost" icon="trash" wire:click="removeModel(@js($model))" :disabled="count($models) <= 1 || $usages !== []" :aria-label="__('Delete model')" />
-					</div>
-				@empty
-					<flux:text variant="subtle">{{ __('No models yet.') }}</flux:text>
-				@endforelse
-			</div>
+        <div class="flex gap-3">
+            <flux:button type="submit" variant="primary">{{ __('Save settings') }}</flux:button>
+            <flux:button :href="route('manage.index')" variant="ghost" wire:navigate>{{ __('Cancel') }}</flux:button>
+        </div>
+    </form>
 
-			<div class="flex justify-end">
-				<flux:button type="button" variant="filled" wire:click="closeModelsModal">{{ __('Done') }}</flux:button>
-			</div>
-		</div>
-	</flux:modal>
+    <flux:modal class="w-full max-w-xl" name="manage-ai-models" wire:model.self="showModelsModal" @close="closeModelsModal">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Manage text models') }}</flux:heading>
+                <flux:text class="mt-2">{{ __('Add or remove model IDs available from the shared OpenAI-compatible endpoint.') }}</flux:text>
+            </div>
+
+            <div class="space-y-3">
+                <flux:switch wire:model.live="useCustomModelId" :label="__('Custom model ID')" :description="__('Enable when the model is not returned by the endpoint catalog.')" />
+                <div class="flex items-end gap-2">
+                    @if ($useCustomModelId)
+                        <flux:input class="flex-1" wire:model="newModelId" wire:keydown.enter.prevent="addModel" :label="__('Model ID')" :placeholder="__('Enter a custom model ID...')" />
+                    @else
+                        <flux:select class="flex-1" wire:model="newModelId" variant="combobox" :filter="false" :label="__('Model ID')" :placeholder="__('Search and select a model...')">
+                            <x-slot name="input">
+                                <flux:select.input wire:model.live.debounce.250ms="modelSearch" :placeholder="__('Search models...')" />
+                            </x-slot>
+                            @foreach ($this->filteredAvailableModels as $model)
+                                <flux:select.option :value="$model">{{ $model }}</flux:select.option>
+                            @endforeach
+                            <x-slot name="empty">
+                                <flux:select.option.empty>{{ __('No matching models.') }}</flux:select.option.empty>
+                            </x-slot>
+                        </flux:select>
+                    @endif
+                    <flux:button type="button" variant="primary" wire:click="addModel" :disabled="$newModelId === ''">{{ __('Add') }}</flux:button>
+                    @if (!$useCustomModelId)
+                        <flux:button type="button" variant="ghost" icon="arrow-path" wire:click="loadAvailableModels" :aria-label="__('Reload models')" />
+                    @endif
+                </div>
+                @if (!$useCustomModelId && $modelCatalogError)
+                    <flux:callout variant="warning" icon="exclamation-triangle">{{ $modelCatalogError }}</flux:callout>
+                @endif
+            </div>
+
+            @if ($modelTestError)
+                <flux:callout variant="danger" icon="exclamation-triangle" :heading="__('Model test failed')">
+                    {{ $modelTestError }}
+                </flux:callout>
+            @endif
+
+            <div class="max-h-80 space-y-2 overflow-y-auto">
+                @php($models = $textModels)
+                @forelse ($models as $model)
+                @php($usages = $this->modelUsages($model))
+                @php($testStatus = $modelTestStatuses[$modelsModalType . ':' . $model] ?? null)
+                <div class="flex items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700" wire:key="managed-model-{{ $modelsModalType }}-{{ md5($model) }}">
+                    <code class="min-w-0 flex-1 truncate text-sm">{{ $model }}</code>
+                    @foreach ($usages as $usage)
+                        <flux:badge size="sm">{{ $usage }}</flux:badge>
+                    @endforeach
+                    @if ($testStatus === 'success')
+                        <flux:icon.check-circle class="size-5 text-green-500" :aria-label="__('Model test passed')" />
+                    @elseif ($testStatus === 'error')
+                        <flux:icon.x-circle class="size-5 text-red-500" :aria-label="__('Model test failed')" />
+                    @endif
+                    <flux:button type="button" size="sm" variant="ghost" icon="beaker" wire:click="testModel(@js($modelsModalType), @js($model))" wire:loading.attr="disabled" wire:target="testModel" :aria-label="__('Test model')" />
+                    <flux:button type="button" size="sm" variant="ghost" icon="trash" wire:click="removeModel(@js($model))" :disabled="count($models) <= 1 || $usages !== []" :aria-label="__('Delete model')" />
+                </div>
+                @empty
+                <flux:text variant="subtle">{{ __('No models yet.') }}</flux:text>
+                @endforelse
+            </div>
+
+            <div class="flex justify-end">
+                <flux:button type="button" variant="filled" wire:click="closeModelsModal">{{ __('Done') }}</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 </section>

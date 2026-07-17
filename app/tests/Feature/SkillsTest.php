@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Ai\ProjectNameAgent;
 use App\Jobs\CreateAiImage;
 use App\Models\GeneratedMedia;
+use App\Models\Setting;
 use App\Models\SkillProject;
 use App\Models\User;
 use App\Services\SkillProjectGenerator;
@@ -43,13 +45,16 @@ class SkillsTest extends TestCase
     public function test_user_can_save_and_resume_product_detail_draft(): void
     {
         Storage::fake('public');
+        Setting::putValue('ai.image_models', ['cx/gpt-5.5-image', 'cx/draft-image']);
         $user = User::factory()->create();
 
         $component = Livewire::actingAs($user)
             ->test('pages::skills')
             ->call('openTool', 'product-detail')
-            ->set('projectName', 'Summer product set')
+            ->assertSet('projectName', '')
+            ->assertDontSee(__('Project name'))
             ->set('productName', 'Leather handbag')
+            ->set('imageModel', 'cx/draft-image')
             ->set('newProductPhoto', UploadedFile::fake()->image('bag.jpg', 800, 800))
             ->set('newLogoPhoto', UploadedFile::fake()->image('logo.png', 300, 200))
             ->set('newModelPhoto', UploadedFile::fake()->image('model.jpg', 600, 900))
@@ -64,8 +69,9 @@ class SkillsTest extends TestCase
         $component->assertSet('project', $project->id);
         $this->assertSame($user->id, $project->user_id);
         $this->assertSame('product-detail', $project->skill);
-        $this->assertSame('Summer product set', $project->name);
+        $this->assertSame(__('Product detail images'), $project->name);
         $this->assertSame('Leather handbag', data_get($project->form_data, 'product_name'));
+        $this->assertSame('cx/draft-image', data_get($project->form_data, 'image_model'));
         foreach (['product', 'logo', 'model', 'additional_products.0', 'additional_products.1'] as $path) {
             Storage::disk('public')->assertExists(data_get($project->input_paths, $path));
         }
@@ -77,6 +83,8 @@ class SkillsTest extends TestCase
             ->test('pages::skills')
             ->assertSet('showWizard', true)
             ->assertSet('productName', 'Leather handbag')
+            ->assertSet('imageModel', 'cx/draft-image')
+            ->assertDontSee(__('Project name'))
             ->assertSee('Ảnh sản phẩm chính')
             ->assertSee('Ảnh tham chiếu bổ sung')
             ->assertSee('Người mẫu nhất quán')
@@ -88,6 +96,39 @@ class SkillsTest extends TestCase
         $this->assertCount(1, data_get($project->input_paths, 'additional_products'));
         Storage::disk('public')->assertMissing($logoPath);
         Storage::disk('public')->assertMissing($removedAdditionalPath);
+    }
+
+    public function test_new_project_submit_generates_name_from_reference_image(): void
+    {
+        Storage::fake('public');
+        Bus::fake();
+        ProjectNameAgent::fake([['name' => 'Túi da nâu studio']]);
+        Setting::putValue('ai.openai_url', 'https://example.test/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_models', ['cx/gpt-5.5-image', 'cx/studio-image']);
+        $user = User::factory()->create();
+
+        Livewire::actingAs($user)
+            ->test('pages::skills')
+            ->call('openTool', 'product-detail')
+            ->assertSet('projectName', '')
+            ->set('productName', 'Leather handbag')
+            ->set('imageModel', 'cx/studio-image')
+            ->set('newProductPhoto', UploadedFile::fake()->image('bag.jpg', 800, 800))
+            ->set('imageTypes', ['hero'])
+            ->call('submit')
+            ->assertHasNoErrors()
+            ->assertSet('projectName', 'Túi da nâu studio');
+
+        $project = SkillProject::query()->sole();
+        $this->assertSame('Túi da nâu studio', $project->name);
+        $this->assertNotNull($project->submitted_at);
+        ProjectNameAgent::assertPrompted(function ($prompt): bool {
+            return $prompt->contains('Vietnamese')
+                && $prompt->contains('Leather handbag')
+                && $prompt->attachments !== [];
+        });
+        Bus::assertDispatched(CreateAiImage::class, 1);
     }
 
     public function test_product_detail_requires_primary_product_and_maps_legacy_references(): void
@@ -138,6 +179,7 @@ class SkillsTest extends TestCase
     {
         Storage::fake('public');
         Bus::fake();
+        Setting::putValue('ai.image_models', ['cx/gpt-5.5-image', 'cx/studio-image']);
         $user = User::factory()->create();
         $this->actingAs($user);
         foreach (['product.jpg', 'logo.png', 'model.jpg', 'side.jpg', 'back.jpg'] as $file) {
@@ -159,13 +201,14 @@ class SkillsTest extends TestCase
         $images = app(SkillProjectGenerator::class)->create(request(), $project, [
             ['prompt' => 'Create hero image', 'title' => 'Hero', 'output_type' => 'hero'],
             ['prompt' => 'Create detail image', 'title' => 'Detail', 'output_type' => 'close-up'],
-        ], '4:5', '1k');
+        ], '4:5', '1k', model: 'cx/studio-image');
 
         $this->assertCount(2, $images);
         $this->assertNotNull($project->refresh()->submitted_at);
         $this->assertSame(2, GeneratedMedia::query()->where('skill_project_id', $project->id)->count());
         $this->assertSame('skills', $images->first()->source);
         $this->assertSame('product-detail', $images->first()->preset);
+        $this->assertSame('cx/studio-image', $images->first()->model);
         $this->assertSame('4:5', data_get($images->first()->request_meta, 'aspect_ratio'));
         $this->assertSame('hero', data_get($images->first()->request_meta, 'output_type'));
         $this->assertSame('product-detail-v2', data_get($images->first()->request_meta, 'prompt_contract'));
@@ -263,32 +306,50 @@ class SkillsTest extends TestCase
             'input_paths' => ['references' => []],
             'submitted_at' => now(),
         ]);
-        $image = GeneratedMedia::create([
+        $v1 = GeneratedMedia::create([
             'user_id' => $user->id,
             'skill_project_id' => $project->id,
             'visitor_key' => 'project-version-ui',
-            'prompt' => 'Existing poster',
+            'prompt' => 'Existing poster v1',
             'provider' => 'openai',
             'model' => 'cx/gpt-5.5-image',
             'status' => 'succeeded',
-            'result_path' => 'ai-images/existing-poster.png',
+            'result_path' => 'ai-images/existing-poster-v1.png',
             'request_meta' => ['version' => 1],
         ]);
-        Storage::disk('public')->put('ai-images/existing-poster.png', UploadedFile::fake()->image('existing-poster.png')->getContent());
+        $v2 = GeneratedMedia::create([
+            'user_id' => $user->id,
+            'skill_project_id' => $project->id,
+            'visitor_key' => 'project-version-ui',
+            'prompt' => 'Existing poster v2',
+            'provider' => 'openai',
+            'model' => 'cx/gpt-5.5-image',
+            'status' => 'succeeded',
+            'result_path' => 'ai-images/existing-poster-v2.png',
+            'request_meta' => ['version' => 2],
+        ]);
+        Storage::disk('public')->put('ai-images/existing-poster-v1.png', UploadedFile::fake()->image('existing-poster-v1.png')->getContent());
+        Storage::disk('public')->put('ai-images/existing-poster-v2.png', UploadedFile::fake()->image('existing-poster-v2.png')->getContent());
 
         Livewire::actingAs($user)
             ->withQueryParams(['view' => 'projects', 'project' => $project->id])
             ->test('pages::skills')
             ->assertSet('showWizard', false)
             ->assertSee('Existing campaign')
-            ->assertSee("id: {$image->id}, preview:", false)
-            ->assertSee('ResizeObserver', false)
-            ->assertSee("addEventListener('load'", false)
+            ->assertSee(__('Version :version', ['version' => 2]))
+            ->assertSee(__('Version :version', ['version' => 1]))
+            ->assertSee(__('Marketing poster'))
+            ->assertSee(__('Create new version'))
+            ->assertSee(__('Back to projects'), false)
+            ->assertSee("id: {$v2->id}, preview:", false)
+            ->assertSee("id: {$v1->id}, preview:", false)
+            ->assertDontSee('ResizeObserver')
             ->call('resumeProject', $project->id)
             ->assertSet('showWizard', true)
             ->assertSet('projectName', 'Existing campaign')
             ->assertSet('posterTopic', 'Summer campaign')
             ->assertSet('aspectRatio', '9:16')
-            ->assertSee('Phiên bản mới 2');
+            ->assertSee(__('Project name'))
+            ->assertSee('Phiên bản mới 3');
     }
 }

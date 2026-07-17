@@ -422,6 +422,7 @@ new #[Title('User guide')] class extends Component {
                         <pre class="overflow-x-auto p-5 text-sm leading-7 text-zinc-100"><code>curl -X POST https://api.{{ parse_url((string) config('app.url'), PHP_URL_HOST) }}/api/ai/images \
   -H "Authorization: Bearer genanh_xxx" \
   -F "prompt=A cinematic product photo with soft studio lighting" \
+  -F "model=cx/gpt-5.5-image" \
   -F "images[]=@/path/to/reference.jpg"</code></pre>
                     </div>
                     <flux:callout variant="warning" icon="shield-check">

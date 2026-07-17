@@ -32,6 +32,7 @@ class SkillProjectGenerator
         string $aspectRatio,
         string $resolution,
         string $imageDetail = 'high',
+        ?string $model = null,
     ): Collection {
         $user = Auth::user();
 
@@ -67,6 +68,7 @@ class SkillProjectGenerator
             throw new \InvalidArgumentException('Tùy chọn ảnh không hợp lệ.');
         }
 
+        $model = AppSettings::resolveImageModel($model);
         $inputPaths = $this->inputReferences($project);
 
         if ($project->skill === 'product-detail' && ! collect($inputPaths)->contains(fn (array $input): bool => $input['role'] === 'product')) {
@@ -76,7 +78,7 @@ class SkillProjectGenerator
         $createdPendingPaths = [];
 
         try {
-            return DB::transaction(function () use ($request, $project, $outputs, $aspectRatio, $resolution, $imageDetail, $inputPaths, $user, &$createdPendingPaths): Collection {
+            return DB::transaction(function () use ($request, $project, $outputs, $aspectRatio, $resolution, $imageDetail, $model, $inputPaths, $user, &$createdPendingPaths): Collection {
                 $lockedProject = SkillProject::query()
                     ->where('user_id', $user->id)
                     ->lockForUpdate()
@@ -105,7 +107,6 @@ class SkillProjectGenerator
                 }
 
                 $provider = AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai'));
-                $model = AppSettings::string('ai.image_model', (string) config('ai.image_model', 'cx/gpt-5.5-image'));
                 $size = GptImageOptions::size($aspectRatio, $resolution);
                 $version = max(0, (int) (new GeneratedMedia)->disableModelCaching()->newQuery()
                     ->where('skill_project_id', $lockedProject->id)

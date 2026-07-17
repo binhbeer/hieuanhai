@@ -174,8 +174,13 @@ new #[Title('Manage users')] class extends Component
 						@php($apiKey = $user->apiKeys->first())
 						<tr class="border-b border-white/10" wire:key="manage-user-{{ $user->id }}">
 							<td class="px-3 py-3 align-top">
-								<div class="font-medium">{{ $user->name }}</div>
-								<div class="text-xs text-zinc-400">{{ $user->email }}</div>
+								<div class="flex items-center gap-3">
+									<flux:avatar size="sm" circle :name="$user->name" :initials="$user->initials()" :src="$user->avatar_path ? Storage::url($user->avatar_path) : null" />
+									<div class="min-w-0">
+										<div class="truncate font-medium">{{ $user->name }}</div>
+										<div class="truncate text-xs text-zinc-400">{{ $user->email }}</div>
+									</div>
+								</div>
 							</td>
 							<td class="px-3 py-3 align-top">{{ $this->roleLabel($user->role) }}</td>
 							<td class="px-3 py-3 align-top tabular-nums">{{ number_format($user->api_keys_count) }}</td>

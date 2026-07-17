@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
 use App\Ai\ImageToPromptAgent;
+use App\Ai\ProjectNameAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
 use App\Http\Controllers\ImageDownloadController;
@@ -14,6 +15,7 @@ use App\Models\Setting;
 use App\Models\Tag;
 use App\Models\User;
 use App\Services\AiImageEditor;
+use App\Support\AppSettings;
 use App\Support\GptImageOptions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -289,7 +291,8 @@ class AiImageEditorTest extends TestCase
             && $request['size'] === '1024x1024'
             && $request['quality'] === 'hd'
             && $request['image_detail'] === 'low'
-            && $request['output_format'] === 'png');
+            && $request['output_format'] === 'png'
+            && $request['response_format'] === 'b64_json');
 
         Storage::disk('public')->assertExists($image->result_path);
         $this->assertMatchesRegularExpression('#^image/generatedmedia/\d{6}/\d{2}/\d+/\d+/[\w-]+\.png$#', (string) $image->result_path);
@@ -305,6 +308,280 @@ class AiImageEditorTest extends TestCase
         $this->assertSame($media->size, $media->getCustomProperty('optimized_size'));
         $this->assertNotNull($media->getCustomProperty('optimized_at'));
         $this->assertSame('succeeded', $image->status);
+    }
+
+    public function test_image_creation_accepts_provider_url_when_base64_missing(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_reference_field', 'input_image');
+        Setting::putValue('ai.image_size', '1024x1024');
+        Setting::putValue('ai.image_quality', 'hd');
+        Setting::putValue('ai.image_detail', 'low');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+
+        $png = $this->pngBinary(1024, 1024);
+
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations' => Http::response([
+                'data' => [['url' => 'https://cdn.example.test/generated.png']],
+            ]),
+            'cdn.example.test/generated.png' => Http::response($png, 200, ['Content-Type' => 'image/png']),
+        ]);
+
+        $photo = UploadedFile::fake()->image('cat.jpg', 1024, 512);
+
+        $image = app(AiImageEditor::class)->create(
+            Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
+            [$photo],
+            'A cute cat wearing a hat',
+        );
+
+        Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
+            && $request['response_format'] === 'b64_json');
+        Http::assertSent(fn (HttpRequest $request) => $request->url() === 'https://cdn.example.test/generated.png');
+
+        Storage::disk('public')->assertExists($image->result_path);
+        $this->assertSame('succeeded', $image->status);
+    }
+
+    public function test_grok_image_creation_uses_current_endpoint_url_response(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
+        Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
+        Setting::putValue('ai.image_size', '1024x1024');
+        Setting::putValue('ai.image_quality', 'auto');
+        Setting::putValue('ai.image_detail', 'auto');
+        ImageReviewAgent::fake([$this->allowedReview(), $this->allowedReview()]);
+
+        $png = $this->pngBinary(1024, 1024);
+
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations*' => Http::response([
+                'data' => [['url' => 'https://cdn.example.test/grok.png']],
+            ]),
+            'cdn.example.test/grok.png' => Http::response($png, 200, ['Content-Type' => 'image/png']),
+        ]);
+
+        $image = app(AiImageEditor::class)->create(
+            Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
+            [],
+            'A cute cat wearing a hat',
+            'xai/grok-imagine-image-quality',
+        );
+
+        Http::assertSent(fn (HttpRequest $request) => str_starts_with($request->url(), 'http://42.112.31.227:22150/v1/images/generations?_request_id=')
+            && $request['model'] === 'xai/grok-imagine-image-quality'
+            && str_contains($request['prompt'], 'A cute cat wearing a hat')
+            && $request['size'] === '1024x1024'
+            && $request['quality'] === 'auto'
+            && $request->hasHeader('Authorization', 'Bearer test-key')
+            && ! array_key_exists('response_format', $request->data()));
+        Http::assertSent(fn (HttpRequest $request) => $request->url() === 'https://cdn.example.test/grok.png');
+
+        Storage::disk('public')->assertExists($image->result_path);
+        $this->assertSame('succeeded', $image->status);
+        $this->assertSame('xai/grok-imagine-image-quality', $image->model);
+    }
+
+    public function test_grok_retries_until_generated_image_matches_prompt(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
+        Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
+        ImageReviewAgent::fake([
+            $this->allowedReview(),
+            [...$this->allowedReview(), 'matches_prompt' => false, 'reason' => 'Sai chủ thể.'],
+            [...$this->allowedReview(), 'matches_prompt' => false, 'reason' => 'Ảnh không liên quan.'],
+            $this->allowedReview(),
+        ]);
+
+        $attempt = 0;
+        Http::fake(function (HttpRequest $request) use (&$attempt) {
+            if (str_contains($request->url(), '/images/generations')) {
+                $attempt++;
+
+                return Http::response([
+                    'data' => [['url' => 'https://cdn.example.test/grok-'.$attempt.'.png']],
+                ]);
+            }
+
+            if (str_contains($request->url(), 'cdn.example.test/grok-')) {
+                return Http::response($this->pngBinary(1024, 1024), 200, ['Content-Type' => 'image/png']);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $image = app(AiImageEditor::class)->create(
+            Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
+            [],
+            'A cute cat wearing a hat',
+            'xai/grok-imagine-image-quality',
+        );
+
+        $this->assertSame(3, $attempt);
+        $this->assertSame('succeeded', $image->status);
+        $this->assertSame(3, Http::recorded(fn (HttpRequest $request) => str_contains($request->url(), '/images/generations'))->count());
+        ImageReviewAgent::assertPrompted(fn ($prompt): bool => str_contains($prompt->prompt, 'Kiểm tra ảnh vừa tạo có khớp nội dung cốt lõi'));
+    }
+
+    public function test_grok_retries_recent_duplicate_before_prompt_review(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
+        Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
+        ImageReviewAgent::fake([$this->allowedReview(), $this->allowedReview()]);
+        $cached = $this->pngBinary(1024, 1024);
+        Storage::disk('public')->put('generated/cached.png', $cached);
+        GeneratedMedia::create([
+            'visitor_key' => 'existing',
+            'prompt' => 'Previous unrelated prompt',
+            'provider' => 'openai',
+            'model' => 'xai/grok-imagine-image-quality',
+            'status' => 'succeeded',
+            'result_path' => 'generated/cached.png',
+        ]);
+        $attempt = 0;
+        Http::fake(function (HttpRequest $request) use (&$attempt, $cached) {
+            if (str_contains($request->url(), '/images/generations')) {
+                $attempt++;
+
+                return Http::response(['data' => [['url' => 'https://cdn.example.test/result-'.$attempt.'.png']]]);
+            }
+
+            if ($request->url() === 'https://cdn.example.test/result-1.png') {
+                return Http::response($cached, 200, ['Content-Type' => 'image/png']);
+            }
+
+            return Http::response($this->pngBinary(1024, 768), 200, ['Content-Type' => 'image/png']);
+        });
+
+        $image = app(AiImageEditor::class)->create(
+            Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
+            [],
+            'A cute cat wearing a hat',
+            'xai/grok-imagine-image-quality',
+        );
+
+        $this->assertSame(2, $attempt);
+        $this->assertSame('succeeded', $image->status);
+    }
+
+    public function test_grok_fails_after_three_prompt_mismatches(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
+        Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
+        ImageReviewAgent::fake([
+            $this->allowedReview(),
+            [...$this->allowedReview(), 'matches_prompt' => false],
+            [...$this->allowedReview(), 'matches_prompt' => false],
+            [...$this->allowedReview(), 'matches_prompt' => false],
+        ]);
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations*' => Http::response([
+                'data' => [['url' => 'https://cdn.example.test/wrong.png']],
+            ]),
+            'cdn.example.test/wrong.png' => Http::response($this->pngBinary(1024, 1024), 200, ['Content-Type' => 'image/png']),
+        ]);
+
+        try {
+            app(AiImageEditor::class)->create(
+                Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
+                [],
+                'A cute cat wearing a hat',
+                'xai/grok-imagine-image-quality',
+            );
+            $this->fail('Expected prompt mismatch error.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Grok trả về ảnh không khớp prompt sau 3 lần thử.', $exception->getMessage());
+        }
+
+        $this->assertSame('failed', GeneratedMedia::query()->latest('id')->firstOrFail()->status);
+        $this->assertSame(3, Http::recorded(fn (HttpRequest $request) => str_contains($request->url(), '/images/generations'))->count());
+    }
+
+    public function test_grok_reference_image_fails_before_calling_current_endpoint(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
+        Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
+        ImageReviewAgent::fake([$this->allowedReview()]);
+        Http::fake();
+
+        try {
+            app(AiImageEditor::class)->create(
+                Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
+                [UploadedFile::fake()->image('person.jpg', 1024, 1024)],
+                'Keep this person and change the background to a studio',
+                'xai/grok-imagine-image-quality',
+            );
+            $this->fail('Expected unsupported Grok reference-image endpoint error.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('Endpoint 9router hiện tại chưa hỗ trợ Grok với ảnh tham chiếu.', $exception->getMessage());
+        }
+
+        Http::assertNothingSent();
+        $this->assertSame('failed', GeneratedMedia::query()->latest('id')->firstOrFail()->status);
+    }
+
+    public function test_pending_grok_generation_keeps_current_endpoint_payload(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
+        Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
+        ImageReviewAgent::fake([$this->allowedReview(), $this->allowedReview()]);
+
+        Http::fake([
+            '42.112.31.227:22150/v1/images/generations*' => Http::response([
+                'data' => [['url' => 'https://cdn.example.test/grok-wide.png']],
+            ]),
+            'cdn.example.test/grok-wide.png' => Http::response($this->pngBinary(1280, 720), 200, ['Content-Type' => 'image/png']),
+        ]);
+
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+        $this->actingAs(User::factory()->create());
+
+        $image = app(AiImageEditor::class)->createPending(
+            $request,
+            [],
+            'A wide mountain landscape at sunrise',
+            size: GptImageOptions::size('16:9', '1k'),
+            imageDetail: 'high',
+            aspectRatio: '16:9',
+            resolution: '1k',
+            model: 'xai/grok-imagine-image-quality',
+        );
+
+        $image = app(AiImageEditor::class)->completePending($image);
+
+        Http::assertSent(fn (HttpRequest $request) => str_starts_with($request->url(), 'http://42.112.31.227:22150/v1/images/generations?_request_id=')
+            && $request['model'] === 'xai/grok-imagine-image-quality'
+            && $request['size'] === '1024x576'
+            && $request['image_detail'] === 'high'
+            && ! array_key_exists('response_format', $request->data()));
+        $this->assertSame('succeeded', $image->status);
+        $this->assertSame('16:9', data_get($image->request_meta, 'aspect_ratio'));
+        $this->assertSame(1280, data_get($image->response_meta, 'dimensions.width'));
+        $this->assertSame(720, data_get($image->response_meta, 'dimensions.height'));
     }
 
     public function test_image_creation_sends_multiple_reference_images(): void
@@ -479,7 +756,7 @@ class AiImageEditorTest extends TestCase
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.']]);
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.', 'matches_prompt' => true]]);
         Http::fake();
 
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -504,7 +781,7 @@ class AiImageEditorTest extends TestCase
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true]]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
                 'data' => [['b64_json' => base64_encode('fake-png')]],
@@ -663,6 +940,7 @@ class AiImageEditorTest extends TestCase
             ->assertSee('x-show="expanded"', false)
             ->assertSee('x-cloak', false)
             ->assertSee('Thiết lập ảnh')
+            ->assertSee(AppSettings::imageModelLabel('cx/gpt-5.5-image'))
             ->assertSee('16:9')
             ->assertSee('2K')
             ->assertSee('Chất lượng: Cao');
@@ -927,6 +1205,28 @@ class AiImageEditorTest extends TestCase
         ImageToPromptAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-default-text');
     }
 
+    public function test_project_name_from_image_uses_vision_model_and_returns_short_name(): void
+    {
+        Setting::putValue('ai.openai_url', 'https://example.test/v1');
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        Setting::putValue('ai.text_model', 'gpt-5.5-default-text');
+        ProjectNameAgent::fake([['name' => '  "Túi da nâu"  ']]);
+
+        $name = app(AiImageEditor::class)->projectNameFromImage(
+            UploadedFile::fake()->image('bag.jpg', 800, 800),
+            'vi',
+            'Leather handbag',
+        );
+
+        $this->assertSame('Túi da nâu', $name);
+        ProjectNameAgent::assertPrompted(function ($prompt): bool {
+            return $prompt->contains('Vietnamese')
+                && $prompt->contains('Leather handbag')
+                && $prompt->model === 'gpt-5.5-default-text'
+                && collect($prompt->attachments)->contains(fn ($attachment): bool => $attachment instanceof Base64Image);
+        });
+    }
+
     public function test_prompt_translation_uses_separate_agent_and_model_setting(): void
     {
         Setting::putValue('ai.openai_api_key', 'test-key');
@@ -993,7 +1293,7 @@ class AiImageEditorTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.']]);
+        ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.', 'matches_prompt' => true]]);
 
         $editor = app(AiImageEditor::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
@@ -1026,7 +1326,7 @@ class AiImageEditorTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true]]);
         ImageMetadataAgent::fake([$this->publishReview('other', [])]);
         $admin = User::factory()->create(['id' => 1]);
         $user = User::factory()->create();
@@ -1328,6 +1628,26 @@ class AiImageEditorTest extends TestCase
         $this->assertStringContainsString('nhỏ hơn cấu hình', (string) $image->error);
     }
 
+    public function test_pending_generation_uses_selected_enabled_model(): void
+    {
+        Storage::fake('public');
+        Setting::putValue('ai.image_models', ['cx/gpt-5.5-image', 'cx/selected-image']);
+        $this->actingAs(User::factory()->create());
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
+
+        $image = app(AiImageEditor::class)->createPending(
+            $request,
+            [],
+            'Selected model image',
+            model: 'cx/selected-image',
+        );
+
+        $this->assertSame('cx/selected-image', $image->model);
+    }
+
     public function test_pending_generation_falls_back_to_settings_without_overrides(): void
     {
         Storage::fake('public');
@@ -1365,6 +1685,7 @@ class AiImageEditorTest extends TestCase
     public function test_generator_persists_aspect_resolution_and_image_quality(): void
     {
         Bus::fake();
+        Setting::putValue('ai.image_models', ['cx/gpt-5.5-image', 'cx/composer-image']);
 
         $this->actingAs(User::factory()->create());
 
@@ -1374,10 +1695,12 @@ class AiImageEditorTest extends TestCase
             ->set('aspectRatio', '16:9')
             ->set('resolution', '2k')
             ->set('imageDetail', 'original')
+            ->set('imageModel', 'cx/composer-image')
             ->call('createImage')
             ->assertHasNoErrors();
 
         $image = GeneratedMedia::query()->latest('id')->firstOrFail();
+        $this->assertSame('cx/composer-image', $image->model);
         $this->assertSame('16:9', data_get($image->request_meta, 'aspect_ratio'));
         $this->assertSame('2k', data_get($image->request_meta, 'resolution'));
         $this->assertSame('1536x864', data_get($image->request_meta, 'size'));
@@ -1412,11 +1735,11 @@ class AiImageEditorTest extends TestCase
     }
 
     /**
-     * @return array{allowed: bool, blocked_policy: string, reason: string}
+     * @return array{allowed: bool, blocked_policy: string, reason: string, matches_prompt: bool}
      */
     private function allowedReview(): array
     {
-        return ['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.'];
+        return ['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true];
     }
 
     /**
@@ -1425,7 +1748,7 @@ class AiImageEditorTest extends TestCase
      */
     private function publishReview(string $category, array $tags = ['nước hoa', 'banner ads', 'sản phẩm'], string $title = 'Banner nước hoa cao cấp', string $description = 'Banner nước hoa cao cấp cho quảng cáo sản phẩm, bố cục rõ chủ thể, phong cách thương mại hiện đại, phù hợp SEO gallery công khai.'): array
     {
-        return ['allowed' => true, 'blocked_policy' => 'none', 'title' => $title, 'description' => $description, 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.'];
+        return ['allowed' => true, 'blocked_policy' => 'none', 'title' => $title, 'description' => $description, 'category' => $category, 'tags' => $tags, 'reason' => 'An toàn.', 'matches_prompt' => true];
     }
 
     private function pngBinary(int $width, int $height): string

@@ -254,6 +254,10 @@ new class extends Component {
                     <flux:separator />
                     <div class="flex items-start gap-3">
                         <flux:badge color="zinc" size="sm">optional</flux:badge>
+                        <flux:text><code class="font-medium text-zinc-800 dark:text-white">model</code> — {{ __('Enabled image model ID. Uses the default image model when omitted.') }}</flux:text>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <flux:badge color="zinc" size="sm">optional</flux:badge>
                         <flux:text><code class="font-medium text-zinc-800 dark:text-white">images[]</code> — {{ __('Up to :count reference images, jpg, jpeg, png, webp, or avif, up to :mbMB each.', ['count' => $maxImages, 'mb' => $maxUploadMb]) }}</flux:text>
                     </div>
                 </div>
@@ -264,7 +268,7 @@ new class extends Component {
                 <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST 'https://api.{{ parse_url((string) config('app.url'), PHP_URL_HOST) }}/api/ai/images' \
   -H 'Authorization: Bearer genanh_xxx' \
   -H 'Content-Type: application/json' \
-  -d '{"prompt":"Create a comic-style portrait"}'</code></pre>
+  -d '{"prompt":"Create a comic-style portrait","model":"cx/gpt-5.5-image"}'</code></pre>
             </div>
 
             <div class="space-y-3">
@@ -272,6 +276,7 @@ new class extends Component {
                 <pre class="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs leading-5 text-zinc-100 shadow-inner"><code>curl -X POST 'https://api.{{ parse_url((string) config('app.url'), PHP_URL_HOST) }}/api/ai/images' \
   -H 'Authorization: Bearer genanh_xxx' \
   -F 'prompt=Turn this image into a comic-style portrait' \
+  -F 'model=cx/gpt-5.5-image' \
   -F 'images[]=@/path/to/source.jpg'</code></pre>
             </div>
 

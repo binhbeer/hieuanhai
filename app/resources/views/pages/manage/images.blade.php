@@ -2,6 +2,7 @@
 
 use App\Models\GeneratedMedia;
 use App\Models\Category;
+use App\Models\User;
 use App\Services\AiImageEditor;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
@@ -19,6 +20,8 @@ new #[Title('Manage created images')] class extends Component {
 	public string $status = 'all';
 
 	public string $categoryId = 'all';
+
+	public string $creatorId = 'all';
 
 	public function mount(): void
 	{
@@ -45,9 +48,14 @@ new #[Title('Manage created images')] class extends Component {
 		$this->resetPage();
 	}
 
+	public function updatedCreatorId(): void
+	{
+		$this->resetPage();
+	}
+
 	public function resetFilters(): void
 	{
-		$this->reset('search', 'publish', 'status', 'categoryId');
+		$this->reset('search', 'publish', 'status', 'categoryId', 'creatorId');
 		$this->resetPage();
 	}
 
@@ -94,6 +102,15 @@ new #[Title('Manage created images')] class extends Component {
 	public function categories()
 	{
 		return Category::query()->ordered()->get();
+	}
+
+	#[Computed]
+	public function creators()
+	{
+		return User::query()
+			->whereIn('id', GeneratedMedia::query()->select('user_id')->whereNotNull('user_id'))
+			->orderBy('name')
+			->get();
 	}
 
 	#[Computed]
@@ -165,6 +182,8 @@ new #[Title('Manage created images')] class extends Component {
 			->when($this->status !== 'all', fn($query) => $query->where('status', $this->status))
 			->when($this->categoryId === 'none', fn($query) => $query->whereNull('category_id'))
 			->when(ctype_digit($this->categoryId), fn($query) => $query->where('category_id', (int) $this->categoryId))
+			->when($this->creatorId === 'guest', fn($query) => $query->whereNull('user_id'))
+			->when(ctype_digit($this->creatorId), fn($query) => $query->where('user_id', (int) $this->creatorId))
 			->latest()
 			->paginate(20);
 	}
@@ -314,24 +333,42 @@ new #[Title('Manage created images')] class extends Component {
 	</flux:card>
 
 	<flux:card class="space-y-4">
-		<div class="grid gap-3 lg:grid-cols-[1fr_12rem_12rem_14rem_auto]">
+		<div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_11rem_11rem_13rem_16rem_auto]">
 			<flux:input wire:model.live.debounce.300ms="search" :label="__('Search images')" placeholder="ID, prompt, user, visitor key" />
-			<flux:select wire:model.live="publish" label="Publish">
+			<flux:select wire:model.live="publish" variant="listbox" :label="__('Publish')">
 				<flux:select.option value="all">{{ __('All') }}</flux:select.option>
-				<flux:select.option value="published">Published</flux:select.option>
-				<flux:select.option value="unpublished">Unpublish</flux:select.option>
+				<flux:select.option value="published">{{ __('Published') }}</flux:select.option>
+				<flux:select.option value="unpublished">{{ __('Unpublished') }}</flux:select.option>
 			</flux:select>
-			<flux:select wire:model.live="status" :label="__('Creation status')">
+			<flux:select wire:model.live="status" variant="listbox" :label="__('Creation status')">
 				<flux:select.option value="all">{{ __('All') }}</flux:select.option>
-				<flux:select.option value="succeeded">Succeeded</flux:select.option>
-				<flux:select.option value="pending">Pending</flux:select.option>
-				<flux:select.option value="failed">Failed</flux:select.option>
+				<flux:select.option value="succeeded">{{ __('Succeeded') }}</flux:select.option>
+				<flux:select.option value="pending">{{ __('Creating') }}</flux:select.option>
+				<flux:select.option value="failed">{{ __('Failed') }}</flux:select.option>
 			</flux:select>
-			<flux:select wire:model.live="categoryId" :label="__('Category')">
+			<flux:select wire:model.live="categoryId" variant="listbox" :label="__('Category')">
 				<flux:select.option value="all">{{ __('All') }}</flux:select.option>
 				<flux:select.option value="none">{{ __('Uncategorized') }}</flux:select.option>
 				@foreach ($this->categories as $category)
 					<flux:select.option value="{{ $category->id }}">{{ $category->name }}</flux:select.option>
+				@endforeach
+			</flux:select>
+			<flux:select wire:model.live="creatorId" variant="listbox" searchable :label="__('Creator')">
+				<x-slot name="search">
+					<flux:select.search :placeholder="__('Search users...')" />
+				</x-slot>
+				<flux:select.option value="all">{{ __('All') }}</flux:select.option>
+				<flux:select.option value="guest">{{ __('Guest') }}</flux:select.option>
+				@foreach ($this->creators as $creator)
+					<flux:select.option value="{{ $creator->id }}" wire:key="creator-filter-{{ $creator->id }}">
+						<div class="flex items-center gap-2 whitespace-nowrap">
+							<flux:avatar size="xs" circle :name="$creator->name" :initials="$creator->initials()" :src="$creator->avatar_path ? Storage::url($creator->avatar_path) : null" />
+							<div class="min-w-0">
+								<div class="truncate">{{ $creator->name }}</div>
+								<div class="truncate text-xs text-zinc-500">{{ $creator->email }}</div>
+							</div>
+						</div>
+					</flux:select.option>
 				@endforeach
 			</flux:select>
 			<div class="flex items-end">
@@ -388,7 +425,7 @@ new #[Title('Manage created images')] class extends Component {
 							<flux:text class="text-xs" variant="subtle">{{ $image->user?->email ?? Str::limit($image->visitor_key, 12) }}</flux:text>
 						</td>
 						<td class="w-56 px-3 py-3 align-top">
-							<flux:select size="sm" :label="__('Category')" wire:change="updateCategory({{ $image->id }}, $event.target.value)">
+							<flux:select size="sm" variant="listbox" :label="__('Category')" wire:change="updateCategory({{ $image->id }}, $event.target.value)">
 								<flux:select.option value="none" :selected="$image->category_id === null">{{ __('Uncategorized') }}</flux:select.option>
 								@foreach ($this->categories as $category)
 									<flux:select.option value="{{ $category->id }}" :selected="$image->category_id === $category->id">{{ $category->name }}</flux:select.option>

@@ -677,7 +677,7 @@ class CreatedImagesTest extends TestCase
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true]]);
         ImageMetadataAgent::fake([['title' => 'Chân dung studio', 'description' => 'Chân dung studio chuyên nghiệp, ánh sáng mềm, nền sạch, phù hợp avatar và hồ sơ công khai.', 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar', 'chuyên nghiệp']]]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations' => Http::response([
@@ -707,7 +707,7 @@ class CreatedImagesTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true]]);
         ImageMetadataAgent::fake([['title' => 'Chân dung studio', 'description' => 'Chân dung studio chuyên nghiệp, ánh sáng mềm, nền sạch, phù hợp avatar và hồ sơ công khai.', 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar', 'chuyên nghiệp']]]);
 
         $user = User::factory()->create();

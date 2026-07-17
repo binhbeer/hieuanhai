@@ -8,12 +8,14 @@ use App\Support\GptImageOptions;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new class extends Component {
+new class extends Component
+{
     use WithFileUploads;
 
     public bool $showComposer = false;
@@ -48,18 +50,21 @@ new class extends Component {
 
     public string $imageDetail = 'high';
 
+    public string $imageModel = '';
+
     public function mount(): void
     {
         $defaults = GptImageOptions::defaultsFromSettings();
         $this->aspectRatio = $defaults['aspect_ratio'];
         $this->resolution = $defaults['resolution'];
         $this->imageDetail = GptImageOptions::defaultImageDetail();
+        $this->imageModel = AppSettings::defaultImageModel();
         $this->showComposer = Auth::check() && request()->boolean('composer');
     }
 
     public function openComposer(): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -76,7 +81,7 @@ new class extends Component {
     #[On('use-prompt')]
     public function usePrompt(string $prompt): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -92,7 +97,7 @@ new class extends Component {
     #[On('edit-image')]
     public function editImage(int $imageId, AiImageEditor $editor): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -103,7 +108,7 @@ new class extends Component {
             ->whereKey($imageId)
             ->first();
 
-        if (!$image) {
+        if (! $image) {
             return;
         }
 
@@ -121,13 +126,13 @@ new class extends Component {
      */
     private function availableReferenceIndexes(AiImageEditor $editor, ?GeneratedMedia $source): array
     {
-        if (!$source instanceof GeneratedMedia) {
+        if (! $source instanceof GeneratedMedia) {
             return [];
         }
 
         return array_slice(array_keys(array_filter(
             $editor->referenceSourcePaths($source),
-            fn(string $path): bool => Storage::disk('public')->exists($path),
+            fn (string $path): bool => Storage::disk('public')->exists($path),
         )), 0, $this->maxReferencePhotos());
     }
 
@@ -144,13 +149,13 @@ new class extends Component {
 
     public function updatedPromptSourcePhoto(): void
     {
-        if (!AppSettings::bool('ai.image_to_prompt_enabled', true)) {
+        if (! AppSettings::bool('ai.image_to_prompt_enabled', true)) {
             $this->promptSourcePhoto = null;
 
             return;
         }
 
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->promptSourcePhoto = null;
             $this->dispatch('open-account-modal', component: 'auth.login');
 
@@ -158,7 +163,7 @@ new class extends Component {
         }
 
         $this->validateOnly('promptSourcePhoto', [
-            'promptSourcePhoto' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,avif', 'max:' . AppSettings::imageUploadMaxKb()],
+            'promptSourcePhoto' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::imageUploadMaxKb()],
         ]);
 
         $this->dispatch('prompt-source-uploaded');
@@ -166,16 +171,16 @@ new class extends Component {
 
     public function analyzePromptSourcePhoto(AiImageEditor $editor): void
     {
-        if (!AppSettings::bool('ai.image_to_prompt_enabled', true) || !Auth::check() || !$this->promptSourcePhoto) {
+        if (! AppSettings::bool('ai.image_to_prompt_enabled', true) || ! Auth::check() || ! $this->promptSourcePhoto) {
             return;
         }
 
         try {
             $this->prompt = $editor->promptFromImage($this->promptSourcePhoto);
             $this->errorMessage = null;
-        } catch (\InvalidArgumentException $e) {
+        } catch (InvalidArgumentException $e) {
             $this->errorMessage = $e->getMessage();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             report($e);
 
             $this->errorMessage = __('Could not create a prompt from this image right now. Please try again later.');
@@ -193,12 +198,12 @@ new class extends Component {
 
     public function removeReferenceImage(int $id): void
     {
-        $this->referenceImageIds = array_values(array_filter($this->referenceImageIds, fn(int $imageId) => $imageId !== $id));
+        $this->referenceImageIds = array_values(array_filter($this->referenceImageIds, fn (int $imageId) => $imageId !== $id));
     }
 
     public function removeParentReference(int $index): void
     {
-        $this->parentReferenceIndexes = array_values(array_filter($this->parentReferenceIndexes, fn(int $referenceIndex) => $referenceIndex !== $index));
+        $this->parentReferenceIndexes = array_values(array_filter($this->parentReferenceIndexes, fn (int $referenceIndex) => $referenceIndex !== $index));
         unset($this->parentReferenceImages);
     }
 
@@ -217,7 +222,7 @@ new class extends Component {
 
     public function createImage(AiImageEditor $editor): void
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -235,16 +240,17 @@ new class extends Component {
 
         $this->validate([
             'prompt' => $this->promptRules(),
-            'aspectRatio' => ['required', 'string', 'in:' . implode(',', GptImageOptions::ASPECT_RATIOS)],
-            'resolution' => ['required', 'string', 'in:' . implode(',', GptImageOptions::RESOLUTIONS)],
-            'imageDetail' => ['required', 'string', 'in:' . implode(',', GptImageOptions::IMAGE_DETAILS)],
-            'referenceImageIds' => ['array', 'max:' . $this->maxReferencePhotos()],
+            'aspectRatio' => ['required', 'string', 'in:'.implode(',', GptImageOptions::ASPECT_RATIOS)],
+            'resolution' => ['required', 'string', 'in:'.implode(',', GptImageOptions::RESOLUTIONS)],
+            'imageDetail' => ['required', 'string', 'in:'.implode(',', GptImageOptions::IMAGE_DETAILS)],
+            'imageModel' => ['required', 'string', 'max:120', Rule::in(AppSettings::enabledImageModels())],
+            'referenceImageIds' => ['array', 'max:'.$this->maxReferencePhotos()],
             'referenceImageIds.*' => ['integer'],
             'parentId' => ['nullable', 'integer'],
-            'parentReferenceIndexes' => ['array', 'max:' . $this->maxReferencePhotos()],
+            'parentReferenceIndexes' => ['array', 'max:'.$this->maxReferencePhotos()],
             'parentReferenceIndexes.*' => ['integer', 'min:0', 'max:'.($this->maxReferencePhotos() - 1)],
-            'photos' => ['array', 'max:' . max(0, $this->maxReferencePhotos() - count($this->referenceImageIds) - count($this->parentReferenceIndexes))],
-            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:' . AppSettings::imageUploadMaxKb()],
+            'photos' => ['array', 'max:'.max(0, $this->maxReferencePhotos() - count($this->referenceImageIds) - count($this->parentReferenceIndexes))],
+            'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::imageUploadMaxKb()],
         ]);
 
         if ($editor->isLimitExceeded(request())) {
@@ -265,6 +271,7 @@ new class extends Component {
                 $this->imageDetail,
                 $this->aspectRatio,
                 $this->resolution,
+                $this->imageModel,
             );
         } catch (InvalidArgumentException $e) {
             $this->errorMessage = $e->getMessage();
@@ -298,11 +305,11 @@ new class extends Component {
 
     public function rewritePrompt(AiImageEditor $editor): void
     {
-        if (!AppSettings::bool('ai.prompt_rewrite_enabled', true)) {
+        if (! AppSettings::bool('ai.prompt_rewrite_enabled', true)) {
             return;
         }
 
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -329,11 +336,11 @@ new class extends Component {
 
     public function translatePrompt(AiImageEditor $editor): void
     {
-        if (!AppSettings::bool('ai.prompt_translation_enabled', true)) {
+        if (! AppSettings::bool('ai.prompt_translation_enabled', true)) {
             return;
         }
 
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
 
             return;
@@ -358,7 +365,7 @@ new class extends Component {
         $this->errorMessage = null;
         $this->publishMessage = null;
 
-        if (!$this->resultImage) {
+        if (! $this->resultImage) {
             return;
         }
 
@@ -413,13 +420,13 @@ new class extends Component {
             ->whereIn('id', $this->referenceImageIds)
             ->publiclyVisible()
             ->get()
-            ->sortBy(fn(GeneratedMedia $image) => array_search($image->id, $this->referenceImageIds, true));
+            ->sortBy(fn (GeneratedMedia $image) => array_search($image->id, $this->referenceImageIds, true));
     }
 
     #[Computed]
     public function parentReferenceImages(): array
     {
-        if (!$this->parentId || $this->parentReferenceIndexes === []) {
+        if (! $this->parentId || $this->parentReferenceIndexes === []) {
             return [];
         }
 
@@ -428,7 +435,7 @@ new class extends Component {
             ->whereKey($this->parentId)
             ->first();
 
-        if (!$image) {
+        if (! $image) {
             return [];
         }
 
@@ -437,8 +444,8 @@ new class extends Component {
         $disk = Storage::disk('public');
 
         return collect($this->parentReferenceIndexes)
-            ->filter(fn(int $index): bool => isset($paths[$index]) && $disk->exists($paths[$index]))
-            ->mapWithKeys(fn(int $index): array => [$index => $disk->url($paths[$index])])
+            ->filter(fn (int $index): bool => isset($paths[$index]) && $disk->exists($paths[$index]))
+            ->mapWithKeys(fn (int $index): array => [$index => $disk->url($paths[$index])])
             ->all();
     }
 
@@ -760,6 +767,18 @@ new class extends Component {
 
                 <div class="shrink-0 space-y-3 border-t border-zinc-200 p-4 dark:border-white/10">
                     <div class="flex flex-wrap items-center gap-2">
+                        <flux:dropdown position="top" align="start">
+                            <flux:button type="button" size="sm" variant="outline" icon:trailing="chevron-down" wire:loading.attr="disabled" wire:target="createImage" :aria-label="__('Image model')">
+                                {{ AppSettings::imageModelLabel($imageModel) }}
+                            </flux:button>
+                            <flux:menu class="min-w-56">
+                                <flux:menu.radio.group wire:model.live="imageModel">
+                                    @foreach (AppSettings::enabledImageModels() as $model)
+                                        <flux:menu.radio :value="$model" wire:key="image-model-{{ md5($model) }}">{{ AppSettings::imageModelLabel($model) }}</flux:menu.radio>
+                                    @endforeach
+                                </flux:menu.radio.group>
+                            </flux:menu>
+                        </flux:dropdown>
                         <flux:dropdown position="top" align="start">
                             <flux:button type="button" size="sm" variant="outline" icon:trailing="chevron-down" wire:loading.attr="disabled" wire:target="createImage">
                                 {{ $aspectRatio === 'auto' ? __('Auto') : $aspectRatio }}

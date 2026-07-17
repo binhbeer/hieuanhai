@@ -20,7 +20,7 @@ class ManageImagesTest extends TestCase
     {
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
-        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.']]);
+        ImageReviewAgent::fake([['allowed' => true, 'blocked_policy' => 'none', 'reason' => 'An toàn.', 'matches_prompt' => true]]);
         ImageMetadataAgent::fake([['title' => 'Chân dung studio', 'description' => 'Chân dung studio chuyên nghiệp, ánh sáng mềm, nền sạch, phù hợp avatar và hồ sơ công khai.', 'category' => 'portraits', 'tags' => ['chân dung', 'studio', 'avatar', 'chuyên nghiệp']]]);
 
         $this->actingAs(User::factory()->create(['id' => 1]));
@@ -63,6 +63,39 @@ class ManageImagesTest extends TestCase
 
         $this->assertFalse($published->fresh()->is_published);
         $this->assertTrue($unpublished->fresh()->is_published);
+    }
+
+    public function test_admin_can_filter_images_by_creator(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+        $creator = User::factory()->create(['name' => 'Creator Alpha']);
+        $otherCreator = User::factory()->create(['name' => 'Creator Beta']);
+
+        foreach ([
+            [$creator->id, 'Alpha image'],
+            [$otherCreator->id, 'Beta image'],
+            [null, 'Guest image'],
+        ] as [$userId, $prompt]) {
+            GeneratedMedia::create([
+                'user_id' => $userId,
+                'visitor_key' => 'creator-filter-'.$prompt,
+                'prompt' => $prompt,
+                'provider' => 'openai',
+                'model' => 'cx/gpt-5.5-image',
+                'status' => 'succeeded',
+            ]);
+        }
+
+        Livewire::actingAs($admin)
+            ->test('pages::manage.images')
+            ->assertSee('Creator Alpha')
+            ->set('creatorId', (string) $creator->id)
+            ->assertSee('Alpha image')
+            ->assertDontSee('Beta image')
+            ->assertDontSee('Guest image')
+            ->set('creatorId', 'guest')
+            ->assertSee('Guest image')
+            ->assertDontSee('Alpha image');
     }
 
     public function test_dashboard_groups_user_and_image_activity_for_the_last_thirty_days(): void

@@ -61,6 +61,7 @@ Route::middleware(['auth'])
         Route::livewire('users/{user}/edit', 'pages::manage.user-edit')->name('users.edit');
         Route::livewire('api-keys', 'pages::manage.api-keys')->name('api-keys.index');
         Route::livewire('images', 'pages::manage.images')->name('images.index');
+        Route::livewire('skills', 'pages::manage.skills')->name('skills.index');
         Route::livewire('categories', 'pages::manage.categories')->name('categories.index');
         Route::livewire('settings', 'pages::manage.settings')->name('settings.index');
         Route::livewire('languages', 'pages::manage.languages')->name('languages.index');

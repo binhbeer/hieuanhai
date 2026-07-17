@@ -5,6 +5,7 @@ use App\Models\GeneratedMedia;
 use App\Models\MediaFavorite;
 use App\Models\User;
 use App\Services\AiImageEditor;
+use App\Support\AppSettings;
 use App\Support\GptImageOptions;
 use Flux\Flux;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -381,7 +382,7 @@ new class extends Component
     }
 
     /**
-     * @return array{aspect_ratio: ?string, resolution: ?string, image_detail: ?string}
+     * @return array{model: ?string, aspect_ratio: ?string, resolution: ?string, image_detail: ?string}
      */
     public function generationOptions(GeneratedMedia $image): array
     {
@@ -389,6 +390,7 @@ new class extends Component
         $aspectRatio = is_string($meta['aspect_ratio'] ?? null) ? $meta['aspect_ratio'] : null;
         $resolution = is_string($meta['resolution'] ?? null) ? strtoupper($meta['resolution']) : null;
         $imageDetail = is_string($meta['image_detail'] ?? null) ? $meta['image_detail'] : null;
+        $model = trim((string) $image->model);
 
         if (($aspectRatio === null || $resolution === null) && is_string($meta['size'] ?? null)) {
             $defaults = GptImageOptions::defaultsFromSettings($meta['size']);
@@ -397,6 +399,7 @@ new class extends Component
         }
 
         return [
+            'model' => $model !== '' ? AppSettings::imageModelLabel($model) : null,
             'aspect_ratio' => $aspectRatio === 'auto' ? __('Auto') : $aspectRatio,
             'resolution' => $resolution,
             'image_detail' => match ($imageDetail) {
@@ -685,6 +688,9 @@ new class extends Component
                         <div x-show="expanded" x-cloak>
                             <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">{{ __('Image settings') }}</div>
                             <div class="flex flex-wrap gap-2">
+                                @if ($generationOptions['model'])
+                                    <flux:badge size="sm" color="zinc" rounded>{{ $generationOptions['model'] }}</flux:badge>
+                                @endif
                                 @if ($generationOptions['aspect_ratio'])
                                     <flux:badge size="sm" color="zinc" rounded>{{ $generationOptions['aspect_ratio'] }}</flux:badge>
                                 @endif

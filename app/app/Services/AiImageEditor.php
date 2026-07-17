@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
 use App\Ai\ImageToPromptAgent;
+use App\Ai\ProjectNameAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
 use App\Events\AiImageCompleted;
@@ -47,6 +48,8 @@ class AiImageEditor
 
     private const REFERENCE_JPEG_QUALITY = 88;
 
+    private const GROK_MAX_ATTEMPTS = 3;
+
     /**
      * @var array<string, int|array{0: int, 1: int}|null>
      */
@@ -62,7 +65,7 @@ class AiImageEditor
     /**
      * @param  array<int, mixed>  $photos
      */
-    public function create(Request $request, array $photos, string $prompt): GeneratedMedia
+    public function create(Request $request, array $photos, string $prompt, ?string $model = null): GeneratedMedia
     {
         $prompt = trim($prompt);
 
@@ -75,7 +78,7 @@ class AiImageEditor
         $photo = $photos[0] ?? null;
         $visitorKey = $this->visitorKey($request);
         $provider = AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai'));
-        $model = AppSettings::string('ai.image_model', (string) config('ai.image_model', 'cx/gpt-5.5-image'));
+        $model = AppSettings::resolveImageModel($model);
         $finalPrompt = trim(implode("\n\n", array_filter([
             $photos === [] ? null : 'Use the provided reference image as the source. Edit that image according to the instructions. Preserve the original subjects, identities, composition, pose, and count unless explicitly asked to change them. Do not create an unrelated new image.',
             $prompt,
@@ -146,6 +149,7 @@ class AiImageEditor
         ?string $imageDetail = null,
         ?string $aspectRatio = null,
         ?string $resolution = null,
+        ?string $model = null,
     ): GeneratedMedia {
 
         if (! Auth::check()) {
@@ -161,6 +165,7 @@ class AiImageEditor
         }
 
         $userId = (int) Auth::id();
+        $model = AppSettings::resolveImageModel($model);
         $size = is_string($size) && GptImageOptions::isValidSize($size) ? $size : null;
         $imageDetail = is_string($imageDetail) && GptImageOptions::isValidImageDetail($imageDetail) ? $imageDetail : null;
         $aspectRatio = is_string($aspectRatio) && in_array($aspectRatio, GptImageOptions::ASPECT_RATIOS, true) ? $aspectRatio : null;
@@ -170,7 +175,7 @@ class AiImageEditor
             $size = GptImageOptions::size($aspectRatio, $resolution);
         }
 
-        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution) {
+        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution, $model) {
             User::query()->whereKey($userId)->lockForUpdate()->first();
 
             if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
@@ -207,7 +212,7 @@ class AiImageEditor
                 'ip_address' => $request->ip(),
                 'prompt' => $prompt,
                 'provider' => AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai')),
-                'model' => AppSettings::string('ai.image_model', (string) config('ai.image_model', 'cx/gpt-5.5-image')),
+                'model' => $model,
                 'status' => 'pending',
                 'request_meta' => array_filter([
                     'upload_name' => $photo?->getClientOriginalName(),
@@ -1106,6 +1111,11 @@ class AiImageEditor
     ): array {
         $sourcePaths = [];
         $referenceImages = [];
+        $isGrokModel = $this->isGrokImageModel($model);
+
+        if ($isGrokModel && array_filter($photos, fn (mixed $photo): bool => $photo instanceof UploadedFile) !== []) {
+            throw new \InvalidArgumentException('Endpoint 9router hiện tại chưa hỗ trợ Grok với ảnh tham chiếu.');
+        }
 
         foreach (array_slice($photos, 0, AppSettings::maxReferencePhotos()) as $photo) {
             if (! $photo instanceof UploadedFile) {
@@ -1155,38 +1165,59 @@ class AiImageEditor
             'output_format' => 'png',
         ];
 
-        if (count($referenceImages) === 1) {
-            $payload[AppSettings::string('ai.image_reference_field')] = $referenceImages[0];
-        } elseif ($referenceImages !== []) {
-            $payload['images'] = $referenceImages;
+        // ponytail: current 9router image route supports Grok generation but not reference-image editing.
+        if (! $isGrokModel) {
+            $payload['response_format'] = 'b64_json';
+
+            if (count($referenceImages) === 1) {
+                $payload[AppSettings::string('ai.image_reference_field')] = $referenceImages[0];
+            } elseif ($referenceImages !== []) {
+                $payload['images'] = $referenceImages;
+            }
         }
 
-        $response = Http::withToken($key)
-            ->acceptJson()
-            ->asJson()
-            ->timeout(AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)))
-            ->post($url.'/images/generations', $payload);
+        $timeout = AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300));
+        $attempts = $isGrokModel ? self::GROK_MAX_ATTEMPTS : 1;
+        $decoded = false;
+        $base64 = '';
+        $usage = [];
 
-        if ($response->failed()) {
-            throw new \RuntimeException('API tạo ảnh lỗi '.$response->status().': '.Str::limit($response->body(), 1000, ''));
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            $endpoint = $url.'/images/generations'.($isGrokModel ? '?_request_id='.Str::uuid() : '');
+            $response = Http::withToken($key)
+                ->acceptJson()
+                ->asJson()
+                ->timeout($timeout)
+                ->post($endpoint, $payload);
+
+            if ($response->failed()) {
+                throw new \RuntimeException('API tạo ảnh lỗi '.$response->status().': '.Str::limit($response->body(), 1000, ''));
+            }
+
+            $data = $response->json();
+            $usage = data_get($data, 'usage', []);
+            [$decoded, $base64] = $this->decodeGeneratedImagePayload($data, $timeout, $isGrokModel);
+
+            if ($decoded === false || $decoded === '') {
+                throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
+            }
+
+            if (! $isGrokModel || (
+                ! $this->isRecentGrokDuplicate($image, $decoded)
+                && $this->generatedImageMatchesPrompt($decoded, $providerPrompt)
+            )) {
+                break;
+            }
+
+            $decoded = false;
+            $base64 = '';
         }
 
-        $data = $response->json();
-
-        $base64 = data_get($data, 'data.0.b64_json');
-        $usage = data_get($data, 'usage', []);
-
-        if (! is_string($base64) || $base64 === '') {
-            throw new \RuntimeException('API không trả về ảnh base64.');
+        if ($decoded === false) {
+            throw new \RuntimeException('Grok trả về ảnh không khớp prompt sau 3 lần thử.');
         }
 
-        $decoded = base64_decode(Str::after($base64, ','), true);
-
-        if ($decoded === false || $decoded === '') {
-            throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
-        }
-
-        $requestedSize = is_string($payload['size'] ?? null) ? $payload['size'] : null;
+        $requestedSize = $resolvedSize;
         $dimensions = $this->measureGeneratedImage($decoded, $requestedSize);
 
         if ($dimensions['target_width'] !== null && $dimensions['target_height'] !== null && ! $dimensions['meets_width_or_height']) {
@@ -1327,6 +1358,48 @@ class AiImageEditor
         return $prompt;
     }
 
+    public function projectNameFromImage(UploadedFile $photo, string $language = 'vi', string $hint = ''): string
+    {
+        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
+        $model = $this->textModel('ai.image_to_prompt_model', (string) config('ai.image_to_prompt_model', 'gpt-5.5'));
+        $attachment = new Base64Image(base64_encode($this->referenceImageContent($photo)), 'image/jpeg');
+        $languageLabel = $language === 'en' ? 'English' : 'Vietnamese';
+        $hint = Str::of($hint)->squish()->limit(120, '')->toString();
+        $message = implode("\n", array_filter([
+            "Đặt tên dự án ngắn bằng {$languageLabel} từ ảnh tham chiếu đính kèm.",
+            $hint !== '' ? "Gợi ý ngữ cảnh: {$hint}." : null,
+        ]));
+
+        $this->configureReviewProvider($provider);
+
+        try {
+            $response = ProjectNameAgent::make()->prompt(
+                $message,
+                attachments: [$attachment],
+                provider: $provider,
+                model: $model,
+                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            throw new \InvalidArgumentException('Không tạo được tên dự án từ ảnh. Vui lòng thử lại sau.');
+        }
+
+        $data = $response instanceof Arrayable ? $response->toArray() : [];
+        $name = Str::of(is_string($data['name'] ?? null) ? $data['name'] : $response->text)
+            ->replace(['"', "'", '“', '”', '‘', '’'], '')
+            ->squish()
+            ->limit(80, '')
+            ->toString();
+
+        if ($name === '') {
+            throw new \InvalidArgumentException('Không tạo được tên dự án từ ảnh. Vui lòng thử lại sau.');
+        }
+
+        return $name;
+    }
+
     private function classifyCategory(string $slug): Category
     {
         $categoryNames = $this->categoryNames();
@@ -1396,6 +1469,61 @@ class AiImageEditor
         }
 
         return $response instanceof Arrayable ? $response->toArray() : [];
+    }
+
+    private function isRecentGrokDuplicate(GeneratedMedia $current, string $image): bool
+    {
+        $hash = hash('sha256', $image);
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        return GeneratedMedia::query()
+            ->where('id', '!=', $current->id)
+            ->where('model', $current->model)
+            ->where('status', 'succeeded')
+            ->whereNotNull('result_path')
+            ->latest('id')
+            ->limit(20)
+            ->get(['result_path'])
+            ->contains(function (GeneratedMedia $image) use ($disk, $hash): bool {
+                $path = $image->result_path;
+
+                return is_string($path)
+                    && $disk->exists($path)
+                    && hash_equals($hash, hash('sha256', $disk->get($path)));
+            });
+    }
+
+    private function generatedImageMatchesPrompt(string $image, string $prompt): bool
+    {
+        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
+        $model = $this->textModel('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
+        $this->configureReviewProvider($provider);
+
+        try {
+            $response = ImageReviewAgent::make()->prompt(
+                "Kiểm tra ảnh vừa tạo có khớp nội dung cốt lõi của prompt không. Chỉ đánh giá độ khớp, không kiểm duyệt lại.\n\nPrompt:\n{$prompt}",
+                attachments: [new Base64Image(base64_encode($image), $this->generatedImageMime($image))],
+                provider: $provider,
+                model: $model,
+                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            throw new \RuntimeException('Không kiểm tra được độ khớp ảnh Grok.');
+        }
+
+        $review = $response instanceof Arrayable ? $response->toArray() : [];
+
+        return ($review['matches_prompt'] ?? false) === true;
+    }
+
+    private function generatedImageMime(string $image): string
+    {
+        $info = @getimagesizefromstring($image);
+
+        return is_array($info) ? $info['mime'] : 'image/jpeg';
     }
 
     /**
@@ -1876,6 +2004,53 @@ class AiImageEditor
             'meets_width_or_height' => $meets,
             'ratio_delta' => $ratioDelta,
         ];
+    }
+
+    private function isGrokImageModel(string $model): bool
+    {
+        $model = strtolower(trim($model));
+
+        return str_contains($model, 'grok') || str_starts_with($model, 'xai/');
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $data
+     * @return array{0: string|false, 1: string}
+     */
+    private function decodeGeneratedImagePayload(?array $data, int $timeout, bool $preferUrl): array
+    {
+        $base64 = data_get($data, 'data.0.b64_json');
+        $imageUrl = data_get($data, 'data.0.url');
+
+        if ($preferUrl && is_string($imageUrl) && $imageUrl !== '') {
+            return $this->downloadGeneratedImage($imageUrl, $timeout);
+        }
+
+        if (is_string($base64) && $base64 !== '') {
+            $base64 = Str::after($base64, ',');
+
+            return [base64_decode($base64, true), $base64];
+        }
+
+        if (is_string($imageUrl) && $imageUrl !== '') {
+            return $this->downloadGeneratedImage($imageUrl, $timeout);
+        }
+
+        throw new \RuntimeException('API không trả về ảnh.');
+    }
+
+    /** @return array{0: string, 1: string} */
+    private function downloadGeneratedImage(string $url, int $timeout): array
+    {
+        $response = Http::timeout($timeout)->get($url);
+
+        if ($response->failed() || $response->body() === '') {
+            throw new \RuntimeException('Không tải được ảnh do API trả về.');
+        }
+
+        $decoded = $response->body();
+
+        return [$decoded, base64_encode($decoded)];
     }
 
     private function providerSizePromptHint(?string $size): string

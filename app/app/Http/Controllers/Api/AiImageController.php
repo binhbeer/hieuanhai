@@ -15,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class AiImageController extends Controller
@@ -126,6 +127,7 @@ class AiImageController extends Controller
         $validator = Validator::make($request->all(), [
             'prompt' => $this->promptRules(),
             'source' => ['sometimes', 'nullable', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:-]+$/'],
+            'model' => ['sometimes', 'nullable', 'string', 'max:120', Rule::in(AppSettings::enabledImageModels())],
             'images' => ['sometimes', 'array', 'max:'.AppSettings::maxReferencePhotos()],
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp,avif', 'max:'.AppSettings::imageUploadMaxKb()],
         ]);
@@ -146,7 +148,8 @@ class AiImageController extends Controller
         try {
             $files = $request->file('images', []);
             $photos = is_array($files) ? array_values($files) : [$files];
-            $image = $editor->create($request, $photos, (string) $request->string('prompt'));
+            $requestedModel = $request->filled('model') ? (string) $request->string('model') : null;
+            $image = $editor->create($request, $photos, (string) $request->string('prompt'), $requestedModel);
 
             if ($publish) {
                 $image = $editor->publish($image, $request, requireOwner: false);
@@ -255,6 +258,7 @@ class AiImageController extends Controller
             'url' => $editor->resultUrl($image),
             'download_name' => $image->downloadName(),
             'status' => $image->status,
+            'model' => $image->model,
             'source' => $image->source,
             'created_at' => $image->created_at?->toISOString(),
             'quota' => $this->quotaPayload($key),
@@ -295,6 +299,7 @@ class AiImageController extends Controller
         $meta = [
             'image_id' => $image->id,
             'result_path' => $image->result_path,
+            'model' => $image->model,
             'source' => $image->source,
         ];
 
@@ -352,6 +357,7 @@ class AiImageController extends Controller
             'error' => $error ? Str::limit($error, 2000, '') : null,
             'request_meta' => [
                 'upload_count' => $this->uploadCount($request),
+                'model' => $request->filled('model') ? (string) $request->string('model') : AppSettings::defaultImageModel(),
             ],
             'response_meta' => $responseMeta,
         ]);

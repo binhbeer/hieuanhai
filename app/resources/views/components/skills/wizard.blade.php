@@ -16,8 +16,9 @@
 
             @if ($step === 1)
                 <div class="space-y-4">
-                    <flux:heading>{{ __('Set up the basics') }}</flux:heading>
-                    <flux:input wire:model.live.debounce.500ms="projectName" :label="__('Project name')" />
+                    @if ($page->isEditingProject())
+                        <flux:input wire:model.live.debounce.500ms="projectName" :label="__('Project name')" />
+                    @endif
 
                     @if ($tool === 'product-detail')
                         <div class="space-y-3">
@@ -92,13 +93,6 @@
                         <flux:switch wire:model.live="autoWrite" :label="__('Auto-write copy')" />
                         @unless ($autoWrite)<flux:textarea wire:model.live.debounce.500ms="posterCopy" :label="__('Content and copy')" rows="3" />@endunless
                     @endif
-
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <flux:select wire:model.live="aspectRatio" :label="__('Aspect ratio')">
-                            @foreach (['1:1', '3:4', '4:3', '4:5', '9:16', '16:9'] as $ratio)<flux:select.option value="{{ $ratio }}">{{ $ratio }}</flux:select.option>@endforeach
-                        </flux:select>
-                        <flux:select wire:model.live="language" :label="__('Text language')"><flux:select.option value="vi">Tiếng Việt</flux:select.option><flux:select.option value="en">English</flux:select.option></flux:select>
-                    </div>
                 </div>
             @elseif ($step === 2 && $tool === 'product-detail')
                 <div class="space-y-4">
@@ -127,7 +121,52 @@
             @endif
         </div>
 
-        <div class="shrink-0 border-t border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+        <div class="shrink-0 space-y-3 border-t border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+            <div class="flex flex-wrap items-center gap-2">
+                <flux:dropdown align="start">
+                    <flux:button type="button" size="sm" variant="outline" icon:trailing="chevron-down" :aria-label="__('Image model')">
+                        {{ \App\Support\AppSettings::imageModelLabel($page->imageModel) }}
+                    </flux:button>
+                    <flux:menu class="min-w-56">
+                        <flux:menu.radio.group wire:model.live="imageModel">
+                            @foreach (\App\Support\AppSettings::enabledImageModels() as $model)
+                                <flux:menu.radio :value="$model" wire:key="studio-image-model-{{ md5($model) }}">{{ \App\Support\AppSettings::imageModelLabel($model) }}</flux:menu.radio>
+                            @endforeach
+                        </flux:menu.radio.group>
+                    </flux:menu>
+                </flux:dropdown>
+                <flux:dropdown align="start">
+                    <flux:button type="button" size="sm" variant="outline" icon:trailing="chevron-down" :aria-label="__('Aspect ratio')">
+                        {{ $page->aspectRatio }}
+                    </flux:button>
+                    <flux:menu class="min-w-56">
+                        <flux:menu.radio.group wire:model.live="aspectRatio">
+                            @foreach (['1:1', '3:4', '4:3', '4:5', '9:16', '16:9'] as $ratio)
+                                <flux:menu.radio :value="$ratio" wire:key="studio-aspect-{{ $ratio }}">
+                                    <span class="flex items-center gap-3">
+                                        <span class="flex size-5 items-center justify-center">
+                                            <span class="{{ \App\Support\GptImageOptions::aspectRatioIconClasses()[$ratio] ?? 'size-3.5' }} rounded-[2px] border-2 border-current opacity-70"></span>
+                                        </span>
+                                        <span class="flex flex-col">
+                                            <span>{{ $ratio }}</span>
+                                            <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">{{ \App\Support\GptImageOptions::aspectRatioDescriptions()[$ratio] ?? '' }}</span>
+                                        </span>
+                                    </span>
+                                </flux:menu.radio>
+                            @endforeach
+                        </flux:menu.radio.group>
+                    </flux:menu>
+                </flux:dropdown>
+                <flux:dropdown align="start">
+                    <flux:button type="button" size="sm" variant="outline" icon:trailing="chevron-down" :aria-label="__('Text language')">{{ $page->language === 'vi' ? 'Tiếng Việt' : 'English' }}</flux:button>
+                    <flux:menu class="min-w-40">
+                        <flux:menu.radio.group wire:model.live="language">
+                            <flux:menu.radio value="vi">Tiếng Việt</flux:menu.radio>
+                            <flux:menu.radio value="en">English</flux:menu.radio>
+                        </flux:menu.radio.group>
+                    </flux:menu>
+                </flux:dropdown>
+            </div>
             <div class="flex gap-3">
                 @if ($step > 1)<flux:button class="w-28" type="button" wire:click="previousStep">{{ __('Back') }}</flux:button>@endif
                 @if ($step < $page->lastStep())
