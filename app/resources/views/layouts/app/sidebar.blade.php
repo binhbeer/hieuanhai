@@ -132,7 +132,7 @@
 						{{ __('New') }}
 					</flux:tab>
 					{{-- <flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
-																		{{ __('Popular') }}
+																										{{ __('Popular') }}
 					</flux:tab> --}}
 					<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
 						{{ __('Featured') }}
@@ -141,18 +141,21 @@
 			@endif
 
 			<flux:spacer />
-
-			@auth
-				<flux:modal.trigger name="image-composer">
-					<flux:button size="sm" type="button" variant="primary" x-data x-on:click="$dispatch('open-image-composer')" aria-label="{{ __('Create image') }}" tooltip="{{ __('Create image') }}" tooltip:position="left">
+			<div class="flex items-center gap-2">
+				@auth
+					<flux:modal.trigger name="image-composer">
+						<flux:button size="sm" type="button" variant="primary" color="amber" x-data x-on:click="$dispatch('open-image-composer')" aria-label="{{ __('Create image') }}" tooltip="{{ __('Create image') }}" tooltip:position="bottom">
+							<x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+						</flux:button>
+					</flux:modal.trigger>
+				@else
+					<flux:button size="sm" type="button" variant="primary" color="amber" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })" aria-label="{{ __('Create image') }}" tooltip="{{ __('Create image') }}" tooltip:position="bottom">
 						<x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
 					</flux:button>
-				</flux:modal.trigger>
-			@else
-				<flux:button size="sm" type="button" variant="primary" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })" aria-label="{{ __('Create image') }}" tooltip="{{ __('Create image') }}" tooltip:position="left">
-					<x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
-				</flux:button>
-			@endauth
+				@endauth
+
+				<x-language-switcher />
+			</div>
 		</flux:header>
 	@endif
 

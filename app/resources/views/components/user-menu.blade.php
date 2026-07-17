@@ -18,7 +18,6 @@
 						{{ $setting['label'] }}
 					</flux:menu.item>
 				@endforeach
-				<x-language-switcher />
 				@if (auth()->user()?->isAdmin())
 					<flux:menu.separator />
 					<flux:menu.item :href="route('manage.index')" wire:navigate>
@@ -43,28 +42,6 @@
 	</flux:dropdown>
 @else
 <div class="space-y-2" {{ $attributes }}>
-	@if (!\App\Support\LocalizedRoute::is('manage.*') && \Illuminate\Support\Facades\Route::isLocalized())
-	@php($routeCategory = request()->route('category'))
-	@php($routeTag = request()->route('tag'))
-	@php($routeImage = request()->route('image'))
-	@php($routeName = \App\Support\LocalizedRoute::name())
-	@php(
-		$englishReady = match ($routeName) {
-			'categories.show' => $routeCategory instanceof \App\Models\Category && $routeCategory->englishReady(),
-			'tags.show' => $routeTag instanceof \App\Models\Tag && $routeTag->englishReady(),
-			'images.show' => $routeImage instanceof \App\Models\GeneratedMedia && $routeImage->englishReady(),
-			default => true
-		}
-	)
-	@php($localizedUrl = fn(string $locale): string => \App\Support\LocalizedRoute::currentUrl($locale))
-	<div class="flex justify-end text-sm">
-		@if (app()->getLocale() === 'en')
-			<a class="text-zinc-500 hover:text-zinc-900 dark:hover:text-white" href="{{ $localizedUrl('vi') }}">Tiếng Việt</a>
-		@elseif (\App\Support\AppSettings::bool('locales.en.enabled') && $englishReady)
-			<a class="text-zinc-500 hover:text-zinc-900 dark:hover:text-white" href="{{ $localizedUrl('en') }}">English</a>
-		@endif
-	</div>
-	@endif
 	<div class="grid grid-cols-2 gap-2">
 		<flux:button class="w-full" type="button" variant="outline" x-data x-on:click="Livewire.dispatch('open-account-modal', { component: 'auth.login' })">
 			{{ __('Log in') }}
