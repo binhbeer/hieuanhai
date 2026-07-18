@@ -6,9 +6,9 @@ use App\Ai\ProjectNameAgent;
 use App\Jobs\CreateAiImage;
 use App\Models\GeneratedMedia;
 use App\Models\Setting;
-use App\Models\SkillProject;
+use App\Models\StudioProject;
 use App\Models\User;
-use App\Services\SkillProjectGenerator;
+use App\Services\StudioImageService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
@@ -16,30 +16,49 @@ use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-class SkillsTest extends TestCase
+class StudioTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_skills_page_is_public_and_navigation_uses_canonical_route(): void
+    public function test_studio_page_is_public_and_navigation_uses_canonical_route(): void
     {
-        $this->get(route('skills.index'))
+        $this->get(route('studio.index'))
             ->assertOk()
-            ->assertSee(__('AI tools'))
+            ->assertSee(__('Studio'))
             ->assertSee(__('Product detail images'))
             ->assertSee(__('Marketing poster'))
             ->assertDontSee('Nền trắng');
 
         $this->get(route('home'))
             ->assertOk()
-            ->assertSee(route('skills.index'), false);
+            ->assertSee(route('studio.index'), false);
     }
 
     public function test_guest_opening_tool_requests_login(): void
     {
-        Livewire::test('pages::skills')
+        Livewire::test('pages::studio')
             ->call('openTool', 'product-detail')
             ->assertDispatched('open-account-modal')
             ->assertSet('showWizard', false);
+    }
+
+    public function test_wizard_query_opens_default_studio_flyout_for_authenticated_user(): void
+    {
+        $user = User::factory()->create();
+
+        Livewire::actingAs($user)
+            ->withQueryParams(['wizard' => '1'])
+            ->test('pages::studio')
+            ->assertSet('showWizard', true)
+            ->assertSet('tool', 'product-detail');
+    }
+
+    public function test_wizard_query_requests_login_for_guest(): void
+    {
+        Livewire::withQueryParams(['wizard' => '1'])
+            ->test('pages::studio')
+            ->assertSet('showWizard', false)
+            ->assertDispatched('open-account-modal');
     }
 
     public function test_user_can_save_and_resume_product_detail_draft(): void
@@ -49,7 +68,7 @@ class SkillsTest extends TestCase
         $user = User::factory()->create();
 
         $component = Livewire::actingAs($user)
-            ->test('pages::skills')
+            ->test('pages::studio')
             ->call('openTool', 'product-detail')
             ->assertSet('projectName', '')
             ->assertDontSee(__('Project name'))
@@ -64,11 +83,11 @@ class SkillsTest extends TestCase
             ])
             ->call('saveDraft');
 
-        $project = SkillProject::query()->sole();
+        $project = StudioProject::query()->sole();
 
         $component->assertSet('project', $project->id);
         $this->assertSame($user->id, $project->user_id);
-        $this->assertSame('product-detail', $project->skill);
+        $this->assertSame('product-detail', $project->tool);
         $this->assertSame(__('Product detail images'), $project->name);
         $this->assertSame('Leather handbag', data_get($project->form_data, 'product_name'));
         $this->assertSame('cx/draft-image', data_get($project->form_data, 'image_model'));
@@ -80,7 +99,7 @@ class SkillsTest extends TestCase
 
         Livewire::actingAs($user)
             ->withQueryParams(['view' => 'projects', 'project' => $project->id])
-            ->test('pages::skills')
+            ->test('pages::studio')
             ->assertSet('showWizard', true)
             ->assertSet('productName', 'Leather handbag')
             ->assertSet('imageModel', 'cx/draft-image')
@@ -94,8 +113,8 @@ class SkillsTest extends TestCase
         $project->refresh();
         $this->assertNull(data_get($project->input_paths, 'logo'));
         $this->assertCount(1, data_get($project->input_paths, 'additional_products'));
-        Storage::disk('public')->assertMissing($logoPath);
-        Storage::disk('public')->assertMissing($removedAdditionalPath);
+        $this->assertFalse(Storage::disk('public')->exists($logoPath));
+        $this->assertFalse(Storage::disk('public')->exists($removedAdditionalPath));
     }
 
     public function test_new_project_submit_generates_name_from_reference_image(): void
@@ -109,7 +128,7 @@ class SkillsTest extends TestCase
         $user = User::factory()->create();
 
         Livewire::actingAs($user)
-            ->test('pages::skills')
+            ->test('pages::studio')
             ->call('openTool', 'product-detail')
             ->assertSet('projectName', '')
             ->set('productName', 'Leather handbag')
@@ -120,7 +139,7 @@ class SkillsTest extends TestCase
             ->assertHasNoErrors()
             ->assertSet('projectName', 'Túi da nâu studio');
 
-        $project = SkillProject::query()->sole();
+        $project = StudioProject::query()->sole();
         $this->assertSame('Túi da nâu studio', $project->name);
         $this->assertNotNull($project->submitted_at);
         ProjectNameAgent::assertPrompted(function ($prompt): bool {
@@ -137,24 +156,24 @@ class SkillsTest extends TestCase
         $user = User::factory()->create();
 
         Livewire::actingAs($user)
-            ->test('pages::skills')
+            ->test('pages::studio')
             ->call('openTool', 'product-detail')
             ->set('newLogoPhoto', UploadedFile::fake()->image('logo.png'))
             ->call('nextStep')
             ->assertHasErrors('newProductPhoto');
 
-        Storage::disk('public')->put('skill-projects/legacy-main.jpg', 'main');
-        Storage::disk('public')->put('skill-projects/legacy-side.jpg', 'side');
-        $project = SkillProject::create([
+        Storage::disk('public')->put('studio-projects/legacy-main.jpg', 'main');
+        Storage::disk('public')->put('studio-projects/legacy-side.jpg', 'side');
+        $project = StudioProject::create([
             'user_id' => $user->id,
-            'skill' => 'product-detail',
+            'tool' => 'product-detail',
             'name' => 'Legacy product',
-            'input_paths' => ['references' => ['skill-projects/legacy-main.jpg', 'skill-projects/legacy-side.jpg']],
+            'input_paths' => ['references' => ['studio-projects/legacy-main.jpg', 'studio-projects/legacy-side.jpg']],
         ]);
 
         Livewire::actingAs($user)
             ->withQueryParams(['project' => $project->id])
-            ->test('pages::skills')
+            ->test('pages::studio')
             ->assertSee('legacy-main.jpg', false)
             ->assertSee('legacy-side.jpg', false);
     }
@@ -163,15 +182,15 @@ class SkillsTest extends TestCase
     {
         $owner = User::factory()->create();
         $other = User::factory()->create();
-        SkillProject::create([
+        StudioProject::create([
             'user_id' => $owner->id,
-            'skill' => 'marketing-poster',
+            'tool' => 'marketing-poster',
             'name' => 'Private campaign',
         ]);
 
         Livewire::actingAs($other)
             ->withQueryParams(['view' => 'projects'])
-            ->test('pages::skills')
+            ->test('pages::studio')
             ->assertDontSee('Private campaign');
     }
 
@@ -183,31 +202,36 @@ class SkillsTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
         foreach (['product.jpg', 'logo.png', 'model.jpg', 'side.jpg', 'back.jpg'] as $file) {
-            Storage::disk('public')->put('skill-projects/'.$file, UploadedFile::fake()->image($file)->getContent());
+            Storage::disk('public')->put('studio-projects/'.$file, UploadedFile::fake()->image($file)->getContent());
         }
-        $project = SkillProject::create([
+        $project = StudioProject::create([
             'user_id' => $user->id,
-            'skill' => 'product-detail',
+            'tool' => 'product-detail',
             'name' => 'Product set',
             'form_data' => ['notes' => 'Warm studio light'],
             'input_paths' => [
-                'product' => 'skill-projects/product.jpg',
-                'logo' => 'skill-projects/logo.png',
-                'model' => 'skill-projects/model.jpg',
-                'additional_products' => ['skill-projects/side.jpg', 'skill-projects/back.jpg'],
+                'product' => 'studio-projects/product.jpg',
+                'logo' => 'studio-projects/logo.png',
+                'model' => 'studio-projects/model.jpg',
+                'additional_products' => ['studio-projects/side.jpg', 'studio-projects/back.jpg'],
             ],
         ]);
 
-        $images = app(SkillProjectGenerator::class)->create(request(), $project, [
+        $images = app(StudioImageService::class)->createBatch(request(), $project, [
             ['prompt' => 'Create hero image', 'title' => 'Hero', 'output_type' => 'hero'],
             ['prompt' => 'Create detail image', 'title' => 'Detail', 'output_type' => 'close-up'],
         ], '4:5', '1k', model: 'cx/studio-image');
 
         $this->assertCount(2, $images);
         $this->assertNotNull($project->refresh()->submitted_at);
-        $this->assertSame(2, GeneratedMedia::query()->where('skill_project_id', $project->id)->count());
-        $this->assertSame('skills', $images->first()->source);
+        $this->assertSame(2, GeneratedMedia::query()->where('studio_project_id', $project->id)->count());
+        $this->assertSame('web', $images->first()->source);
         $this->assertSame('product-detail', $images->first()->preset);
+        $this->assertSame($project->id, $images->first()->studio_project_id);
+        $this->assertTrue($images->first()->studioProject->is($project));
+        $this->assertSame('studio', data_get($images->first()->request_meta, 'generation_mode'));
+        $this->assertSame('product-detail', data_get($images->first()->request_meta, 'tool'));
+        $this->assertArrayNotHasKey('skill', $images->first()->request_meta);
         $this->assertSame('cx/studio-image', $images->first()->model);
         $this->assertSame('4:5', data_get($images->first()->request_meta, 'aspect_ratio'));
         $this->assertSame('hero', data_get($images->first()->request_meta, 'output_type'));
@@ -239,16 +263,16 @@ class SkillsTest extends TestCase
                 'status' => 'succeeded',
             ]);
         }
-        Storage::disk('public')->put('skill-projects/product.jpg', UploadedFile::fake()->image('product.jpg')->getContent());
-        $project = SkillProject::create([
+        Storage::disk('public')->put('studio-projects/product.jpg', UploadedFile::fake()->image('product.jpg')->getContent());
+        $project = StudioProject::create([
             'user_id' => $user->id,
-            'skill' => 'product-detail',
+            'tool' => 'product-detail',
             'name' => 'Too many outputs',
-            'input_paths' => ['references' => ['skill-projects/product.jpg']],
+            'input_paths' => ['references' => ['studio-projects/product.jpg']],
         ]);
 
         try {
-            app(SkillProjectGenerator::class)->create(request(), $project, [
+            app(StudioImageService::class)->createBatch(request(), $project, [
                 ['prompt' => 'Hero', 'title' => 'Hero', 'output_type' => 'hero'],
                 ['prompt' => 'Detail', 'title' => 'Detail', 'output_type' => 'close-up'],
             ], '4:5', '1k');
@@ -258,7 +282,7 @@ class SkillsTest extends TestCase
         }
 
         $this->assertNull($project->refresh()->submitted_at);
-        $this->assertSame(0, GeneratedMedia::query()->where('skill_project_id', $project->id)->count());
+        $this->assertSame(0, GeneratedMedia::query()->where('studio_project_id', $project->id)->count());
         Bus::assertNothingDispatched();
     }
 
@@ -268,20 +292,20 @@ class SkillsTest extends TestCase
         Bus::fake();
         $user = User::factory()->create();
         $this->actingAs($user);
-        Storage::disk('public')->put('skill-projects/poster.jpg', UploadedFile::fake()->image('poster.jpg')->getContent());
-        $project = SkillProject::create([
+        Storage::disk('public')->put('studio-projects/poster.jpg', UploadedFile::fake()->image('poster.jpg')->getContent());
+        $project = StudioProject::create([
             'user_id' => $user->id,
-            'skill' => 'marketing-poster',
+            'tool' => 'marketing-poster',
             'name' => 'Campaign',
-            'input_paths' => ['references' => ['skill-projects/poster.jpg']],
+            'input_paths' => ['references' => ['studio-projects/poster.jpg']],
         ]);
-        $generator = app(SkillProjectGenerator::class);
+        $generator = app(StudioImageService::class);
 
-        $first = $generator->create(request(), $project, [
+        $first = $generator->createBatch(request(), $project, [
             ['prompt' => 'Create first poster', 'title' => 'Poster v1', 'output_type' => 'poster'],
         ], '4:5', '1k')->sole();
         $first->update(['status' => 'succeeded']);
-        $second = $generator->create(request(), $project->refresh(), [
+        $second = $generator->createBatch(request(), $project->refresh(), [
             ['prompt' => 'Create revised poster', 'title' => 'Poster v2', 'output_type' => 'poster'],
         ], '4:5', '1k')->sole();
 
@@ -294,9 +318,9 @@ class SkillsTest extends TestCase
     public function test_submitted_project_opens_details_before_new_version_flyout(): void
     {
         $user = User::factory()->create();
-        $project = SkillProject::create([
+        $project = StudioProject::create([
             'user_id' => $user->id,
-            'skill' => 'marketing-poster',
+            'tool' => 'marketing-poster',
             'name' => 'Existing campaign',
             'form_data' => [
                 'poster_topic' => 'Summer campaign',
@@ -308,7 +332,7 @@ class SkillsTest extends TestCase
         ]);
         $v1 = GeneratedMedia::create([
             'user_id' => $user->id,
-            'skill_project_id' => $project->id,
+            'studio_project_id' => $project->id,
             'visitor_key' => 'project-version-ui',
             'prompt' => 'Existing poster v1',
             'provider' => 'openai',
@@ -319,7 +343,7 @@ class SkillsTest extends TestCase
         ]);
         $v2 = GeneratedMedia::create([
             'user_id' => $user->id,
-            'skill_project_id' => $project->id,
+            'studio_project_id' => $project->id,
             'visitor_key' => 'project-version-ui',
             'prompt' => 'Existing poster v2',
             'provider' => 'openai',
@@ -333,7 +357,7 @@ class SkillsTest extends TestCase
 
         Livewire::actingAs($user)
             ->withQueryParams(['view' => 'projects', 'project' => $project->id])
-            ->test('pages::skills')
+            ->test('pages::studio')
             ->assertSet('showWizard', false)
             ->assertSee('Existing campaign')
             ->assertSee(__('Version :version', ['version' => 2]))

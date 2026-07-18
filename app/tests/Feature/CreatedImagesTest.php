@@ -13,9 +13,10 @@ use App\Models\ApiKey;
 use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\User;
-use App\Services\AiImageEditor;
+use App\Services\ImageCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Queue\MaxAttemptsExceededException;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -105,7 +106,7 @@ class CreatedImagesTest extends TestCase
 
     public function test_guest_create_image_action_opens_login_modal(): void
     {
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->call('openComposer')
             ->assertDispatched('open-account-modal')
             ->assertNoRedirect();
@@ -251,7 +252,7 @@ class CreatedImagesTest extends TestCase
     {
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('parentId', 999)
             ->set('parentPrompt', 'Old parent prompt')
             ->set('parentReferenceIndexes', [0])
@@ -281,7 +282,7 @@ class CreatedImagesTest extends TestCase
         ]);
         $this->actingAs($user);
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->call('editImage', $parent->id)
             ->assertSet('parentId', $parent->id)
             ->assertSet('parentPrompt', 'Original parent prompt')
@@ -328,7 +329,7 @@ class CreatedImagesTest extends TestCase
         ]);
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->call('editImage', $parent->id)
             ->assertSet('parentId', null)
             ->assertSet('showComposer', false)
@@ -353,7 +354,7 @@ class CreatedImagesTest extends TestCase
         ]);
         $this->actingAs($user);
 
-        $component = Livewire::test('gallery.generator')
+        $component = Livewire::test('gallery.creator')
             ->call('editImage', $parent->id)
             ->set('prompt', 'Make the lighting warmer')
             ->call('createImage')
@@ -381,7 +382,7 @@ class CreatedImagesTest extends TestCase
         ]);
         $this->actingAs($user);
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->call('editImage', $parent->id)
             ->assertSet('parentId', $parent->id)
             ->assertSet('parentPrompt', 'Prompt-only parent')
@@ -392,7 +393,7 @@ class CreatedImagesTest extends TestCase
     {
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->set('prompt', str_repeat('mèo ', 1201))
             ->call('createImage')
@@ -408,7 +409,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->assertSee(__('Uploading image...'))
             ->assertSee(__('Analyzing image...'))
@@ -431,7 +432,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->set('prompt', 'small cat')
             ->set('rewriteInstruction', 'make it cinematic')
@@ -452,7 +453,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->set('prompt', 'A cinematic product photo of a small cat.')
             ->call('translatePrompt')
@@ -473,7 +474,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->assertDontSee(__('Translate prompt to Vietnamese'))
             ->assertDontSee(__('Rewrite prompt'))
@@ -499,7 +500,7 @@ class CreatedImagesTest extends TestCase
 
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->set('rewriteInstruction', 'Create a cinematic product photo of a small cat')
             ->call('rewritePrompt')
@@ -515,7 +516,7 @@ class CreatedImagesTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        $component = Livewire::test('gallery.generator')
+        $component = Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->set('prompt', 'Create a small cat')
             ->call('createImage')
@@ -542,7 +543,7 @@ class CreatedImagesTest extends TestCase
         $user = User::factory()->unverified()->create(['id' => 200, 'created_at' => now()->subDay()]);
         $this->actingAs($user);
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->set('prompt', 'Create a small cat')
             ->call('createImage')
@@ -648,7 +649,7 @@ class CreatedImagesTest extends TestCase
         $this->assertSame('failed', data_get($image->request_meta, 'progress'));
         $this->assertSame('Tác vụ tạo ảnh bị gián đoạn. Vui lòng thử lại.', $image->error);
         $this->actingAs($user);
-        $this->assertSame(0, app(AiImageEditor::class)->countToday(request()));
+        $this->assertSame(0, app(ImageCreationService::class)->countToday(request()));
         Storage::disk('public')->assertMissing($pendingPath);
         Event::assertDispatched(AiImageCompleted::class);
     }
@@ -695,7 +696,7 @@ class CreatedImagesTest extends TestCase
             'status' => 'pending',
         ]);
 
-        (new CreateAiImage($image->id))->handle(app(AiImageEditor::class));
+        (new CreateAiImage($image->id))->handle(app(ImageCreationService::class));
 
         Event::assertDispatched(
             AiImageCompleted::class,
@@ -770,10 +771,11 @@ class CreatedImagesTest extends TestCase
         $this->assertFalse($image->fresh()->is_published);
     }
 
-    public function test_failed_create_image_job_releases_quota_by_marking_image_failed(): void
+    public function test_failed_create_image_job_releases_quota_and_stops_detail_loading(): void
     {
         Event::fake([AiImageCompleted::class]);
 
+        User::factory()->create(); // id 1 is always admin
         $user = User::factory()->create();
         $this->actingAs($user);
         $image = GeneratedMedia::create([
@@ -784,12 +786,19 @@ class CreatedImagesTest extends TestCase
             'model' => 'cx/gpt-5.5-image',
             'status' => 'pending',
         ]);
+        $detail = Livewire::test('gallery.detail')->call('openImage', $image->id);
 
         $job = new CreateAiImage($image->id, $user->id);
-        $job->failed(new \RuntimeException('Queue timeout'));
+        $job->failed(new MaxAttemptsExceededException('App\\Jobs\\CreateAiImage has been attempted too many times.'));
 
+        $detail
+            ->call('refreshCompletedImage', ['image_id' => $image->id, 'status' => 'failed'])
+            ->assertSee(__('Could not create this image.'))
+            ->assertSee(__('Failed'))
+            ->assertDontSee('wire:poll.2s', false)
+            ->assertDispatched('toast-show');
         $this->assertSame('failed', $image->fresh()->status);
-        $this->assertSame(0, app(AiImageEditor::class)->countToday(request()));
+        $this->assertSame(0, app(ImageCreationService::class)->countToday(request()));
         Event::assertDispatched(AiImageCompleted::class);
     }
 }

@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\ApiKey;
-use App\Services\AiImageEditor;
+use App\Services\GeneratedMediaService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -29,26 +29,26 @@ new class extends Component {
     #[Computed]
     public function userImageCount(): int
     {
-        return app(AiImageEditor::class)->guestImageCount(request());
+        return app(GeneratedMediaService::class)->guestImageCount(request());
     }
 
     #[Computed]
     public function remainingToday(): ?int
     {
-        return app(AiImageEditor::class)->remainingToday(request());
+        return app(GeneratedMediaService::class)->remainingToday(request());
     }
 
     #[Computed]
     public function dailyLimit(): int
     {
-        return app(AiImageEditor::class)->dailyLimit();
+        return app(GeneratedMediaService::class)->dailyLimit();
     }
 }; ?>
 
 @auth
     @if ($buttonOnly)
         <flux:sidebar.item :href="route('history.index')" :current="\App\Support\LocalizedRoute::is('history.*')" wire:navigate>
-            <x-slot name="icon"><x-iconsax-bul-gallery class="size-4" /></x-slot>
+            <x-slot name="icon"><x-iconsax-two-gallery-tick class="size-4" /></x-slot>
             {{ __(':count images created', ['count' => number_format($this->userImageCount)]) }}
         </flux:sidebar.item>
     @else

@@ -2,7 +2,7 @@
 
 use App\Jobs\CreateAiImage;
 use App\Models\GeneratedMedia;
-use App\Services\AiImageEditor;
+use App\Services\CreatorImageService;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -59,7 +59,10 @@ new class extends Component
         $this->resolution = $defaults['resolution'];
         $this->imageDetail = GptImageOptions::defaultImageDetail();
         $this->imageModel = AppSettings::defaultImageModel();
-        $this->showComposer = Auth::check() && request()->boolean('composer');
+
+        if (request()->boolean('composer')) {
+            $this->openComposer();
+        }
     }
 
     public function openComposer(): void
@@ -95,7 +98,7 @@ new class extends Component
     }
 
     #[On('edit-image')]
-    public function editImage(int $imageId, AiImageEditor $editor): void
+    public function editImage(int $imageId, CreatorImageService $editor): void
     {
         if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
@@ -124,7 +127,7 @@ new class extends Component
     /**
      * @return array<int, int>
      */
-    private function availableReferenceIndexes(AiImageEditor $editor, ?GeneratedMedia $source): array
+    private function availableReferenceIndexes(CreatorImageService $editor, ?GeneratedMedia $source): array
     {
         if (! $source instanceof GeneratedMedia) {
             return [];
@@ -169,7 +172,7 @@ new class extends Component
         $this->dispatch('prompt-source-uploaded');
     }
 
-    public function analyzePromptSourcePhoto(AiImageEditor $editor): void
+    public function analyzePromptSourcePhoto(CreatorImageService $editor): void
     {
         if (! AppSettings::bool('ai.image_to_prompt_enabled', true) || ! Auth::check() || ! $this->promptSourcePhoto) {
             return;
@@ -220,7 +223,7 @@ new class extends Component
         return AppSettings::promptRules(__('Prompt must not exceed 1200 words.'));
     }
 
-    public function createImage(AiImageEditor $editor): void
+    public function createImage(CreatorImageService $editor): void
     {
         if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
@@ -272,6 +275,7 @@ new class extends Component
                 $this->aspectRatio,
                 $this->resolution,
                 $this->imageModel,
+                ['generation_mode' => 'creator', 'source' => 'web'],
             );
         } catch (InvalidArgumentException $e) {
             $this->errorMessage = $e->getMessage();
@@ -303,7 +307,7 @@ new class extends Component
         $this->redirectRoute('history.index', ['image' => $image->id], navigate: true);
     }
 
-    public function rewritePrompt(AiImageEditor $editor): void
+    public function rewritePrompt(CreatorImageService $editor): void
     {
         if (! AppSettings::bool('ai.prompt_rewrite_enabled', true)) {
             return;
@@ -334,7 +338,7 @@ new class extends Component
         }
     }
 
-    public function translatePrompt(AiImageEditor $editor): void
+    public function translatePrompt(CreatorImageService $editor): void
     {
         if (! AppSettings::bool('ai.prompt_translation_enabled', true)) {
             return;
@@ -360,7 +364,7 @@ new class extends Component
         }
     }
 
-    public function publishResult(AiImageEditor $editor): void
+    public function publishResult(CreatorImageService $editor): void
     {
         $this->errorMessage = null;
         $this->publishMessage = null;
@@ -406,7 +410,7 @@ new class extends Component
     #[Computed]
     public function remainingToday(): ?int
     {
-        return app(AiImageEditor::class)->remainingToday(request());
+        return app(CreatorImageService::class)->remainingToday(request());
     }
 
     #[Computed]
@@ -439,7 +443,7 @@ new class extends Component
             return [];
         }
 
-        $paths = app(AiImageEditor::class)->referenceSourcePaths($image);
+        $paths = app(CreatorImageService::class)->referenceSourcePaths($image);
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk('public');
 
@@ -457,12 +461,12 @@ new class extends Component
 
     public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
     {
-        return app(AiImageEditor::class)->imageUrl($image, $size);
+        return app(CreatorImageService::class)->imageUrl($image, $size);
     }
 
     public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
     {
-        return app(AiImageEditor::class)->imageSize($image, $size);
+        return app(CreatorImageService::class)->imageSize($image, $size);
     }
 }; ?>
 
@@ -548,104 +552,39 @@ new class extends Component
                     @endif
 
                     @php($isMultiple = $maxReferencePhotos > 1)
-                    <flux:card class="p-3!">
-                        <div x-data="{
-                                pasteError(text) {
-                                    Flux.toast({ text, variant: 'danger' })
-                                },
-                                async pasteFromClipboard() {
-                                    if (! navigator.clipboard?.read) {
-                                        this.pasteError(@js(__('Your browser does not support pasting images.')))
-                                        return
-                                    }
-
-                                    try {
-                                        const items = await navigator.clipboard.read()
-                                        const files = []
-
-                                        for (const item of items) {
-                                            const type = item.types.find(t => t.startsWith('image/'))
-                                            if (! type) continue
-                                            const blob = await item.getType(type)
-                                            const ext = (type.split('/')[1] || 'png').replace('jpeg', 'jpg')
-                                            files.push(new File([blob], `clipboard-${Date.now()}.${ext}`, { type: blob.type }))
-                                        }
-
-                                        if (files.length === 0) {
-                                            this.pasteError(@js(__('No image found in clipboard.')))
-                                            return
-                                        }
-
-                                        if ({{ $isMultiple ? 'true' : 'false' }}) {
-                                            $wire.uploadMultiple('newPhotos', files, () => {}, () => {
-                                                this.pasteError(@js(__('Could not paste image. Please try again.')))
-                                            })
-                                        } else {
-                                            $wire.upload('newPhotos', files[0], () => {}, () => {
-                                                this.pasteError(@js(__('Could not paste image. Please try again.')))
-                                            })
-                                        }
-                                    } catch (e) {
-                                        this.pasteError(@js(__('Could not read clipboard. Please allow clipboard access.')))
-                                    }
-                                },
-                            }">
-                            <div class="flex items-center justify-between gap-3 mb-3">
-                                <div class="flex items-center gap-2 flex-1">
-                                    <flux:text class="text-sm" variant="subtle">{{ $referenceCount }}/{{ $maxReferencePhotos }}</flux:text>
-                                    <flux:heading size="sm">{{ __('Reference images') }}</flux:heading>
+                    <div>
+                        <x-image-upload-grid model="newPhotos" :count="$referenceCount" :limit="$maxReferencePhotos" :heading="__('Reference images')" :add-label="__('Add image')" :multiple="$isMultiple">
+                            @foreach ($parentReferenceImages as $index => $url)
+                                <div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
+                                    <img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" />
+                                    <div class="absolute top-1 right-1 z-10">
+                                        <flux:button type="button" size="xs" variant="filled" icon="x-mark" wire:click="removeParentReference({{ $index }})" wire:loading.remove wire:target="createImage" :aria-label="__('Remove reference image :number', ['number' => $loop->iteration])" />
+                                    </div>
                                 </div>
-                                @if ($referenceCount < $maxReferencePhotos)
-                                    <flux:button type="button" size="sm" variant="filled" x-on:click="pasteFromClipboard()" wire:loading.attr="disabled" wire:target="newPhotos">
-                                        <x-slot name="icon"><x-iconsax-two-clipboard-import class="size-4" /></x-slot>
-                                        {{ __('Paste image') }}
-                                    </flux:button>
-                                @endif
-                            </div>
-
-                            @if ($referenceCount > 0)
-                            <div class="grid grid-cols-3 gap-2">
-                                @foreach ($parentReferenceImages as $index => $url)
-                                    <div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
-                                        <img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" />
-                                        <div class="absolute top-1 right-1 z-10">
-                                            <flux:button type="button" size="xs" variant="filled" icon="x-mark" wire:click="removeParentReference({{ $index }})" wire:loading.remove wire:target="createImage" :aria-label="__('Remove reference image :number', ['number' => $loop->iteration])" />
-                                        </div>
+                            @endforeach
+                            @foreach ($referenceImages as $image)
+                            @php($url = $this->imageUrl($image, 'xs'))
+                            @php($imageSize = $this->imageSize($image, 'xs'))
+                            @if ($url)
+                                <div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
+                                    <img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif />
+                                    <div class="absolute top-1 right-1 z-10">
+                                        <flux:button type="button" size="xs" variant="filled" icon="x-mark" wire:click="removeReferenceImage({{ $image->id }})" wire:loading.remove wire:target="createImage" :aria-label="__('Remove reference image :number', ['number' => $loop->iteration])" />
                                     </div>
-                                @endforeach
-                                @foreach ($referenceImages as $image)
-                                @php($url = $this->imageUrl($image, 'xs'))
-                                @php($imageSize = $this->imageSize($image, 'xs'))
-                                @if ($url)
-                                    <div class="group relative overflow-hidden rounded-2xl bg-zinc-200">
-                                        <img class="aspect-square size-full object-cover" src="{{ $url }}" alt="{{ __('Reference image :number', ['number' => $loop->iteration]) }}" @if ($imageSize) width="{{ $imageSize['width'] }}" height="{{ $imageSize['height'] }}" @endif />
-                                        <div class="absolute top-1 right-1 z-10">
-                                            <flux:button type="button" size="xs" variant="filled" icon="x-mark" wire:click="removeReferenceImage({{ $image->id }})" wire:loading.remove wire:target="createImage" :aria-label="__('Remove reference image :number', ['number' => $loop->iteration])" />
-                                        </div>
-                                    </div>
-                                @endif
-                                @endforeach
-                                @foreach ($photos as $index => $item)
-                                    <div class="group relative overflow-hidden rounded-2xl bg-zinc-200 dark:bg-white/10">
-                                        <img class="aspect-square size-full object-cover" src="{{ $item->temporaryUrl() }}" alt="{{ __('Reference image :number', ['number' => $referenceImages->count() + $index + 1]) }}" />
-                                        <div class="absolute top-1 right-1 z-10">
-                                            <flux:button type="button" size="xs" variant="filled" icon="x-mark" wire:click="removePhoto({{ $index }})" wire:loading.remove wire:target="createImage" :aria-label="__('Remove reference image :number', ['number' => $referenceImages->count() + $index + 1])" />
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                            @endif
-
-                            @if ($referenceCount < $maxReferencePhotos)
-                                <div class="space-y-2">
-                                    <flux:file-upload wire:model="newPhotos" accept="image/jpeg,image/png,image/webp,image/avif" :multiple="$isMultiple">
-                                        <flux:file-upload.dropzone :heading="$referenceCount > 0 ? __('Add image') : __('Upload optional image')" :text="__('Drop images here or click to browse')" with-progress inline />
-                                    </flux:file-upload>
                                 </div>
                             @endif
-                            <div class="mt-2 text-sm text-zinc-500" wire:loading wire:target="newPhotos">{{ __('Uploading image...') }}</div>
-                        </div>
-                    </flux:card>
+                            @endforeach
+                            @foreach ($photos as $index => $item)
+                                <div class="group relative overflow-hidden rounded-2xl bg-zinc-200 dark:bg-white/10">
+                                    <img class="aspect-square size-full object-cover" src="{{ $item->temporaryUrl() }}" alt="{{ __('Reference image :number', ['number' => $referenceImages->count() + $index + 1]) }}" />
+                                    <div class="absolute top-1 right-1 z-10">
+                                        <flux:button type="button" size="xs" variant="filled" icon="x-mark" wire:click="removePhoto({{ $index }})" wire:loading.remove wire:target="createImage" :aria-label="__('Remove reference image :number', ['number' => $referenceImages->count() + $index + 1])" />
+                                    </div>
+                                </div>
+                            @endforeach
+                        </x-image-upload-grid>
+                        <div class="mt-2 text-sm text-zinc-500" wire:loading wire:target="newPhotos">{{ __('Uploading image...') }}</div>
+                    </div>
 
                     @if ($parentId && filled($parentPrompt))
                         <div class="space-y-2 rounded-2xl bg-zinc-100 p-4 dark:bg-white/10">
@@ -733,7 +672,7 @@ new class extends Component
                                                     <flux:text variant="subtle">{{ __('Tell AI how to rewrite your current prompt.') }}</flux:text>
                                                 </div>
                                                 <flux:textarea wire:model="rewriteInstruction" rows="4" resize="vertical" :label="__('Rewrite instruction')" :placeholder="__('e.g. Make it more cinematic, add product lighting, keep the same subject...')" />
-                                                <flux:button class="w-full" type="button" size="sm" variant="primary" wire:click="rewritePrompt" wire:loading.attr="disabled" wire:target="rewritePrompt">
+                                                <flux:button class="w-full" type="button" size="sm" variant="primary" color="emerald" wire:click="rewritePrompt" wire:loading.attr="disabled" wire:target="rewritePrompt">
                                                     <span wire:loading.remove wire:target="rewritePrompt">{{ __('Rewrite prompt') }}</span>
                                                     <span wire:loading wire:target="rewritePrompt">{{ __('Rewriting prompt...') }}</span>
                                                 </flux:button>
@@ -840,7 +779,7 @@ new class extends Component
                         </flux:radio.group>
                     @endif
 
-                    <flux:button class="w-full" type="submit" variant="primary" wire:loading.attr="disabled" wire:target="newPhotos,createImage">
+                    <flux:button class="w-full" type="submit" variant="primary" color="emerald" wire:loading.attr="disabled" wire:target="newPhotos,createImage">
                         <span wire:loading.remove wire:target="newPhotos,createImage">{{ __('Create image') }}</span>
                         <span wire:loading wire:target="newPhotos">{{ __('Uploading image...') }}</span>
                         <span wire:loading wire:target="createImage">{{ __('Creating image...') }}</span>

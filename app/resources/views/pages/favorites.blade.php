@@ -2,7 +2,7 @@
 
 use App\Models\GeneratedMedia;
 use App\Models\MediaFavorite;
-use App\Services\AiImageEditor;
+use App\Services\GeneratedMediaService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -51,12 +51,12 @@ new #[Title('Favorite images')] class extends Component
 
     public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
     {
-        return app(AiImageEditor::class)->imageUrl($image, $size);
+        return app(GeneratedMediaService::class)->imageUrl($image, $size);
     }
 
     public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
     {
-        return app(AiImageEditor::class)->imageSize($image, $size);
+        return app(GeneratedMediaService::class)->imageSize($image, $size);
     }
 
     public function detailUrl(GeneratedMedia $image): string

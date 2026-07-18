@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $user_id
- * @property string $skill
+ * @property string $tool
  * @property string $name
  * @property array<string, mixed>|null $form_data
  * @property array<string, mixed>|null $input_paths
@@ -18,10 +18,12 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['user_id', 'skill', 'name', 'form_data', 'input_paths', 'submitted_at'])]
-class SkillProject extends BaseModel
+#[Fillable(['user_id', 'tool', 'name', 'form_data', 'input_paths', 'submitted_at'])]
+class StudioProject extends BaseModel
 {
-    public const SKILLS = ['product-detail', 'marketing-poster'];
+    protected $table = 'studio_projects';
+
+    public const TOOLS = ['product-detail', 'marketing-poster'];
 
     /**
      * @return BelongsTo<User, $this>
@@ -36,7 +38,7 @@ class SkillProject extends BaseModel
      */
     public function media(): HasMany
     {
-        return $this->hasMany(GeneratedMedia::class);
+        return $this->hasMany(GeneratedMedia::class, 'studio_project_id');
     }
 
     protected function casts(): array

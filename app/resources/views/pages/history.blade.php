@@ -2,7 +2,7 @@
 
 use App\Jobs\CreateAiImage;
 use App\Models\GeneratedMedia;
-use App\Services\AiImageEditor;
+use App\Services\GeneratedMediaService;
 use App\Support\AppSettings;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -68,7 +68,7 @@ new #[Title('Created images')] class extends Component {
         $this->resetPage();
     }
 
-    public function togglePublish(int $id, AiImageEditor $editor): void
+    public function togglePublish(int $id, GeneratedMediaService $editor): void
     {
         $image = $this->findImage($id);
 
@@ -96,7 +96,7 @@ new #[Title('Created images')] class extends Component {
         }
     }
 
-    public function cancelPending(int $id, AiImageEditor $editor): void
+    public function cancelPending(int $id, GeneratedMediaService $editor): void
     {
         $query = GeneratedMedia::query();
 
@@ -114,7 +114,7 @@ new #[Title('Created images')] class extends Component {
         Flux::toast(text: __('Image creation cancelled.'));
     }
 
-    public function deleteImage(int $id, AiImageEditor $editor): void
+    public function deleteImage(int $id, GeneratedMediaService $editor): void
     {
         $editor->deleteGuestImage(request(), $id);
         $this->refreshImages();
@@ -125,7 +125,7 @@ new #[Title('Created images')] class extends Component {
     #[Computed]
     public function usage(): array
     {
-        $editor = app(AiImageEditor::class);
+        $editor = app(GeneratedMediaService::class);
 
         return [
             'limit' => $editor->dailyLimit(),
@@ -172,7 +172,7 @@ new #[Title('Created images')] class extends Component {
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
-            : $query->where('visitor_key', app(AiImageEditor::class)->visitorKey(request()));
+            : $query->where('visitor_key', app(GeneratedMediaService::class)->visitorKey(request()));
 
         return $query
             ->with('category')
@@ -187,12 +187,12 @@ new #[Title('Created images')] class extends Component {
 
     public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
     {
-        return app(AiImageEditor::class)->imageUrl($image, $size);
+        return app(GeneratedMediaService::class)->imageUrl($image, $size);
     }
 
     public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
     {
-        return app(AiImageEditor::class)->imageSize($image, $size);
+        return app(GeneratedMediaService::class)->imageSize($image, $size);
     }
 
     public function progressLabel(GeneratedMedia $image): string
@@ -274,7 +274,7 @@ new #[Title('Created images')] class extends Component {
 
         Auth::check()
             ? $query->where('user_id', Auth::id())
-            : $query->where('visitor_key', app(AiImageEditor::class)->visitorKey(request()));
+            : $query->where('visitor_key', app(GeneratedMediaService::class)->visitorKey(request()));
 
         return $query
             ->where('status', 'succeeded')

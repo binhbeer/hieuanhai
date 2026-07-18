@@ -14,10 +14,11 @@
 
 		@php($sidebarCategories = \App\Models\Category::query()->active()->when(app()->getLocale() === 'en', fn($query) => $query->englishReady())->ordered()->get())
 		@php($selectedSidebarCategory = request()->route('category'))
-		@php($gallerySearch = \App\Support\LocalizedRoute::is('search.*') && is_string(request('q')) ? request('q') : '')
+		@php($gallerySearch = is_string(request('q')) ? trim(request('q')) : '')
 		@php($gallerySort = is_string(request('sort')) && in_array(request('sort'), ['featured', 'new', 'popular'], true) ? request('sort') : 'new')
-		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : (\App\Support\LocalizedRoute::is('search.*') ? route('search.index') : route('home')))
-		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch, 'sort' => $sort === 'new' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
+		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : (\App\Support\LocalizedRoute::is('tags.show') ? route('tags.show', request()->route('tag')) : route('gallery.index')))
+		@php($isGalleryRoute = \App\Support\LocalizedRoute::is('gallery.index', 'categories.show', 'tags.show'))
+		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch !== '' ? $gallerySearch : null, 'sort' => $sort === 'new' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
 
 		<div class="min-h-0 flex-1 overflow-y-auto">
 			@if (auth()->user()?->isAdmin() && \App\Support\LocalizedRoute::is('manage.*'))
@@ -47,7 +48,7 @@
 							<x-slot name="icon"><x-iconsax-bul-gallery class="size-5" /></x-slot>
 							{{ __('Images') }}
 						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('manage.skills.index')" :current="\App\Support\LocalizedRoute::is('manage.skills.*')" wire:navigate>
+						<flux:sidebar.item :href="route('manage.studio.index')" :current="\App\Support\LocalizedRoute::is('manage.studio.*')" wire:navigate>
 							<x-slot name="icon"><x-iconsax-bul-star class="size-5" /></x-slot>
 							{{ __('AI tools') }}
 						</flux:sidebar.item>
@@ -66,54 +67,66 @@
 					</flux:sidebar.group>
 				</flux:sidebar.nav>
 			@else
-				<flux:sidebar.nav>
-					<flux:sidebar.group class="grid">
-						<flux:sidebar.item :href="route('home')" :current="\App\Support\LocalizedRoute::is('home')" wire:navigate>
-							<x-slot name="icon"><x-iconsax-bul-home class="size-4" /></x-slot>
-							{{ __('Home') }}
-						</flux:sidebar.item>
-						<flux:sidebar.item :href="route('skills.index')" :current="\App\Support\LocalizedRoute::is('skills.*')" wire:navigate>
-							<x-slot name="icon"><x-iconsax-bul-star class="size-4" /></x-slot>
-							{{ __('AI tools') }}
-						</flux:sidebar.item>
-						@auth
-							<flux:sidebar.item :href="route('search.index')" :current="\App\Support\LocalizedRoute::is('search.*')" wire:navigate>
-								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-4" /></x-slot>
-								{{ __('Search') }}
-							</flux:sidebar.item>
-							<flux:sidebar.item :href="route('favorites.index')" :current="\App\Support\LocalizedRoute::is('favorites.*')" wire:navigate>
-								<x-slot name="icon"><x-iconsax-bul-heart class="size-4" /></x-slot>
-								{{ __('Favorite images') }}
-							</flux:sidebar.item>
-						@else
-							<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
-								<x-slot name="icon"><x-iconsax-bul-search-normal class="size-4" /></x-slot>
-								{{ __('Search') }}
-							</flux:sidebar.item>
-							<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
-								<x-slot name="icon"><x-iconsax-bul-heart class="size-4" /></x-slot>
-								{{ __('Favorite images') }}
-							</flux:sidebar.item>
-						@endauth
-						@auth
-							<livewire:gallery.usage :button-only="true" />
-						@endauth
-					</flux:sidebar.group>
-				</flux:sidebar.nav>
+			@php($productTab = match (true) {
+				\App\Support\LocalizedRoute::is('quick.*') => 'quick',
+				\App\Support\LocalizedRoute::is('creator.*') => 'creator',
+				\App\Support\LocalizedRoute::is('studio.*') => 'studio',
+				default => null,
+			})
 
-				<flux:sidebar.nav>
-					<flux:sidebar.group class="grid" expandable heading="{{ __('Categories') }}">
-						<x-slot name="icon"><x-iconsax-bul-folder-open class="size-4" /></x-slot>
-						<flux:sidebar.item :href="route('home')" :current="\App\Support\LocalizedRoute::is('home')" wire:navigate>
-							{{ __('All') }}
+			<div class="px-2 pb-3">
+				<flux:tabs variant="segmented" size="sm" class="grid! h-auto! w-full grid-cols-3 gap-0.5 p-1" aria-label="{{ __('Create image') }}">
+					<flux:tab :href="route('quick.index')" :selected="$productTab === 'quick'" wire:navigate class="h-auto! flex-col! justify-center gap-1! px-1! py-2! text-center text-xs leading-tight">
+						<x-slot name="icon">
+							<x-iconsax-two-flash class="size-5 text-zinc-500 dark:text-zinc-400 [[data-flux-tab][data-selected]_&]:text-zinc-800 dark:[[data-flux-tab][data-selected]_&]:text-white" />
+						</x-slot>
+						{{ __('Quick') }}
+					</flux:tab>
+					<flux:tab :href="route('creator.index')" :selected="$productTab === 'creator'" wire:navigate class="h-auto! flex-col! justify-center gap-1! px-1! py-2! text-center text-xs leading-tight">
+						<x-slot name="icon">
+							<x-iconsax-two-magicpen class="size-5 text-zinc-500 dark:text-zinc-400 [[data-flux-tab][data-selected]_&]:text-zinc-800 dark:[[data-flux-tab][data-selected]_&]:text-white" />
+						</x-slot>
+						{{ __('Creator') }}
+					</flux:tab>
+					<flux:tab :href="route('studio.index')" :selected="$productTab === 'studio'" wire:navigate class="h-auto! flex-col! justify-center gap-1! px-1! py-2! text-center text-xs leading-tight">
+						<x-slot name="icon">
+							<x-iconsax-two-layer class="size-5 text-zinc-500 dark:text-zinc-400 [[data-flux-tab][data-selected]_&]:text-zinc-800 dark:[[data-flux-tab][data-selected]_&]:text-white" />
+						</x-slot>
+						{{ __('Studio') }}
+					</flux:tab>
+				</flux:tabs>
+			</div>
+
+			<flux:sidebar.nav>
+				<flux:sidebar.group class="grid">
+					@auth
+						<flux:sidebar.item :href="route('favorites.index')" :current="\App\Support\LocalizedRoute::is('favorites.*')" wire:navigate>
+							<x-slot name="icon"><x-iconsax-two-gallery-favorite class="size-4" /></x-slot>
+							{{ __('Favorite images') }}
 						</flux:sidebar.item>
-						@foreach ($sidebarCategories as $category)
-							<flux:sidebar.item :href="route('categories.show', $category)" :current="$selectedSidebarCategory instanceof \App\Models\Category && $selectedSidebarCategory->is($category)" wire:navigate>
-								{{ $category->name }}
-							</flux:sidebar.item>
-						@endforeach
-					</flux:sidebar.group>
-				</flux:sidebar.nav>
+						<livewire:gallery.usage :button-only="true" />
+					@else
+						<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
+							<x-slot name="icon"><x-iconsax-two-gallery-favorite class="size-4" /></x-slot>
+							{{ __('Favorite images') }}
+						</flux:sidebar.item>
+					@endauth
+				</flux:sidebar.group>
+			</flux:sidebar.nav>
+
+			<flux:sidebar.nav>
+				<flux:sidebar.group class="grid" expandable heading="{{ __('Gallery') }}">
+					<x-slot name="icon"><x-iconsax-two-image class="size-4" /></x-slot>
+					<flux:sidebar.item :href="route('gallery.index')" :current="\App\Support\LocalizedRoute::is('gallery.index')" wire:navigate>
+						{{ __('All') }}
+					</flux:sidebar.item>
+					@foreach ($sidebarCategories as $category)
+						<flux:sidebar.item :href="route('categories.show', $category)" :current="$selectedSidebarCategory instanceof \App\Models\Category && $selectedSidebarCategory->is($category)" wire:navigate>
+							{{ $category->name }}
+						</flux:sidebar.item>
+					@endforeach
+				</flux:sidebar.group>
+			</flux:sidebar.nav>
 			@endif
 		</div>
 
@@ -129,14 +142,15 @@
 	@if (!\App\Support\LocalizedRoute::is('images.show'))
 		<flux:header class="sticky top-0 border-b border-zinc-200 bg-white/70 px-3! md:px-4! dark:border-zinc-700 dark:bg-zinc-900/70 backdrop-blur border-none">
 			<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
+			<x-app-logo class="ms-1 lg:hidden" href="{{ route('home') }}" wire:navigate />
 
-			@if (\App\Support\LocalizedRoute::is('home', 'categories.show') || (\App\Support\LocalizedRoute::is('search.*') && $gallerySearch !== ''))
+			@if ($isGalleryRoute)
 				<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
 					<flux:tab :href="$galleryTabUrl('new')" :selected="$gallerySort === 'new'" wire:navigate>
 						{{ __('New') }}
 					</flux:tab>
 					{{-- <flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
-																										{{ __('Popular') }}
+																														{{ __('Popular') }}
 					</flux:tab> --}}
 					<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
 						{{ __('Featured') }}
@@ -146,18 +160,31 @@
 
 			<flux:spacer />
 			<div class="flex items-center gap-2">
-				@auth
-					<flux:modal.trigger name="image-composer">
-						<flux:button size="sm" type="button" variant="primary" color="amber" x-data x-on:click="$dispatch('open-image-composer')" aria-label="{{ __('Create image') }}" tooltip="{{ __('Create image') }}" tooltip:position="bottom">
-							<x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
+				@unless (auth()->user()?->isAdmin() && \App\Support\LocalizedRoute::is('manage.*'))
+					<flux:dropdown position="bottom" align="end">
+						<flux:button size="sm" variant="ghost" square aria-label="{{ __('Create image') }}" tooltip="{{ __('Create image') }}" tooltip:position="bottom">
+							<x-slot name="icon">
+								<x-iconsax-two-add class="size-5" />
+							</x-slot>
 						</flux:button>
-					</flux:modal.trigger>
-				@else
-					<flux:button size="sm" type="button" variant="primary" color="amber" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })" aria-label="{{ __('Create image') }}" tooltip="{{ __('Create image') }}" tooltip:position="bottom">
-						<x-slot name="icon"><x-iconsax-two-magic-star class="size-5" /></x-slot>
-					</flux:button>
-				@endauth
 
+						<flux:menu class="min-w-40">
+							<flux:menu.item :href="route('quick.index', ['composer' => 1])" wire:navigate x-data x-on:click="$dispatch('open-quick-composer')">
+								<x-slot name="icon"><x-iconsax-two-flash class="mr-1.5 size-5" /></x-slot>
+								{{ __('Quick') }}
+							</flux:menu.item>
+							<flux:menu.item :href="route('creator.index', ['composer' => 1])" wire:navigate x-data x-on:click="$dispatch('open-image-composer')">
+								<x-slot name="icon"><x-iconsax-two-magicpen class="mr-1.5 size-5" /></x-slot>
+								{{ __('Creator') }}
+							</flux:menu.item>
+							<flux:menu.item :href="route('studio.index', ['wizard' => 1])" wire:navigate x-data x-on:click="$dispatch('open-studio-wizard')">
+								<x-slot name="icon"><x-iconsax-two-layer class="mr-1.5 size-5" /></x-slot>
+								{{ __('Studio') }}
+							</flux:menu.item>
+						</flux:menu>
+					</flux:dropdown>
+				@endunless
+				<x-appearance-switcher />
 				<x-language-switcher />
 			</div>
 		</flux:header>
@@ -173,8 +200,12 @@
 		<livewire:gallery.detail />
 	@endif
 
-	@persist('gallery-generator')
-	<livewire:gallery.generator />
+	@persist('quick-composer')
+	<livewire:quick.composer />
+	@endpersist
+
+	@persist('gallery-creator')
+	<livewire:gallery.creator />
 	@endpersist
 
 	@persist('toast')

@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\GeneratedMedia;
-use App\Services\AiImageEditor;
+use App\Services\GeneratedMediaService;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -13,7 +13,7 @@ class BackfillAiImageMetadata extends Command
 
     protected $description = 'Generate missing title, description, category, and tags for published images';
 
-    public function handle(AiImageEditor $editor): int
+    public function handle(GeneratedMediaService $editor): int
     {
         $limit = (int) $this->option('limit');
 

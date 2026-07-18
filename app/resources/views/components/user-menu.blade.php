@@ -12,7 +12,7 @@
 			</div>
 			<flux:menu.separator />
 			<flux:menu.radio.group>
-				@foreach ([['component' => 'settings.profile', 'label' => __('Profile'), 'icon' => 'iconsax-two-profile'], ['component' => 'settings.security', 'label' => __('Security'), 'icon' => 'iconsax-two-shield-security'], ['component' => 'settings.api-key', 'label' => __('API key'), 'icon' => 'iconsax-two-key'], ['component' => 'settings.appearance', 'label' => __('Appearance'), 'icon' => 'iconsax-two-color-swatch']] as $setting)
+				@foreach ([['component' => 'settings.profile', 'label' => __('Profile'), 'icon' => 'iconsax-two-profile'], ['component' => 'settings.security', 'label' => __('Security'), 'icon' => 'iconsax-two-shield-security'], ['component' => 'settings.api-key', 'label' => __('API key'), 'icon' => 'iconsax-two-key']] as $setting)
 					<flux:menu.item class="cursor-pointer" as="button" type="button" onclick="Livewire.dispatch('open-account-modal', { component: '{{ $setting['component'] }}' })">
 						<x-slot name="icon"><x-dynamic-component class="mr-1.5 size-5" :component="$setting['icon']" /></x-slot>
 						{{ $setting['label'] }}

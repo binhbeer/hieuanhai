@@ -3,7 +3,7 @@
 @guest
     <div class="rounded-3xl border border-dashed border-zinc-300 p-12 text-center dark:border-white/15">
         <flux:heading>{{ __('Log in to view your projects') }}</flux:heading>
-        <flux:button class="mt-4" variant="primary" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in') }}</flux:button>
+        <flux:button class="mt-4" variant="primary" color="violet" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in') }}</flux:button>
     </div>
 @else
     @if ($selectedProject && $selectedProject->submitted_at)
@@ -12,7 +12,7 @@
                 <div class="flex min-w-0 items-start gap-3">
                     <flux:button
                         class="shrink-0"
-                        :href="route('skills.index', ['view' => 'projects'])"
+                        :href="route('studio.index', ['view' => 'projects'])"
                         variant="ghost"
                         wire:navigate
                         :aria-label="__('Back to projects')"
@@ -22,13 +22,13 @@
                     <div class="min-w-0">
                         <flux:heading size="xl">{{ $selectedProject->name }}</flux:heading>
                         <flux:text class="mt-1">
-                            {{ $page->skillLabel($selectedProject->skill) }}
+                            {{ $page->toolLabel($selectedProject->tool) }}
                             · {{ $page->projectProgress($selectedProject) }}
                             · {{ __(':count versions', ['count' => $page->latestVersion($selectedProject)]) }}
                         </flux:text>
                     </div>
                 </div>
-                <flux:button type="button" variant="primary" wire:click="resumeProject({{ $selectedProject->id }})">
+                <flux:button type="button" variant="primary" color="violet" wire:click="resumeProject({{ $selectedProject->id }})">
                     <x-slot name="icon"><x-iconsax-two-add class="size-5" /></x-slot>
                     {{ __('Create new version') }}
                 </flux:button>
@@ -50,7 +50,7 @@
                             <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                                 <flux:heading size="lg">{{ __('Version :version', ['version' => $version]) }}</flux:heading>
                                 <flux:text>
-                                    {{ $page->skillLabel($selectedProject->skill) }}
+                                    {{ $page->toolLabel($selectedProject->tool) }}
                                     · {{ $versionCreatedAt?->timezone(config('app.timezone'))->format('d/m/Y H:i') }}
                                     · {{ __(':count images', ['count' => $images->count()]) }}
                                 </flux:text>
@@ -83,7 +83,7 @@
             @foreach ($page->projects as $item)
                 @php($cover = $item->media->firstWhere('status', 'succeeded'))
                 <article class="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5">
-                    <a @if ($item->submitted_at) href="{{ route('skills.index', ['view' => 'projects', 'project' => $item->id]) }}" wire:navigate @else href="#" wire:click.prevent="resumeProject({{ $item->id }})" @endif class="block w-full text-left" aria-label="{{ __('Edit project :name', ['name' => $item->name]) }}">
+                    <a @if ($item->submitted_at) href="{{ route('studio.index', ['view' => 'projects', 'project' => $item->id]) }}" wire:navigate @else href="#" wire:click.prevent="resumeProject({{ $item->id }})" @endif class="block w-full text-left" aria-label="{{ __('Edit project :name', ['name' => $item->name]) }}">
                         <div class="aspect-[16/9] bg-zinc-100 dark:bg-white/10">
                             @if ($cover && $page->imageUrl($cover, 'sm'))
                                 <img class="size-full object-cover" src="{{ $page->imageUrl($cover, 'sm') }}" alt="{{ $item->name }}" loading="lazy">
@@ -94,7 +94,7 @@
                         <div class="p-4">
                             <h2 class="font-semibold">{{ $item->name }}</h2>
                             <p class="mt-1 text-sm text-zinc-500">
-                                {{ $page->skillLabel($item->skill) }}
+                                {{ $page->toolLabel($item->tool) }}
                                 · {{ $page->projectProgress($item) }}
                                 @if ($item->created_at)
                                     · {{ $item->created_at->timezone(config('app.timezone'))->format('d/m/Y H:i') }}

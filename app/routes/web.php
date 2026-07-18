@@ -12,29 +12,36 @@ Route::bind('category', function (string $value): Category {
         ->where('status', 'active');
 
     if (app()->getLocale() === 'en') {
-        $query->whereNotNull('name->en')->where('name->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', '')->whereHas('media', fn($query) => $query->where('is_published', true)->where('status', 'succeeded')->whereNotNull('result_path')->whereNotNull('title->en')->where('title->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', ''));
+        $query->whereNotNull('name->en')->where('name->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', '')->whereHas('media', fn ($query) => $query->where('is_published', true)->where('status', 'succeeded')->whereNotNull('result_path')->whereNotNull('title->en')->where('title->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', ''));
     }
 
-    $category = $query->firstOrFail();
-
-    return $category instanceof Category ? $category : throw new UnexpectedValueException('Category binding returned an invalid model.');
+    return $query->firstOrFail();
 });
 
 Route::bind('tag', function (string $value): Tag {
     $query = Tag::query()->where(app()->getLocale() === 'en' ? 'slug_en' : 'slug', $value);
 
     if (app()->getLocale() === 'en') {
-        $query->whereNotNull('name->en')->where('name->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', '')->whereHas('media', fn($query) => $query->where('is_published', true)->where('status', 'succeeded')->whereNotNull('result_path')->whereNotNull('title->en')->where('title->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', ''));
+        $query->whereNotNull('name->en')->where('name->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', '')->whereHas('media', fn ($query) => $query->where('is_published', true)->where('status', 'succeeded')->whereNotNull('result_path')->whereNotNull('title->en')->where('title->en', '!=', '')->whereNotNull('description->en')->where('description->en', '!=', ''));
     }
 
-    $tag = $query->firstOrFail();
-
-    return $tag instanceof Tag ? $tag : throw new UnexpectedValueException('Tag binding returned an invalid model.');
+    return $query->firstOrFail();
 });
 
 Route::translate(function (): void {
-    Route::livewire('/', 'pages::gallery')->name('home');
-    Route::livewire(Localizer::url('skills'), 'pages::skills')->name('skills.index');
+    Route::livewire('/', 'pages::home')->name('home');
+    Route::livewire(Localizer::url('gallery'), 'pages::gallery')->name('gallery.index');
+    Route::livewire(Localizer::url('quick'), 'pages::quick')->name('quick.index');
+    Route::livewire(Localizer::url('quick/remove-object'), 'pages::quick')->name('quick.remove-object')->defaults('tool', 'remove-object');
+    Route::livewire(Localizer::url('quick/restore-old-photo'), 'pages::quick')->name('quick.restore-old-photo')->defaults('tool', 'restore-old-photo');
+    Route::livewire(Localizer::url('quick/replace-background'), 'pages::quick')->name('quick.replace-background')->defaults('tool', 'replace-background');
+    Route::livewire(Localizer::url('quick/product-photo'), 'pages::quick')->name('quick.product-photo')->defaults('tool', 'product-photo');
+    Route::livewire(Localizer::url('quick/face-swap'), 'pages::quick')->name('quick.face-swap')->defaults('tool', 'face-swap');
+    Route::livewire(Localizer::url('quick/change-outfit'), 'pages::quick')->name('quick.change-outfit')->defaults('tool', 'change-outfit');
+    Route::livewire(Localizer::url('quick/add-person'), 'pages::quick')->name('quick.add-person')->defaults('tool', 'add-person');
+    Route::livewire(Localizer::url('quick/id-photo'), 'pages::quick')->name('quick.id-photo')->defaults('tool', 'id-photo');
+    Route::livewire(Localizer::url('creator'), 'pages::creator')->name('creator.index');
+    Route::livewire(Localizer::url('studio'), 'pages::studio')->name('studio.index');
     Route::livewire(Localizer::url('huong-dan'), 'pages::guide')->name('guide.index');
     Route::livewire(Localizer::url('huong-dan/bat-dau'), 'pages::guide')->name('guide.getting-started');
     Route::livewire(Localizer::url('huong-dan/ung-dung-web'), 'pages::guide')->name('guide.web');
@@ -47,7 +54,7 @@ Route::translate(function (): void {
 });
 
 Route::localize(function (): void {
-    Route::livewire('search', 'pages::search')->middleware('auth')->name('search.index');
+    Route::get('search', fn () => redirect()->route('gallery.index', request()->query()))->name('search.index');
     Route::livewire('favorites', 'pages::favorites')->middleware('auth')->name('favorites.index');
     Route::livewire('history', 'pages::history')->middleware('auth')->name('history.index');
 });
@@ -61,7 +68,7 @@ Route::middleware(['auth'])
         Route::livewire('users/{user}/edit', 'pages::manage.user-edit')->name('users.edit');
         Route::livewire('api-keys', 'pages::manage.api-keys')->name('api-keys.index');
         Route::livewire('images', 'pages::manage.images')->name('images.index');
-        Route::livewire('skills', 'pages::manage.skills')->name('skills.index');
+        Route::livewire('studio', 'pages::manage.studio')->name('studio.index');
         Route::livewire('categories', 'pages::manage.categories')->name('categories.index');
         Route::livewire('settings', 'pages::manage.settings')->name('settings.index');
         Route::livewire('languages', 'pages::manage.languages')->name('languages.index');
@@ -70,4 +77,4 @@ Route::middleware(['auth'])
 Route::redirect('api-keys', '/manage/api-keys')->middleware('auth')->name('api-keys.index');
 Route::redirect('dashboard', '/')->name('dashboard');
 
-require __DIR__ . '/settings.php';
+require __DIR__.'/settings.php';

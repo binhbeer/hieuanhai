@@ -1,9 +1,9 @@
 <?php
 
 use App\Models\GeneratedMedia;
-use App\Models\SkillProject;
+use App\Models\StudioProject;
 use App\Models\User;
-use App\Services\AiImageEditor;
+use App\Services\GeneratedMediaService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -14,7 +14,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 
 	public string $search = '';
 
-	public string $skill = 'all';
+	public string $tool = 'all';
 
 	public string $status = 'all';
 
@@ -30,7 +30,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 		$this->resetPage();
 	}
 
-	public function updatedSkill(): void
+	public function updatedTool(): void
 	{
 		$this->resetPage();
 	}
@@ -47,7 +47,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 
 	public function resetFilters(): void
 	{
-		$this->reset('search', 'skill', 'status', 'creatorId');
+		$this->reset('search', 'tool', 'status', 'creatorId');
 		$this->resetPage();
 	}
 
@@ -55,7 +55,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 	public function creators()
 	{
 		return User::query()
-			->whereIn('id', SkillProject::query()->select('user_id'))
+			->whereIn('id', StudioProject::query()->select('user_id'))
 			->orderBy('name')
 			->get();
 	}
@@ -64,10 +64,10 @@ new #[Title('Manage AI Studio')] class extends Component {
 	public function stats(): array
 	{
 		return [
-			'total' => SkillProject::query()->count(),
-			'draft' => SkillProject::query()->whereNull('submitted_at')->count(),
-			'submitted' => SkillProject::query()->whereNotNull('submitted_at')->count(),
-			'media' => GeneratedMedia::query()->whereNotNull('skill_project_id')->count(),
+			'total' => StudioProject::query()->count(),
+			'draft' => StudioProject::query()->whereNull('submitted_at')->count(),
+			'submitted' => StudioProject::query()->whereNotNull('submitted_at')->count(),
+			'media' => GeneratedMedia::query()->whereNotNull('studio_project_id')->count(),
 		];
 	}
 
@@ -75,7 +75,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 	public function dailyStats(): array
 	{
 		$from = today()->subDays(29);
-		$projects = SkillProject::query()
+		$projects = StudioProject::query()
 			->where('created_at', '>=', $from)
 			->selectRaw('DATE(created_at) as date, COUNT(*) as total, SUM(submitted_at IS NULL) as draft, SUM(submitted_at IS NOT NULL) as submitted')
 			->groupByRaw('DATE(created_at)')
@@ -98,7 +98,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 	#[Computed]
 	public function projects()
 	{
-		return SkillProject::query()
+		return StudioProject::query()
 			->with([
 				'user',
 				'media' => fn ($query) => $query->latest(),
@@ -113,7 +113,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 
 				$query->where(function ($query) use ($search, $like): void {
 					$query->where('name', 'like', $like)
-						->orWhere('skill', 'like', $like)
+						->orWhere('tool', 'like', $like)
 						->orWhereHas('user', function ($query) use ($like): void {
 							$query->where('name', 'like', $like)
 								->orWhere('email', 'like', $like);
@@ -124,7 +124,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 					}
 				});
 			})
-			->when($this->skill !== 'all', fn ($query) => $query->where('skill', $this->skill))
+			->when($this->tool !== 'all', fn ($query) => $query->where('tool', $this->tool))
 			->when($this->status === 'draft', fn ($query) => $query->whereNull('submitted_at'))
 			->when($this->status === 'submitted', fn ($query) => $query->whereNotNull('submitted_at'))
 			->when($this->status === 'creating', function ($query): void {
@@ -141,16 +141,16 @@ new #[Title('Manage AI Studio')] class extends Component {
 			->paginate(20);
 	}
 
-	public function skillLabel(string $skill): string
+	public function toolLabel(string $tool): string
 	{
-		return match ($skill) {
+		return match ($tool) {
 			'product-detail' => __('Product detail images'),
 			'marketing-poster' => __('Marketing poster'),
-			default => $skill,
+			default => $tool,
 		};
 	}
 
-	public function projectProgress(SkillProject $project): string
+	public function projectProgress(StudioProject $project): string
 	{
 		if ($project->submitted_at === null) {
 			return __('Draft');
@@ -168,12 +168,12 @@ new #[Title('Manage AI Studio')] class extends Component {
 
 	public function imageUrl(GeneratedMedia $image, string $size = 'xs'): ?string
 	{
-		return app(AiImageEditor::class)->imageUrl($image, $size);
+		return app(GeneratedMediaService::class)->imageUrl($image, $size);
 	}
 
 	public function imageSize(GeneratedMedia $image, string $size = 'xs'): ?array
 	{
-		return app(AiImageEditor::class)->imageSize($image, $size);
+		return app(GeneratedMediaService::class)->imageSize($image, $size);
 	}
 }; ?>
 
@@ -276,7 +276,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 				@php($projectHeight = $day['total'] / $maxDailyProjects * 100)
 				@php($draftHeight = $day['total'] > 0 ? $day['draft'] / $day['total'] * 100 : 0)
 				@php($submittedHeight = $day['total'] > 0 ? $day['submitted'] / $day['total'] * 100 : 0)
-				<div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="daily-manage-skills-{{ $day['date']->toDateString() }}">
+				<div class="group relative flex h-full min-w-0 flex-1 items-end" wire:key="daily-manage-studio-{{ $day['date']->toDateString() }}">
 					<div class="flex w-full flex-col-reverse overflow-hidden rounded-t bg-zinc-200 dark:bg-zinc-800" style="height: {{ $day['total'] > 0 ? max(4, $projectHeight) : 0 }}%">
 						<div class="bg-amber-500" style="height: {{ $draftHeight }}%"></div>
 						<div class="bg-emerald-500" style="height: {{ $submittedHeight }}%"></div>
@@ -302,7 +302,7 @@ new #[Title('Manage AI Studio')] class extends Component {
 	<flux:card class="space-y-4">
 		<div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_13rem_13rem_16rem_auto]">
 			<flux:input wire:model.live.debounce.300ms="search" :label="__('Search projects')" placeholder="ID, name, user" />
-			<flux:select wire:model.live="skill" variant="listbox" :label="__('Tool')">
+			<flux:select wire:model.live="tool" variant="listbox" :label="__('Tool')">
 				<flux:select.option value="all">{{ __('All') }}</flux:select.option>
 				<flux:select.option value="product-detail">{{ __('Product detail images') }}</flux:select.option>
 				<flux:select.option value="marketing-poster">{{ __('Marketing poster') }}</flux:select.option>
@@ -314,13 +314,13 @@ new #[Title('Manage AI Studio')] class extends Component {
 				<flux:select.option value="creating">{{ __('Creating') }}</flux:select.option>
 				<flux:select.option value="completed">{{ __('Completed') }}</flux:select.option>
 			</flux:select>
-			<flux:select wire:model.live="creatorId" variant="listbox" searchable :label="__('Creator')">
+			<flux:select wire:model.live="creatorId" variant="listbox" searchable :label="__('Image creator')">
 				<x-slot name="search">
 					<flux:select.search :placeholder="__('Search users...')" />
 				</x-slot>
 				<flux:select.option value="all">{{ __('All') }}</flux:select.option>
 				@foreach ($this->creators as $creator)
-					<flux:select.option value="{{ $creator->id }}" wire:key="skill-creator-filter-{{ $creator->id }}">
+					<flux:select.option value="{{ $creator->id }}" wire:key="studio-creator-filter-{{ $creator->id }}">
 						<div class="flex items-center gap-2 whitespace-nowrap">
 							<flux:avatar size="xs" circle :name="$creator->name" :initials="$creator->initials()" :src="$creator->avatar_path ? Storage::url($creator->avatar_path) : null" />
 							<div class="min-w-0">
@@ -361,13 +361,13 @@ new #[Title('Manage AI Studio')] class extends Component {
 						@php($previewMedia = $project->media->where('status', 'succeeded')->whereNotNull('result_path')->take(3))
 						@php($firstMedia = $previewMedia->first() ?? $project->media->first())
 						@php($firstUrl = $firstMedia ? $this->imageUrl($firstMedia, 'xs') : null)
-						<tr class="border-b border-white/10" wire:key="manage-skill-{{ $project->id }}">
+						<tr class="border-b border-white/10" wire:key="manage-studio-{{ $project->id }}">
 							<td class="px-3 py-3 align-top">
 								<div class="font-medium">{{ $project->name }}</div>
 								<div class="mt-1 text-xs text-zinc-400">#{{ $project->id }}</div>
 							</td>
 							<td class="px-3 py-3 align-top">
-								{{ $this->skillLabel($project->skill) }}
+								{{ $this->toolLabel($project->tool) }}
 							</td>
 							<td class="px-3 py-3 align-top">
 								<div>{{ $project->user?->name ?? __('Guest') }}</div>

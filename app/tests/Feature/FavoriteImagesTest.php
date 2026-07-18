@@ -40,7 +40,7 @@ class FavoriteImagesTest extends TestCase
         $image = $this->publishedImage('Favorite product image');
         $other = $this->publishedImage('Other public image');
 
-        $this->get(route('home'))
+        $this->get(route('gallery.index'))
             ->assertOk()
             ->assertSee('Nổi bật')
             ->assertSee('Mới')
@@ -51,7 +51,7 @@ class FavoriteImagesTest extends TestCase
             ->assertOk()
             ->assertSee('Yêu thích')
             ->assertSee('0')
-            ->assertSee('href="'.route('home').'"', false);
+            ->assertSee('href="'.route('gallery.index').'"', false);
 
         Livewire::actingAs($user)
             ->test('pages::gallery')
@@ -105,7 +105,7 @@ class FavoriteImagesTest extends TestCase
 
         MediaFavorite::create(['user_id' => $user->id, 'media_id' => $image->id]);
 
-        $this->get(route('home'))
+        $this->get(route('gallery.index'))
             ->assertOk()
             ->assertSee('/anh/'.$image->id)
             ->assertDontSee('from=');

@@ -1,9 +1,9 @@
 <?php
 
 use App\Models\GeneratedMedia;
-use App\Models\SkillProject;
-use App\Services\AiImageEditor;
-use App\Services\SkillProjectGenerator;
+use App\Models\StudioProject;
+use App\Services\ImagePromptService;
+use App\Services\StudioImageService;
 use App\Support\AppSettings;
 use Flux\Flux;
 use Illuminate\Http\UploadedFile;
@@ -18,7 +18,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-new #[Title('AI tools')] class extends Component
+new #[Title('Studio')] class extends Component
 {
     use WithFileUploads;
 
@@ -81,12 +81,21 @@ new #[Title('AI tools')] class extends Component
         }
 
         if ($this->project && Auth::check()) {
-            $project = SkillProject::query()->where('user_id', Auth::id())->find($this->project);
+            $project = StudioProject::query()->where('user_id', Auth::id())->find($this->project);
 
             if ($project && $project->submitted_at === null) {
                 $this->resumeProject($project->id);
             }
         }
+
+        if (request()->boolean('wizard') && ! $this->showWizard) {
+            $this->openWizard();
+        }
+    }
+
+    public function openWizard(): void
+    {
+        $this->openTool(StudioProject::TOOLS[0]);
     }
 
     public function openTool(string $tool): void
@@ -98,7 +107,7 @@ new #[Title('AI tools')] class extends Component
             return;
         }
 
-        if (! in_array($tool, SkillProject::SKILLS, true)) {
+        if (! in_array($tool, StudioProject::TOOLS, true)) {
             return;
         }
 
@@ -141,7 +150,7 @@ new #[Title('AI tools')] class extends Component
         $paths = $this->inputPaths();
 
         foreach ($photos as $photo) {
-            $path = $photo->store('skill-projects/'.$project->id, 'public');
+            $path = $photo->store('studio-projects/'.$project->id, 'public');
 
             if (! is_string($path)) {
                 $this->errorMessage = __('Could not save uploaded image.');
@@ -202,7 +211,7 @@ new #[Title('AI tools')] class extends Component
 
         $project = $this->ownedProject();
 
-        if (! $project || $project->skill !== 'product-detail') {
+        if (! $project || $project->tool !== 'product-detail') {
             return;
         }
 
@@ -228,7 +237,7 @@ new #[Title('AI tools')] class extends Component
 
     public function saveDraft(): void
     {
-        if (! Auth::check() || ! in_array($this->tool, SkillProject::SKILLS, true)) {
+        if (! Auth::check() || ! in_array($this->tool, StudioProject::TOOLS, true)) {
             return;
         }
 
@@ -281,7 +290,7 @@ new #[Title('AI tools')] class extends Component
         $this->saveDraft();
     }
 
-    public function submit(SkillProjectGenerator $generator, AiImageEditor $editor): void
+    public function submit(StudioImageService $generator, ImagePromptService $editor): void
     {
         $this->validateBasics();
 
@@ -301,7 +310,7 @@ new #[Title('AI tools')] class extends Component
                 $this->assignGeneratedProjectName($editor, $project);
             }
 
-            $images = $generator->create(
+            $images = $generator->createBatch(
                 request(),
                 $project,
                 $this->generationOutputs(),
@@ -316,7 +325,7 @@ new #[Title('AI tools')] class extends Component
             Flux::toast(variant: 'success', text: __('Project queued successfully.'));
 
             if ($images->isNotEmpty()) {
-                $this->redirectRoute('skills.index', ['view' => 'projects', 'project' => $project->id], navigate: true);
+                $this->redirectRoute('studio.index', ['view' => 'projects', 'project' => $project->id], navigate: true);
             }
         } catch (\InvalidArgumentException $e) {
             $this->errorMessage = $e->getMessage();
@@ -334,7 +343,7 @@ new #[Title('AI tools')] class extends Component
             return;
         }
 
-        $project = SkillProject::query()->where('user_id', Auth::id())->find($id);
+        $project = StudioProject::query()->where('user_id', Auth::id())->find($id);
 
         if (! $project) {
             return;
@@ -348,7 +357,7 @@ new #[Title('AI tools')] class extends Component
 
     public function deleteDraft(int $id): void
     {
-        $project = SkillProject::query()
+        $project = StudioProject::query()
             ->where('user_id', Auth::id())
             ->whereNull('submitted_at')
             ->find($id);
@@ -378,7 +387,7 @@ new #[Title('AI tools')] class extends Component
             return collect();
         }
 
-        return SkillProject::query()
+        return StudioProject::query()
             ->where('user_id', Auth::id())
             ->with(['media' => fn ($query) => $query->latest()])
             ->latest('updated_at')
@@ -392,39 +401,39 @@ new #[Title('AI tools')] class extends Component
     }
 
     #[Computed]
-    public function selectedProject(): ?SkillProject
+    public function selectedProject(): ?StudioProject
     {
         if (! Auth::check() || ! $this->project) {
             return null;
         }
 
-        return SkillProject::query()
+        return StudioProject::query()
             ->where('user_id', Auth::id())
             ->with(['media' => fn ($query) => $query->latest()])
             ->find($this->project);
     }
 
     #[Computed]
-    public function draftProject(): ?SkillProject
+    public function draftProject(): ?StudioProject
     {
         return $this->ownedProject();
     }
 
     public function imageUrl(GeneratedMedia $image, string $size = 'sm'): ?string
     {
-        return app(AiImageEditor::class)->imageUrl($image, $size);
+        return app(ImagePromptService::class)->imageUrl($image, $size);
     }
 
-    public function skillLabel(string $skill): string
+    public function toolLabel(string $tool): string
     {
-        return match ($skill) {
+        return match ($tool) {
             'product-detail' => __('Product detail images'),
             'marketing-poster' => __('Marketing poster'),
-            default => $skill,
+            default => $tool,
         };
     }
 
-    public function projectProgress(SkillProject $project): string
+    public function projectProgress(StudioProject $project): string
     {
         if ($project->submitted_at === null) {
             return __('Draft');
@@ -441,12 +450,14 @@ new #[Title('AI tools')] class extends Component
         return max(1, (int) data_get($image->request_meta, 'version', 1));
     }
 
-    public function latestVersion(SkillProject $project): int
+    public function latestVersion(StudioProject $project): int
     {
-        return max(0, (int) $project->media->max(fn (GeneratedMedia $image): int => $this->mediaVersion($image)));
+        return (int) $project->media
+            ->map(fn (GeneratedMedia $image): int => $this->mediaVersion($image))
+            ->max();
     }
 
-    private function draft(): SkillProject
+    private function draft(): StudioProject
     {
         $project = $this->ownedProject();
 
@@ -454,9 +465,9 @@ new #[Title('AI tools')] class extends Component
             return $project;
         }
 
-        $project = SkillProject::create([
+        $project = StudioProject::create([
             'user_id' => Auth::id(),
-            'skill' => $this->tool,
+            'tool' => $this->tool,
             'name' => trim($this->projectName) !== '' ? Str::limit(trim($this->projectName), 255, '') : $this->defaultProjectName(),
             'form_data' => $this->formData(),
             'input_paths' => $this->tool === 'product-detail'
@@ -469,21 +480,21 @@ new #[Title('AI tools')] class extends Component
         return $project;
     }
 
-    private function ownedProject(): ?SkillProject
+    private function ownedProject(): ?StudioProject
     {
         if (! Auth::check() || ! $this->project) {
             return null;
         }
 
-        return SkillProject::query()
+        return StudioProject::query()
             ->where('user_id', Auth::id())
             ->find($this->project);
     }
 
-    private function loadProject(SkillProject $project): void
+    private function loadProject(StudioProject $project): void
     {
         $data = is_array($project->form_data) ? $project->form_data : [];
-        $this->tool = $project->skill;
+        $this->tool = $project->tool;
         $this->projectName = $project->name;
         $this->productName = (string) ($data['product_name'] ?? '');
         $this->aspectRatio = (string) ($data['aspect_ratio'] ?? '4:5');
@@ -529,7 +540,7 @@ new #[Title('AI tools')] class extends Component
         return $this->ownedProject()?->submitted_at !== null;
     }
 
-    private function assignGeneratedProjectName(AiImageEditor $editor, SkillProject $project): void
+    private function assignGeneratedProjectName(ImagePromptService $editor, StudioProject $project): void
     {
         $path = $this->primaryReferencePath($project);
 
@@ -563,9 +574,9 @@ new #[Title('AI tools')] class extends Component
         $project->update(['name' => $name]);
     }
 
-    private function primaryReferencePath(SkillProject $project): ?string
+    private function primaryReferencePath(StudioProject $project): ?string
     {
-        if ($project->skill === 'product-detail') {
+        if ($project->tool === 'product-detail') {
             $product = $this->productInputPaths($project)['product'];
 
             return is_string($product) ? $product : null;
@@ -590,7 +601,7 @@ new #[Title('AI tools')] class extends Component
     /**
      * @return array{product: string|null, logo: string|null, model: string|null, additional_products: array<int, string>}
      */
-    public function productInputPaths(?SkillProject $project = null): array
+    public function productInputPaths(?StudioProject $project = null): array
     {
         $paths = $project?->input_paths ?? $this->draftProject?->input_paths ?? [];
         $paths = is_array($paths) ? $paths : [];
@@ -633,7 +644,7 @@ new #[Title('AI tools')] class extends Component
         $remaining = max(0, $limit - count($existing));
 
         foreach (array_slice($uploads, 0, $remaining) as $upload) {
-            $path = $upload->store('skill-projects/'.$project->id, 'public');
+            $path = $upload->store('studio-projects/'.$project->id, 'public');
 
             if (! is_string($path)) {
                 $this->errorMessage = __('Could not save uploaded image.');
@@ -792,16 +803,16 @@ new #[Title('AI tools')] class extends Component
     $isPolling = $selectedProject?->media->contains(fn ($image) => $image->status === 'pending') ?? false;
 @endphp
 
-<section class="mx-auto w-full max-w-7xl space-y-8 p-2 sm:p-4" @if ($isPolling) wire:poll.2s="refreshProject" @endif>
-    <x-skills.header :view="$view" />
+<section class="mx-auto w-full max-w-7xl space-y-8 p-2 sm:p-4" x-data x-on:open-studio-wizard.window="$wire.openWizard()" @if ($isPolling) wire:poll.2s="refreshProject" @endif>
+    <x-studio.header :view="$view" />
 
     @if ($view === 'plaza')
-        <x-skills.plaza :page="$this" />
+        <x-studio.plaza :page="$this" />
     @else
-        <x-skills.projects :page="$this" :selected-project="$selectedProject" />
+        <x-studio.projects :page="$this" :selected-project="$selectedProject" />
     @endif
 
-    <x-skills.wizard
+    <x-studio.wizard
         :page="$this"
         :tool="$tool"
         :step="$step"

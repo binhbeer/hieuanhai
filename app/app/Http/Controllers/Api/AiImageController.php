@@ -8,7 +8,7 @@ use App\Models\ApiRequest;
 use App\Models\Category;
 use App\Models\GeneratedMedia;
 use App\Models\Tag;
-use App\Services\AiImageEditor;
+use App\Services\ImageCreationService;
 use App\Support\AppSettings;
 use App\Support\LocalizedRoute;
 use Illuminate\Http\JsonResponse;
@@ -20,12 +20,12 @@ use Throwable;
 
 class AiImageController extends Controller
 {
-    public function store(Request $request, AiImageEditor $editor): JsonResponse
+    public function store(Request $request, ImageCreationService $editor): JsonResponse
     {
         return $this->storeImage($request, $editor, publish: false);
     }
 
-    public function storeAndPublish(Request $request, AiImageEditor $editor): JsonResponse
+    public function storeAndPublish(Request $request, ImageCreationService $editor): JsonResponse
     {
         return $this->storeImage($request, $editor, publish: true);
     }
@@ -47,7 +47,7 @@ class AiImageController extends Controller
         ]);
     }
 
-    public function search(Request $request, AiImageEditor $editor): JsonResponse
+    public function search(Request $request, ImageCreationService $editor): JsonResponse
     {
         $validator = Validator::make($request->query(), [
             'keyword' => ['sometimes', 'string', 'max:200'],
@@ -104,7 +104,7 @@ class AiImageController extends Controller
         ]);
     }
 
-    private function storeImage(Request $request, AiImageEditor $editor, bool $publish): JsonResponse
+    private function storeImage(Request $request, ImageCreationService $editor, bool $publish): JsonResponse
     {
         $startedAt = microtime(true);
         $key = $request->attributes->get('ai_api_key');
@@ -163,9 +163,9 @@ class AiImageController extends Controller
             return response()->json($this->responsePayload($image, $editor, $key, $publish), 201);
         } catch (\InvalidArgumentException $e) {
             $errorCode = match ($e->getCode()) {
-                AiImageEditor::ERROR_IMAGE_REVIEW_SEXUAL => 'IMAGE_REVIEW_BLOCKED_SEXUAL',
-                AiImageEditor::ERROR_IMAGE_REVIEW_POLITICAL => 'IMAGE_REVIEW_BLOCKED_POLITICAL',
-                AiImageEditor::ERROR_IMAGE_REVIEW_UNAVAILABLE => 'IMAGE_REVIEW_UNAVAILABLE',
+                ImageCreationService::ERROR_IMAGE_REVIEW_SEXUAL => 'IMAGE_REVIEW_BLOCKED_SEXUAL',
+                ImageCreationService::ERROR_IMAGE_REVIEW_POLITICAL => 'IMAGE_REVIEW_BLOCKED_POLITICAL',
+                ImageCreationService::ERROR_IMAGE_REVIEW_UNAVAILABLE => 'IMAGE_REVIEW_UNAVAILABLE',
                 default => null,
             };
             $statusCode = $errorCode === 'IMAGE_REVIEW_UNAVAILABLE' ? 503 : 422;
@@ -195,7 +195,7 @@ class AiImageController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function searchImagePayload(GeneratedMedia $image, AiImageEditor $editor): array
+    private function searchImagePayload(GeneratedMedia $image, ImageCreationService $editor): array
     {
         return [
             'id' => $image->id,
@@ -251,7 +251,7 @@ class AiImageController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function responsePayload(GeneratedMedia $image, AiImageEditor $editor, ApiKey $key, bool $publish): array
+    private function responsePayload(GeneratedMedia $image, ImageCreationService $editor, ApiKey $key, bool $publish): array
     {
         $payload = [
             'id' => $image->id,

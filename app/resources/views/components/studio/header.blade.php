@@ -2,9 +2,9 @@
 
 <header class="space-y-6 pt-4 text-center sm:pt-8">
     <flux:tabs class="mx-auto w-fit" variant="segmented" size="sm">
-        <flux:tab :href="route('skills.index')" :selected="$view === 'plaza'" wire:navigate>{{ __('AI tools') }}</flux:tab>
+        <flux:tab :href="route('studio.index')" :selected="$view === 'plaza'" wire:navigate>{{ __('Studio') }}</flux:tab>
         @auth
-            <flux:tab :href="route('skills.index', ['view' => 'projects'])" :selected="$view === 'projects'" wire:navigate>{{ __('My projects') }}</flux:tab>
+            <flux:tab :href="route('studio.index', ['view' => 'projects'])" :selected="$view === 'projects'" wire:navigate>{{ __('My projects') }}</flux:tab>
         @else
             <flux:tab type="button" action x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('My projects') }}</flux:tab>
         @endauth

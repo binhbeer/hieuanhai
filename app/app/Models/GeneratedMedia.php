@@ -19,7 +19,7 @@ use Spatie\Translatable\HasTranslations;
  * @property int|null $user_id
  * @property int|null $parent_id
  * @property int|null $category_id
- * @property int|null $skill_project_id
+ * @property int|null $studio_project_id
  * @property string|null $title
  * @property string|null $description
  * @property string $visitor_key
@@ -46,7 +46,7 @@ use Spatie\Translatable\HasTranslations;
     'user_id',
     'parent_id',
     'category_id',
-    'skill_project_id',
+    'studio_project_id',
     'title',
     'description',
     'visitor_key',
@@ -171,11 +171,11 @@ class GeneratedMedia extends BaseModel implements HasMedia
     }
 
     /**
-     * @return BelongsTo<SkillProject, $this>
+     * @return BelongsTo<StudioProject, $this>
      */
-    public function skillProject(): BelongsTo
+    public function studioProject(): BelongsTo
     {
-        return $this->belongsTo(SkillProject::class);
+        return $this->belongsTo(StudioProject::class);
     }
 
     /**

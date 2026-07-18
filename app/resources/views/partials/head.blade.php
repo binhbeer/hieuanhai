@@ -17,9 +17,11 @@
     $metaCategory = $routeCategory instanceof \App\Models\Category ? $routeCategory : null;
     $metaTag = $routeTag instanceof \App\Models\Tag ? $routeTag : null;
     $baseRouteName = \App\Support\LocalizedRoute::name();
-    $isPrivateSkillsView = $baseRouteName === 'skills.index' && (request()->query('view') === 'projects' || request()->filled('project'));
+    $isHome = \App\Support\LocalizedRoute::is('home');
+    $isPrivateStudioView = $baseRouteName === 'studio.index' && (request()->query('view') === 'projects' || request()->filled('project'));
     $isGuide = $baseRouteName !== null && \Illuminate\Support\Str::is('guide.*', $baseRouteName);
-    $isIndexable = (in_array($baseRouteName, ['home', 'skills.index', 'categories.show', 'tags.show', 'images.show'], true) || $isGuide) && ! $isPrivateSkillsView;
+    $isQuickEdit = $baseRouteName !== null && \Illuminate\Support\Str::is('quick.*', $baseRouteName);
+    $isIndexable = (in_array($baseRouteName, ['home', 'gallery.index', 'creator.index', 'studio.index', 'categories.show', 'tags.show', 'images.show'], true) || $isQuickEdit || $isGuide) && ! $isPrivateStudioView;
     $englishEnabled = \App\Support\AppSettings::bool('locales.en.enabled');
     $englishReady = match (true) {
         $metaImage !== null => $metaImage->englishReady(),
@@ -29,12 +31,18 @@
     };
     $routeParameters = array_filter(['image' => $metaImage, 'category' => $metaCategory, 'tag' => $metaTag]);
 
+    $quickEditTool = is_string(request()->route('tool')) ? \App\Support\QuickEditTools::get(request()->route('tool')) : null;
+
     $metaTitle = match (true) {
         $metaImage !== null => \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 70, ''),
         $metaCategory !== null => $metaCategory->name,
         $metaTag !== null => '#'.$metaTag->name,
         \App\Support\LocalizedRoute::is('home') => $homeTitle,
-        \App\Support\LocalizedRoute::is('skills.index') => __('AI tools'),
+        \App\Support\LocalizedRoute::is('gallery.index') => __('AI Gallery'),
+        \App\Support\LocalizedRoute::is('quick.index') => __('Quick'),
+        $isQuickEdit && $quickEditTool !== null => __($quickEditTool['seo_title'] ?? $quickEditTool['title']),
+        \App\Support\LocalizedRoute::is('creator.index') => __('Creator'),
+        \App\Support\LocalizedRoute::is('studio.index') => __('Studio'),
         \App\Support\LocalizedRoute::is('guide.index') => __('User guide'),
         \App\Support\LocalizedRoute::is('guide.getting-started') => __('Create your first AI image'),
         \App\Support\LocalizedRoute::is('guide.web') => __('Manage your complete image workflow'),
@@ -59,6 +67,11 @@
             160,
             '',
         ),
+        $isQuickEdit && $quickEditTool !== null => __($quickEditTool['seo_description'] ?? $quickEditTool['description']),
+        \App\Support\LocalizedRoute::is('quick.index') => __('Edit photos with focused AI tools, clear reference roles, and one result per request.'),
+        \App\Support\LocalizedRoute::is('gallery.index') => __('Browse published AI images from the GenAnh community by category, tag, and visual idea.'),
+        \App\Support\LocalizedRoute::is('creator.index') => __('Create AI images from prompts and references with advanced model, ratio, resolution, rewrite, and translation controls.'),
+        \App\Support\LocalizedRoute::is('studio.index') => __('Build product image sets and marketing posters with projects, drafts, versions, and batch outputs.'),
         \App\Support\LocalizedRoute::is('guide.index') => __('Step-by-step guides for image creation, workflow management, publishing, account security, and API integration.'),
         \App\Support\LocalizedRoute::is('guide.getting-started') => __('From signing in to downloading a finished image, follow this practical workflow.'),
         \App\Support\LocalizedRoute::is('guide.web') => __('Track generations, improve results, publish your best work, and collect ideas from the community.'),
@@ -72,20 +85,30 @@
         $metaCategory !== null => route('categories.show', $metaCategory),
         $metaTag !== null => route('tags.show', $metaTag),
         \App\Support\LocalizedRoute::is('home') => route('home'),
-        \App\Support\LocalizedRoute::is('skills.index') => route('skills.index'),
+        \App\Support\LocalizedRoute::is('gallery.index') => route('gallery.index'),
+        \App\Support\LocalizedRoute::is('quick.index') => route('quick.index'),
+        $isQuickEdit && $baseRouteName !== null => route($baseRouteName),
+        \App\Support\LocalizedRoute::is('creator.index') => route('creator.index'),
+        \App\Support\LocalizedRoute::is('studio.index') => route('studio.index'),
         $isGuide && $baseRouteName !== null => route($baseRouteName),
         default => url()->current(),
     };
 
-    $imageEditor = app(\App\Services\AiImageEditor::class);
+    $imageEditor = app(\App\Services\GeneratedMediaService::class);
     $metaImageOriginalUrl = $metaImage ? $imageEditor->imageUrl($metaImage) : null;
     $metaImageOriginalUrl = $metaImageOriginalUrl && ! \Illuminate\Support\Str::startsWith($metaImageOriginalUrl, ['http://', 'https://']) ? url($metaImageOriginalUrl) : $metaImageOriginalUrl;
-    $metaImageUrl = $metaImage ? $imageEditor->imageUrl($metaImage, 'og') : null;
+    $homeLogoUrl = $isHome ? asset('logo.png').'?v='.$assetVersion : null;
+    $quickCoverUrl = $quickEditTool && isset($quickEditTool['thumbnail']) ? asset($quickEditTool['thumbnail']) : null;
+    $metaImageUrl = $metaImage ? $imageEditor->imageUrl($metaImage, 'og') : ($quickCoverUrl ?? $homeLogoUrl);
     $metaImageUrl = $metaImageUrl && ! \Illuminate\Support\Str::startsWith($metaImageUrl, ['http://', 'https://']) ? url($metaImageUrl) : $metaImageUrl;
-    $metaImageAlt = $metaImage ? \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 120, '') : null;
+    $metaImageAlt = $metaImage
+        ? \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 120, '')
+        : ($quickEditTool ? __($quickEditTool['cover_alt'] ?? $quickEditTool['title']) : ($isHome ? $siteName.' logo' : null));
+    $metaImageWidth = $isHome ? 1254 : ($quickCoverUrl ? 320 : 1200);
+    $metaImageHeight = $isHome ? 1254 : ($quickCoverUrl ? 200 : 630);
     $metaKeywords = $metaImage
         ? $metaImage->tags->map(fn (\App\Models\Tag $tag): string => (string) $tag->getTranslationWithoutFallback('name', $locale))->filter()->implode(', ')
-        : $siteKeywords;
+        : ($quickEditTool && isset($quickEditTool['keywords']) ? __($quickEditTool['keywords']) : $siteKeywords);
     $metaRobots = $isIndexable ? 'index,follow,max-image-preview:large' : 'noindex,nofollow';
     $metaLocale = $locale === 'en' ? 'en_US' : 'vi_VN';
     $alternateLocale = $locale === 'en' ? 'vi_VN' : 'en_US';
@@ -95,7 +118,21 @@
     $modifiedAt = $metaImage?->updated_at?->toIso8601String();
     $schema = [];
 
-    if (\App\Support\LocalizedRoute::is('home')) {
+    if ($isHome) {
+        $organizationId = route('home').'#organization';
+        $schema[] = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Organization',
+            '@id' => $organizationId,
+            'name' => $siteName,
+            'url' => route('home'),
+            'logo' => [
+                '@type' => 'ImageObject',
+                'url' => $homeLogoUrl,
+                'width' => 1254,
+                'height' => 1254,
+            ],
+        ];
         $schema[] = [
             '@context' => 'https://schema.org',
             '@type' => 'WebSite',
@@ -103,10 +140,11 @@
             'url' => route('home'),
             'description' => $siteDescription,
             'inLanguage' => $locale,
+            'publisher' => ['@id' => $organizationId],
         ];
     }
 
-    if ($metaCategory || $metaTag) {
+    if (\App\Support\LocalizedRoute::is('gallery.index') || $metaCategory || $metaTag) {
         $schema[] = [
             '@context' => 'https://schema.org',
             '@type' => 'CollectionPage',
@@ -114,6 +152,52 @@
             'url' => $metaUrl,
             'description' => $metaDescription,
             'inLanguage' => $locale,
+        ];
+    }
+
+    if ($isQuickEdit || \App\Support\LocalizedRoute::is('creator.index', 'studio.index')) {
+        $schema[] = [
+            '@context' => 'https://schema.org',
+            '@type' => 'WebPage',
+            'name' => filled($metaTitle) ? $metaTitle : $siteName,
+            'url' => $metaUrl,
+            'description' => $metaDescription,
+            'inLanguage' => $locale,
+        ];
+        $schema[] = [
+            '@context' => 'https://schema.org',
+            '@type' => 'SoftwareApplication',
+            'name' => $siteName,
+            'applicationCategory' => 'MultimediaApplication',
+            'operatingSystem' => 'Web',
+            'url' => $metaUrl,
+            'description' => $metaDescription,
+        ];
+    }
+
+    if ($isQuickEdit && $quickEditTool !== null && $baseRouteName !== null) {
+        $schema[] = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                ['@type' => 'ListItem', 'position' => 1, 'name' => __('Home'), 'item' => route('home')],
+                ['@type' => 'ListItem', 'position' => 2, 'name' => __('Quick'), 'item' => route('quick.index')],
+                ['@type' => 'ListItem', 'position' => 3, 'name' => __($quickEditTool['title']), 'item' => route($baseRouteName)],
+            ],
+        ];
+        $schema[] = [
+            '@context' => 'https://schema.org',
+            '@type' => 'FAQPage',
+            'mainEntity' => collect(\App\Support\QuickEditTools::faqs((string) request()->route('tool')))
+                ->map(fn (array $faq): array => [
+                    '@type' => 'Question',
+                    'name' => __($faq['question'], ['tool' => __($quickEditTool['title'])]),
+                    'acceptedAnswer' => [
+                        '@type' => 'Answer',
+                        'text' => __($faq['answer']),
+                    ],
+                ])
+                ->all(),
         ];
     }
 
@@ -191,8 +275,8 @@
 @if ($metaImageUrl)
     <meta property="og:image" content="{{ $metaImageUrl }}">
     <meta property="og:image:secure_url" content="{{ $metaImageUrl }}">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
+    <meta property="og:image:width" content="{{ $metaImageWidth }}">
+    <meta property="og:image:height" content="{{ $metaImageHeight }}">
     @if ($metaImageAlt)
         <meta property="og:image:alt" content="{{ $metaImageAlt }}">
     @endif
@@ -203,7 +287,7 @@
 @if ($modifiedAt)
     <meta property="article:modified_time" content="{{ $modifiedAt }}">
 @endif
-<meta name="twitter:card" content="{{ $metaImageUrl ? 'summary_large_image' : 'summary' }}">
+<meta name="twitter:card" content="{{ $metaImage && $metaImageUrl ? 'summary_large_image' : 'summary' }}">
 <meta name="twitter:title" content="{{ filled($metaTitle) ? $metaTitle : $siteName }}">
 <meta name="twitter:url" content="{{ $metaUrl }}">
 @if (filled($metaDescription))

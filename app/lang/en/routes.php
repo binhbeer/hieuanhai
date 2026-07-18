@@ -1,7 +1,18 @@
 <?php
 
 return [
-    'skills' => 'studio-ai',
+    'gallery' => 'gallery',
+    'quick' => 'quick',
+    'quick/remove-object' => 'quick/remove-object',
+    'quick/restore-old-photo' => 'quick/restore-old-photo',
+    'quick/replace-background' => 'quick/replace-background',
+    'quick/product-photo' => 'quick/product-photo',
+    'quick/face-swap' => 'quick/face-swap',
+    'quick/change-outfit' => 'quick/change-outfit',
+    'quick/add-person' => 'quick/add-person',
+    'quick/id-photo' => 'quick/id-photo',
+    'creator' => 'creator',
+    'studio' => 'studio',
     'huong-dan' => 'guide',
     'huong-dan/bat-dau' => 'guide/getting-started',
     'huong-dan/ung-dung-web' => 'guide/web-app',

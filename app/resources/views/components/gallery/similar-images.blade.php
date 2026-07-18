@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\GeneratedMedia;
-use App\Services\AiImageEditor;
+use App\Services\GeneratedMediaService;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -26,18 +26,18 @@ new class extends Component
             ->find($this->imageId);
 
         return $image
-            ? app(AiImageEditor::class)->relatedPublished($image, self::LIMIT)
+            ? app(GeneratedMediaService::class)->relatedPublished($image, self::LIMIT)
             : new Collection;
     }
 
     public function imageUrl(GeneratedMedia $image): ?string
     {
-        return app(AiImageEditor::class)->imageUrl($image, 'xs');
+        return app(GeneratedMediaService::class)->imageUrl($image, 'xs');
     }
 
     public function imageSize(GeneratedMedia $image): ?array
     {
-        return app(AiImageEditor::class)->imageSize($image, 'xs');
+        return app(GeneratedMediaService::class)->imageSize($image, 'xs');
     }
 
     public function detailUrl(GeneratedMedia $image): string

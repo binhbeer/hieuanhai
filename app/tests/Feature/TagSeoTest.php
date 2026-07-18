@@ -10,7 +10,7 @@ use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\Tag;
 use App\Models\User;
-use App\Services\AiImageEditor;
+use App\Services\ImageCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
@@ -84,7 +84,7 @@ class TagSeoTest extends TestCase
             'result_path' => 'ai-images/brownie.png',
         ]);
 
-        app(AiImageEditor::class)->publish($image, Request::create('/', 'POST'));
+        app(ImageCreationService::class)->publish($image, Request::create('/', 'POST'));
 
         Bus::assertNotDispatched(GenerateTagDescription::class, fn (GenerateTagDescription $job): bool => $job->tagId === $existingTag->id);
         Bus::assertDispatchedTimes(GenerateTagDescription::class, 3);

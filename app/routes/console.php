@@ -61,18 +61,35 @@ Artisan::command('sitemap:generate', function (): void {
     $latestImageUpdate = $date($publicImages()->max('updated_at')) ?? now();
 
     $guideRoutes = ['guide.index', 'guide.getting-started', 'guide.web', 'guide.api', 'guide.faq'];
-    $pages = SitemapFile::create()
-        ->add($url(LocalizedRoute::url('home', locale: 'vi'), $latestImageUpdate))
-        ->add($url(LocalizedRoute::url('skills.index', locale: 'vi'), now()));
+    $publicRoutes = [
+        'home',
+        'gallery.index',
+        'quick.index',
+        'quick.remove-object',
+        'quick.restore-old-photo',
+        'quick.replace-background',
+        'quick.product-photo',
+        'quick.face-swap',
+        'quick.change-outfit',
+        'quick.add-person',
+        'quick.id-photo',
+        'creator.index',
+        'studio.index',
+    ];
+    $pages = SitemapFile::create();
+
+    foreach ($publicRoutes as $publicRoute) {
+        $pages->add($url(LocalizedRoute::url($publicRoute, locale: 'vi'), $publicRoute === 'gallery.index' ? $latestImageUpdate : now()));
+    }
 
     foreach ($guideRoutes as $guideRoute) {
         $pages->add($url(LocalizedRoute::url($guideRoute, locale: 'vi'), now()));
     }
 
     if ($englishEnabled) {
-        $pages
-            ->add($url(LocalizedRoute::url('home', locale: 'en'), $latestImageUpdate))
-            ->add($url(LocalizedRoute::url('skills.index', locale: 'en'), now()));
+        foreach ($publicRoutes as $publicRoute) {
+            $pages->add($url(LocalizedRoute::url($publicRoute, locale: 'en'), $publicRoute === 'gallery.index' ? $latestImageUpdate : now()));
+        }
 
         foreach ($guideRoutes as $guideRoute) {
             $pages->add($url(LocalizedRoute::url($guideRoute, locale: 'en'), now()));

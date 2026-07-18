@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Jobs\CreateAiImage;
 use App\Models\GeneratedMedia;
-use App\Models\SkillProject;
+use App\Models\StudioProject;
 use App\Models\User;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
@@ -17,17 +17,15 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
-class SkillProjectGenerator
+class StudioImageService extends ImageCreationService
 {
-    public function __construct(private AiImageEditor $editor) {}
-
     /**
      * @param  array<int, array{prompt: string, title: string, output_type: string}>  $outputs
      * @return Collection<int, GeneratedMedia>
      */
-    public function create(
+    public function createBatch(
         Request $request,
-        SkillProject $project,
+        StudioProject $project,
         array $outputs,
         string $aspectRatio,
         string $resolution,
@@ -40,11 +38,11 @@ class SkillProjectGenerator
             throw new \InvalidArgumentException('Không tìm thấy dự án.');
         }
 
-        if ($this->editor->requiresEmailVerificationForImageCreation()) {
+        if ($this->requiresEmailVerificationForImageCreation()) {
             throw new \InvalidArgumentException('Vui lòng xác minh email để tiếp tục nhận lượt tạo ảnh hằng ngày sau ngày đăng ký đầu tiên.');
         }
 
-        if (! in_array($project->skill, SkillProject::SKILLS, true)) {
+        if (! in_array($project->tool, StudioProject::TOOLS, true)) {
             throw new \InvalidArgumentException('Công cụ AI không hợp lệ.');
         }
 
@@ -71,7 +69,7 @@ class SkillProjectGenerator
         $model = AppSettings::resolveImageModel($model);
         $inputPaths = $this->inputReferences($project);
 
-        if ($project->skill === 'product-detail' && ! collect($inputPaths)->contains(fn (array $input): bool => $input['role'] === 'product')) {
+        if ($project->tool === 'product-detail' && ! collect($inputPaths)->contains(fn (array $input): bool => $input['role'] === 'product')) {
             throw new \InvalidArgumentException('Hãy tải lên ảnh sản phẩm chính.');
         }
 
@@ -79,7 +77,7 @@ class SkillProjectGenerator
 
         try {
             return DB::transaction(function () use ($request, $project, $outputs, $aspectRatio, $resolution, $imageDetail, $model, $inputPaths, $user, &$createdPendingPaths): Collection {
-                $lockedProject = SkillProject::query()
+                $lockedProject = StudioProject::query()
                     ->where('user_id', $user->id)
                     ->lockForUpdate()
                     ->find($project->id);
@@ -102,14 +100,14 @@ class SkillProjectGenerator
                     ->where('created_at', '>=', now()->startOfDay())
                     ->count();
 
-                if (! $user->isAdmin() && $usedToday + count($outputs) > $this->editor->dailyLimit()) {
+                if (! $user->isAdmin() && $usedToday + count($outputs) > $this->dailyLimit()) {
                     throw new \InvalidArgumentException('Bạn không còn đủ lượt tạo ảnh hôm nay cho dự án này.');
                 }
 
                 $provider = AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai'));
                 $size = GptImageOptions::size($aspectRatio, $resolution);
                 $version = max(0, (int) (new GeneratedMedia)->disableModelCaching()->newQuery()
-                    ->where('skill_project_id', $lockedProject->id)
+                    ->where('studio_project_id', $lockedProject->id)
                     ->get(['request_meta'])
                     ->max(fn (GeneratedMedia $media): int => max(1, (int) data_get($media->request_meta, 'version', 1)))) + 1;
                 $images = new Collection;
@@ -120,27 +118,28 @@ class SkillProjectGenerator
                     $createdPendingPaths = [...$createdPendingPaths, ...array_column($pendingUploads, 'path')];
                     $image = GeneratedMedia::create([
                         'user_id' => $user->id,
-                        'skill_project_id' => $lockedProject->id,
-                        'visitor_key' => $this->editor->visitorKey($request),
+                        'studio_project_id' => $lockedProject->id,
+                        'visitor_key' => $this->visitorKey($request),
                         'ip_address' => $request->ip(),
                         'title' => trim($output['title']),
-                        'preset' => $lockedProject->skill,
+                        'preset' => $lockedProject->tool,
                         'prompt' => trim($output['prompt']),
                         'custom_prompt' => is_string(data_get($lockedProject->form_data, 'notes')) ? trim((string) data_get($lockedProject->form_data, 'notes')) : null,
-                        'source' => 'skills',
+                        'source' => 'web',
                         'provider' => $provider,
                         'model' => $model,
                         'status' => 'pending',
                         'request_meta' => [
                             'upload_count' => count($pendingUploads),
                             'pending_uploads' => $pendingUploads,
+                            'generation_mode' => 'studio',
                             'reference_roles' => $referenceRoles,
-                            'prompt_contract' => $lockedProject->skill === 'product-detail' ? 'product-detail-v2' : null,
+                            'prompt_contract' => $lockedProject->tool === 'product-detail' ? 'product-detail-v2' : null,
                             'aspect_ratio' => $aspectRatio,
                             'resolution' => $resolution,
                             'size' => $size,
                             'image_detail' => $imageDetail,
-                            'skill' => $lockedProject->skill,
+                            'tool' => $lockedProject->tool,
                             'version' => $version,
                             'output_type' => $output['output_type'],
                             'progress' => 'queued',
@@ -169,11 +168,11 @@ class SkillProjectGenerator
     /**
      * @return array<int, array{path: string, role: string}>
      */
-    private function inputReferences(SkillProject $project): array
+    private function inputReferences(StudioProject $project): array
     {
         $paths = is_array($project->input_paths) ? $project->input_paths : [];
 
-        if ($project->skill !== 'product-detail') {
+        if ($project->tool !== 'product-detail') {
             return collect($paths)
                 ->flatten()
                 ->filter(fn (mixed $path): bool => is_string($path) && Storage::disk('public')->exists($path))
@@ -228,7 +227,7 @@ class SkillProjectGenerator
             $uploads[] = [
                 'path' => $path,
                 'name' => basename($sourcePath),
-                'mime' => $disk->mimeType($sourcePath) ?: null,
+                'mime' => null,
                 'role' => $input['role'],
             ];
         }

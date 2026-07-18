@@ -8,6 +8,9 @@ use App\Ai\ImageToPromptAgent;
 use App\Ai\ProjectNameAgent;
 use App\Ai\PromptRewriteAgent;
 use App\Ai\PromptTranslationAgent;
+use App\Ai\QuickEditOptionAgent;
+use App\Ai\QuickEditPreflightAgent;
+use App\Ai\QuickEditToolResolverAgent;
 use App\Events\AiImageCompleted;
 use App\Jobs\GenerateTagDescription;
 use App\Models\Category;
@@ -16,6 +19,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
+use App\Support\QuickEditTools;
 use GdImage;
 use GeneaLabs\LaravelModelCaching\CachedBuilder;
 use Illuminate\Contracts\Support\Arrayable;
@@ -36,7 +40,7 @@ use Spatie\ImageOptimizer\OptimizerChainFactory;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Throwable;
 
-class AiImageEditor
+class ImageCreationService
 {
     public const ERROR_IMAGE_REVIEW_SEXUAL = 1001;
 
@@ -47,8 +51,6 @@ class AiImageEditor
     private const REFERENCE_MAX_WIDTH = 1024;
 
     private const REFERENCE_JPEG_QUALITY = 88;
-
-    private const GROK_MAX_ATTEMPTS = 3;
 
     /**
      * @var array<string, int|array{0: int, 1: int}|null>
@@ -137,6 +139,7 @@ class AiImageEditor
      * @param  array<int, mixed>  $photos
      * @param  array<int, int>  $referenceImageIds
      * @param  array<int, int>  $parentReferenceIndexes
+     * @param  array<string, mixed>  $metadata
      */
     public function createPending(
         Request $request,
@@ -150,6 +153,7 @@ class AiImageEditor
         ?string $aspectRatio = null,
         ?string $resolution = null,
         ?string $model = null,
+        array $metadata = [],
     ): GeneratedMedia {
 
         if (! Auth::check()) {
@@ -175,7 +179,7 @@ class AiImageEditor
             $size = GptImageOptions::size($aspectRatio, $resolution);
         }
 
-        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution, $model) {
+        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution, $model, $metadata) {
             User::query()->whereKey($userId)->lockForUpdate()->first();
 
             if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
@@ -204,6 +208,13 @@ class AiImageEditor
             $photos = array_slice(array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile)), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads) - count($referenceUploads)));
             $pendingUploads = [...$parentReferenceUploads, ...$referenceUploads, ...$this->storePendingUploads($photos)];
             $photo = $photos[0] ?? null;
+            $safeMetadata = collect($metadata)->only([
+                'generation_mode',
+                'reference_roles',
+                'intent_summary',
+                'prompt_contract',
+                'preflight_confidence',
+            ])->all();
 
             return GeneratedMedia::create([
                 'user_id' => $userId,
@@ -211,8 +222,10 @@ class AiImageEditor
                 'visitor_key' => $this->visitorKey($request),
                 'ip_address' => $request->ip(),
                 'prompt' => $prompt,
+                'source' => is_string($metadata['source'] ?? null) ? Str::limit($metadata['source'], 120, '') : 'web',
                 'provider' => AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai')),
                 'model' => $model,
+                'preset' => is_string($metadata['preset'] ?? null) ? Str::limit($metadata['preset'], 120, '') : null,
                 'status' => 'pending',
                 'request_meta' => array_filter([
                     'upload_name' => $photo?->getClientOriginalName(),
@@ -227,6 +240,7 @@ class AiImageEditor
                     'size' => $size,
                     'image_detail' => $imageDetail,
                     'progress' => 'queued',
+                    ...$safeMetadata,
                 ], fn (mixed $value): bool => $value !== null),
             ]);
         });
@@ -1165,7 +1179,6 @@ class AiImageEditor
             'output_format' => 'png',
         ];
 
-        // ponytail: current 9router image route supports Grok generation but not reference-image editing.
         if (! $isGrokModel) {
             $payload['response_format'] = 'b64_json';
 
@@ -1177,44 +1190,23 @@ class AiImageEditor
         }
 
         $timeout = AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300));
-        $attempts = $isGrokModel ? self::GROK_MAX_ATTEMPTS : 1;
-        $decoded = false;
-        $base64 = '';
-        $usage = [];
+        $endpoint = $url.'/images/generations'.($isGrokModel ? '?_request_id='.Str::uuid() : '');
+        $response = Http::withToken($key)
+            ->acceptJson()
+            ->asJson()
+            ->timeout($timeout)
+            ->post($endpoint, $payload);
 
-        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            $endpoint = $url.'/images/generations'.($isGrokModel ? '?_request_id='.Str::uuid() : '');
-            $response = Http::withToken($key)
-                ->acceptJson()
-                ->asJson()
-                ->timeout($timeout)
-                ->post($endpoint, $payload);
-
-            if ($response->failed()) {
-                throw new \RuntimeException('API tạo ảnh lỗi '.$response->status().': '.Str::limit($response->body(), 1000, ''));
-            }
-
-            $data = $response->json();
-            $usage = data_get($data, 'usage', []);
-            [$decoded, $base64] = $this->decodeGeneratedImagePayload($data, $timeout, $isGrokModel);
-
-            if ($decoded === false || $decoded === '') {
-                throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
-            }
-
-            if (! $isGrokModel || (
-                ! $this->isRecentGrokDuplicate($image, $decoded)
-                && $this->generatedImageMatchesPrompt($decoded, $providerPrompt)
-            )) {
-                break;
-            }
-
-            $decoded = false;
-            $base64 = '';
+        if ($response->failed()) {
+            throw new \RuntimeException('API tạo ảnh lỗi '.$response->status().': '.Str::limit($response->body(), 1000, ''));
         }
 
-        if ($decoded === false) {
-            throw new \RuntimeException('Grok trả về ảnh không khớp prompt sau 3 lần thử.');
+        $data = $response->json();
+        $usage = data_get($data, 'usage', []);
+        [$decoded, $base64] = $this->decodeGeneratedImagePayload($data, $timeout, $isGrokModel);
+
+        if ($decoded === false || $decoded === '') {
+            throw new \RuntimeException('API trả về ảnh base64 không hợp lệ.');
         }
 
         $requestedSize = $resolvedSize;
@@ -1324,6 +1316,238 @@ class AiImageEditor
         }
 
         return Str::limit($translated, 2000, '');
+    }
+
+    /**
+     * @param  list<UploadedFile>  $photos
+     * @return list<array{tool: string, request: string, reason: string}>
+     */
+    public function suggestQuickEditOptions(array $photos, ?string $landingTool = null): array
+    {
+        if ($photos === []) {
+            throw new \InvalidArgumentException('At least one image is required.');
+        }
+
+        if ($landingTool !== null && QuickEditTools::get($landingTool) === null) {
+            throw new \InvalidArgumentException('Quick Edit tool is invalid.');
+        }
+
+        $catalog = collect(QuickEditTools::all())
+            ->map(fn (array $tool, string $slug): string => "- {$slug}: {$tool['title']} — {$tool['description']}")
+            ->implode("\n");
+        $locale = app()->getLocale() === 'en' ? 'English' : 'Vietnamese';
+        $landingContext = $landingTool === null
+            ? 'Generic Quick page; no landing tool is preferred.'
+            : "Current landing context: {$landingTool}. It is not a constraint.";
+        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
+        $model = $this->textModel('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
+        $attachments = $this->reviewUploadedFileAttachments($photos);
+        $this->configureReviewProvider($provider);
+
+        try {
+            $response = QuickEditOptionAgent::make()->prompt(
+                "Output language: {$locale}.\n{$landingContext}\nAvailable tools:\n{$catalog}",
+                attachments: $attachments,
+                provider: $provider,
+                model: $model,
+                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            throw new \InvalidArgumentException('Không phân tích được ảnh để đề xuất chỉnh sửa. Vui lòng thử lại sau.');
+        }
+
+        $data = $response instanceof Arrayable ? $response->toArray() : [];
+        $options = is_array($data['options'] ?? null) ? $data['options'] : ($data['suggestions'] ?? []);
+        $options = is_array($options) ? $options : [];
+        $text = trim($response->text);
+
+        if ($options === []) {
+            $json = preg_replace('/\A```(?:json)?\s*|\s*```\z/iu', '', $text) ?? $text;
+            $decoded = json_decode($json, true);
+            $options = is_array($decoded['options'] ?? null) ? $decoded['options'] : ($decoded['suggestions'] ?? []);
+            $options = is_array($options) ? $options : [];
+        }
+
+        if ($options === [] && preg_match_all('/^\s*\d+\.\s*`(?<tool>[^`]+)`(?<body>.*?)(?=^\s*\d+\.\s*`|\z)/msu', $text, $blocks, PREG_SET_ORDER) > 0) {
+            foreach ($blocks as $block) {
+                if (! preg_match('/(?:Yêu cầu|Request):\s*(?<request>[^\r\n]+)/u', $block['body'], $requestMatch)
+                    || ! preg_match('/(?:Lý do|Reason):\s*(?<reason>[^\r\n]+)/u', $block['body'], $reasonMatch)) {
+                    continue;
+                }
+
+                $request = trim($requestMatch['request']);
+                $request = preg_replace('/\A[“"]|[”"]\z/u', '', $request) ?? $request;
+                $options[] = [
+                    'tool' => $block['tool'],
+                    'request' => $request,
+                    'reason' => trim($reasonMatch['reason']),
+                ];
+            }
+        }
+
+        $normalized = [];
+
+        foreach ($options as $option) {
+            if (! is_array($option)) {
+                continue;
+            }
+
+            $tool = trim((string) ($option['tool'] ?? $option['tool_slug'] ?? ''));
+            $request = Str::limit(Str::of((string) ($option['request'] ?? ''))->squish()->toString(), 300, '');
+            $reason = Str::limit(Str::of((string) ($option['reason'] ?? ''))->squish()->toString(), 300, '');
+
+            if (QuickEditTools::get($tool) === null || $request === '' || $reason === '' || isset($normalized[$tool])) {
+                continue;
+            }
+
+            $normalized[$tool] = compact('tool', 'request', 'reason');
+        }
+
+        return array_slice(array_values($normalized), 0, 3);
+    }
+
+    /**
+     * @param  list<UploadedFile>  $photos
+     */
+    public function resolveQuickEditTool(array $photos, string $request): string
+    {
+        if ($photos === []) {
+            throw new \InvalidArgumentException('At least one image is required.');
+        }
+
+        $request = Str::of($request)->squish()->limit(12000, '')->toString();
+
+        if ($request === '') {
+            throw new \InvalidArgumentException('Prompt là bắt buộc.');
+        }
+
+        $catalog = collect(QuickEditTools::all())
+            ->map(fn (array $tool, string $slug): string => "- {$slug}: {$tool['description']}")
+            ->implode("\n");
+        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
+        $model = $this->textModel('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
+        $attachments = $this->reviewUploadedFileAttachments($photos);
+        $this->configureReviewProvider($provider);
+
+        try {
+            $response = QuickEditToolResolverAgent::make()->prompt(
+                "Available tools:\n{$catalog}\nUser request: {$request}",
+                attachments: $attachments,
+                provider: $provider,
+                model: $model,
+                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            throw new \InvalidArgumentException('Không xác định được loại chỉnh sửa phù hợp. Vui lòng thử lại sau.');
+        }
+
+        $data = $response instanceof Arrayable ? $response->toArray() : [];
+        $tool = trim((string) ($data['tool'] ?? ''));
+
+        if (QuickEditTools::get($tool) === null) {
+            throw new \InvalidArgumentException('Không xác định được loại chỉnh sửa phù hợp. Vui lòng thử lại sau.');
+        }
+
+        return $tool;
+    }
+
+    /**
+     * @param  list<UploadedFile>  $photos
+     * @return array<string, mixed>
+     */
+    public function quickEditPreflight(array $photos, string $request, string $tool): array
+    {
+        if (QuickEditTools::get($tool) === null) {
+            throw new \InvalidArgumentException('Quick Edit tool is invalid.');
+        }
+
+        if ($photos === []) {
+            throw new \InvalidArgumentException('At least one image is required.');
+        }
+
+        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
+        $model = $this->textModel('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
+        $attachments = $this->reviewUploadedFileAttachments($photos);
+        $this->configureReviewProvider($provider);
+
+        try {
+            $response = QuickEditPreflightAgent::make()->prompt(
+                QuickEditTools::contract($tool, array_fill(0, count($photos), 'source'), $request),
+                attachments: $attachments,
+                provider: $provider,
+                model: $model,
+                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            throw new \InvalidArgumentException('Không phân tích được yêu cầu chỉnh ảnh. Vui lòng thử lại sau.');
+        }
+
+        $data = $response instanceof Arrayable ? $response->toArray() : [];
+        $roles = array_values(array_map('strval', is_array($data['roles'] ?? null) ? $data['roles'] : []));
+        $roles = array_pad(array_slice($roles, 0, count($photos)), count($photos), 'source');
+        $roles = array_map(fn (string $role): string => in_array($role, QuickEditTools::roles(), true) ? $role : 'source', $roles);
+        $confidence = max(0, min(1, (float) ($data['confidence'] ?? 0)));
+        $questions = array_values(array_filter(array_map('strval', is_array($data['questions'] ?? null) ? $data['questions'] : [])));
+        $needsClarification = (bool) ($data['needs_clarification'] ?? false) || $confidence < 0.65;
+
+        return [
+            'intent_summary' => Str::limit(trim((string) ($data['intent_summary'] ?? '')), 500, ''),
+            'roles' => $roles,
+            'subjects' => array_values(array_filter(array_map('strval', is_array($data['subjects'] ?? null) ? $data['subjects'] : []))),
+            'conflicts' => array_values(array_filter(array_map('strval', is_array($data['conflicts'] ?? null) ? $data['conflicts'] : []))),
+            'confidence' => $confidence,
+            'needs_clarification' => $needsClarification,
+            'questions' => array_slice($questions, 0, 2),
+            'suggestions' => array_values(array_filter(array_map('strval', is_array($data['suggestions'] ?? null) ? $data['suggestions'] : []))),
+        ];
+    }
+
+    /**
+     * @param  list<UploadedFile>  $photos
+     * @param  array<string, mixed>  $metadata
+     */
+    public function createQuickEditPending(Request $request, array $photos, string $prompt, string $tool, array $metadata = []): GeneratedMedia
+    {
+        $config = QuickEditTools::get($tool);
+
+        if ($config === null) {
+            throw new \InvalidArgumentException('Quick Edit tool is invalid.');
+        }
+
+        $roles = is_array($metadata['reference_roles'] ?? null) ? array_values(array_map('strval', $metadata['reference_roles'])) : [];
+        $roles = array_slice($roles, 0, count($photos));
+
+        if ($roles === [] && count($photos) === 1) {
+            $roles = [$config['source_role']];
+        }
+
+        if (count($roles) !== count($photos)) {
+            throw new \InvalidArgumentException('Please assign a role to every reference image.');
+        }
+
+        $metadata = [
+            'generation_mode' => 'quick',
+            'preset' => $tool,
+            'reference_roles' => $roles,
+            'prompt_contract' => 'quick-v1',
+            ...$metadata,
+        ];
+        $metadata['reference_roles'] = $roles;
+        $prompt = trim(QuickEditTools::contract($tool, $roles, $prompt));
+
+        return $this->createPending(
+            $request,
+            $photos,
+            $prompt,
+            model: AppSettings::defaultImageModel(),
+            metadata: $metadata,
+        );
     }
 
     public function promptFromImage(UploadedFile $photo): string
@@ -1469,61 +1693,6 @@ class AiImageEditor
         }
 
         return $response instanceof Arrayable ? $response->toArray() : [];
-    }
-
-    private function isRecentGrokDuplicate(GeneratedMedia $current, string $image): bool
-    {
-        $hash = hash('sha256', $image);
-        /** @var FilesystemAdapter $disk */
-        $disk = Storage::disk('public');
-
-        return GeneratedMedia::query()
-            ->where('id', '!=', $current->id)
-            ->where('model', $current->model)
-            ->where('status', 'succeeded')
-            ->whereNotNull('result_path')
-            ->latest('id')
-            ->limit(20)
-            ->get(['result_path'])
-            ->contains(function (GeneratedMedia $image) use ($disk, $hash): bool {
-                $path = $image->result_path;
-
-                return is_string($path)
-                    && $disk->exists($path)
-                    && hash_equals($hash, hash('sha256', $disk->get($path)));
-            });
-    }
-
-    private function generatedImageMatchesPrompt(string $image, string $prompt): bool
-    {
-        $provider = AppSettings::string('ai.image_provider', (string) config('ai.default', 'openai'));
-        $model = $this->textModel('ai.image_review_model', (string) config('ai.image_review_model', 'gpt-5.5'));
-        $this->configureReviewProvider($provider);
-
-        try {
-            $response = ImageReviewAgent::make()->prompt(
-                "Kiểm tra ảnh vừa tạo có khớp nội dung cốt lõi của prompt không. Chỉ đánh giá độ khớp, không kiểm duyệt lại.\n\nPrompt:\n{$prompt}",
-                attachments: [new Base64Image(base64_encode($image), $this->generatedImageMime($image))],
-                provider: $provider,
-                model: $model,
-                timeout: AppSettings::int('ai.image_timeout', (int) config('ai.image_timeout', 300)),
-            );
-        } catch (Throwable $e) {
-            report($e);
-
-            throw new \RuntimeException('Không kiểm tra được độ khớp ảnh Grok.');
-        }
-
-        $review = $response instanceof Arrayable ? $response->toArray() : [];
-
-        return ($review['matches_prompt'] ?? false) === true;
-    }
-
-    private function generatedImageMime(string $image): string
-    {
-        $info = @getimagesizefromstring($image);
-
-        return is_array($info) ? $info['mime'] : 'image/jpeg';
     }
 
     /**

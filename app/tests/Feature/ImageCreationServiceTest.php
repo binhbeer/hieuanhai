@@ -14,7 +14,7 @@ use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\Tag;
 use App\Models\User;
-use App\Services\AiImageEditor;
+use App\Services\ImageCreationService;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,15 +32,15 @@ use Livewire\Livewire;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
-class AiImageEditorTest extends TestCase
+class ImageCreationServiceTest extends TestCase
 {
     use RefreshDatabase;
 
     public function test_guests_can_visit_gallery_but_not_create_images(): void
     {
-        $this->get(route('home'))
+        $this->get(route('gallery.index'))
             ->assertOk()
-            ->assertSee(__('Create image'))
+            ->assertSee(__('AI Gallery'))
             ->assertSee(__('Favorite images'))
             ->assertDontSee(__('Remaining'));
     }
@@ -94,7 +94,7 @@ class AiImageEditorTest extends TestCase
 
     public function test_guest_cannot_create_pending_image(): void
     {
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -114,7 +114,7 @@ class AiImageEditorTest extends TestCase
         $user = User::factory()->create(['id' => 2]);
         $this->actingAs($user);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -142,7 +142,7 @@ class AiImageEditorTest extends TestCase
         $user = User::factory()->create(['id' => 2]);
         $this->actingAs($user);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -171,7 +171,7 @@ class AiImageEditorTest extends TestCase
         $user = User::factory()->unverified()->create(['id' => 2, 'created_at' => now()->subDay()]);
         $this->actingAs($user);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -191,7 +191,7 @@ class AiImageEditorTest extends TestCase
         $user = User::factory()->unverified()->create(['id' => 200]);
         $this->actingAs($user);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -206,7 +206,7 @@ class AiImageEditorTest extends TestCase
     {
         $user = User::factory()->create();
         $this->actingAs($user);
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -231,7 +231,7 @@ class AiImageEditorTest extends TestCase
     {
         $this->actingAs(User::factory()->unverified()->create(['id' => 1, 'created_at' => now()->subDay()]));
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'GET', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -276,7 +276,7 @@ class AiImageEditorTest extends TestCase
 
         $photo = UploadedFile::fake()->image('source.png', 2000, 1000);
 
-        $image = app(AiImageEditor::class)->create(
+        $image = app(ImageCreationService::class)->create(
             $request,
             [$photo],
             'A cute cat wearing a hat',
@@ -332,7 +332,7 @@ class AiImageEditorTest extends TestCase
 
         $photo = UploadedFile::fake()->image('cat.jpg', 1024, 512);
 
-        $image = app(AiImageEditor::class)->create(
+        $image = app(ImageCreationService::class)->create(
             Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
             [$photo],
             'A cute cat wearing a hat',
@@ -367,7 +367,7 @@ class AiImageEditorTest extends TestCase
             'cdn.example.test/grok.png' => Http::response($png, 200, ['Content-Type' => 'image/png']),
         ]);
 
-        $image = app(AiImageEditor::class)->create(
+        $image = app(ImageCreationService::class)->create(
             Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
             [],
             'A cute cat wearing a hat',
@@ -388,128 +388,32 @@ class AiImageEditorTest extends TestCase
         $this->assertSame('xai/grok-imagine-image-quality', $image->model);
     }
 
-    public function test_grok_retries_until_generated_image_matches_prompt(): void
+    public function test_grok_generation_calls_endpoint_once_without_prompt_review_or_duplicate_check(): void
     {
         Storage::fake('public');
         Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
         Setting::putValue('ai.openai_api_key', 'test-key');
         Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
         Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
-        ImageReviewAgent::fake([
-            $this->allowedReview(),
-            [...$this->allowedReview(), 'matches_prompt' => false, 'reason' => 'Sai chủ thể.'],
-            [...$this->allowedReview(), 'matches_prompt' => false, 'reason' => 'Ảnh không liên quan.'],
-            $this->allowedReview(),
-        ]);
+        ImageReviewAgent::fake([$this->allowedReview()]);
 
-        $attempt = 0;
-        Http::fake(function (HttpRequest $request) use (&$attempt) {
-            if (str_contains($request->url(), '/images/generations')) {
-                $attempt++;
-
-                return Http::response([
-                    'data' => [['url' => 'https://cdn.example.test/grok-'.$attempt.'.png']],
-                ]);
-            }
-
-            if (str_contains($request->url(), 'cdn.example.test/grok-')) {
-                return Http::response($this->pngBinary(1024, 1024), 200, ['Content-Type' => 'image/png']);
-            }
-
-            return Http::response([], 404);
-        });
-
-        $image = app(AiImageEditor::class)->create(
-            Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
-            [],
-            'A cute cat wearing a hat',
-            'xai/grok-imagine-image-quality',
-        );
-
-        $this->assertSame(3, $attempt);
-        $this->assertSame('succeeded', $image->status);
-        $this->assertSame(3, Http::recorded(fn (HttpRequest $request) => str_contains($request->url(), '/images/generations'))->count());
-        ImageReviewAgent::assertPrompted(fn ($prompt): bool => str_contains($prompt->prompt, 'Kiểm tra ảnh vừa tạo có khớp nội dung cốt lõi'));
-    }
-
-    public function test_grok_retries_recent_duplicate_before_prompt_review(): void
-    {
-        Storage::fake('public');
-        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
-        Setting::putValue('ai.openai_api_key', 'test-key');
-        Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
-        Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
-        ImageReviewAgent::fake([$this->allowedReview(), $this->allowedReview()]);
-        $cached = $this->pngBinary(1024, 1024);
-        Storage::disk('public')->put('generated/cached.png', $cached);
-        GeneratedMedia::create([
-            'visitor_key' => 'existing',
-            'prompt' => 'Previous unrelated prompt',
-            'provider' => 'openai',
-            'model' => 'xai/grok-imagine-image-quality',
-            'status' => 'succeeded',
-            'result_path' => 'generated/cached.png',
-        ]);
-        $attempt = 0;
-        Http::fake(function (HttpRequest $request) use (&$attempt, $cached) {
-            if (str_contains($request->url(), '/images/generations')) {
-                $attempt++;
-
-                return Http::response(['data' => [['url' => 'https://cdn.example.test/result-'.$attempt.'.png']]]);
-            }
-
-            if ($request->url() === 'https://cdn.example.test/result-1.png') {
-                return Http::response($cached, 200, ['Content-Type' => 'image/png']);
-            }
-
-            return Http::response($this->pngBinary(1024, 768), 200, ['Content-Type' => 'image/png']);
-        });
-
-        $image = app(AiImageEditor::class)->create(
-            Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
-            [],
-            'A cute cat wearing a hat',
-            'xai/grok-imagine-image-quality',
-        );
-
-        $this->assertSame(2, $attempt);
-        $this->assertSame('succeeded', $image->status);
-    }
-
-    public function test_grok_fails_after_three_prompt_mismatches(): void
-    {
-        Storage::fake('public');
-        Setting::putValue('ai.openai_url', 'http://42.112.31.227:22150/v1');
-        Setting::putValue('ai.openai_api_key', 'test-key');
-        Setting::putValue('ai.image_model', 'xai/grok-imagine-image-quality');
-        Setting::putValue('ai.image_models', ['xai/grok-imagine-image-quality']);
-        ImageReviewAgent::fake([
-            $this->allowedReview(),
-            [...$this->allowedReview(), 'matches_prompt' => false],
-            [...$this->allowedReview(), 'matches_prompt' => false],
-            [...$this->allowedReview(), 'matches_prompt' => false],
-        ]);
         Http::fake([
             '42.112.31.227:22150/v1/images/generations*' => Http::response([
-                'data' => [['url' => 'https://cdn.example.test/wrong.png']],
+                'data' => [['url' => 'https://cdn.example.test/grok.png']],
             ]),
-            'cdn.example.test/wrong.png' => Http::response($this->pngBinary(1024, 1024), 200, ['Content-Type' => 'image/png']),
+            'cdn.example.test/grok.png' => Http::response($this->pngBinary(1024, 1024), 200, ['Content-Type' => 'image/png']),
         ]);
 
-        try {
-            app(AiImageEditor::class)->create(
-                Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
-                [],
-                'A cute cat wearing a hat',
-                'xai/grok-imagine-image-quality',
-            );
-            $this->fail('Expected prompt mismatch error.');
-        } catch (\RuntimeException $exception) {
-            $this->assertSame('Grok trả về ảnh không khớp prompt sau 3 lần thử.', $exception->getMessage());
-        }
+        $image = app(ImageCreationService::class)->create(
+            Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
+            [],
+            'A cute cat wearing a hat',
+            'xai/grok-imagine-image-quality',
+        );
 
-        $this->assertSame('failed', GeneratedMedia::query()->latest('id')->firstOrFail()->status);
-        $this->assertSame(3, Http::recorded(fn (HttpRequest $request) => str_contains($request->url(), '/images/generations'))->count());
+        $this->assertSame('succeeded', $image->status);
+        $this->assertSame(1, Http::recorded(fn (HttpRequest $request) => str_contains($request->url(), '/images/generations'))->count());
+        ImageReviewAgent::assertNotPrompted(fn ($prompt): bool => str_contains($prompt->prompt, 'Kiểm tra ảnh vừa tạo có khớp nội dung cốt lõi'));
     }
 
     public function test_grok_reference_image_fails_before_calling_current_endpoint(): void
@@ -523,7 +427,7 @@ class AiImageEditorTest extends TestCase
         Http::fake();
 
         try {
-            app(AiImageEditor::class)->create(
+            app(ImageCreationService::class)->create(
                 Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']),
                 [UploadedFile::fake()->image('person.jpg', 1024, 1024)],
                 'Keep this person and change the background to a studio',
@@ -560,7 +464,7 @@ class AiImageEditorTest extends TestCase
         $request->setLaravelSession($session);
         $this->actingAs(User::factory()->create());
 
-        $image = app(AiImageEditor::class)->createPending(
+        $image = app(ImageCreationService::class)->createPending(
             $request,
             [],
             'A wide mountain landscape at sunrise',
@@ -571,7 +475,7 @@ class AiImageEditorTest extends TestCase
             model: 'xai/grok-imagine-image-quality',
         );
 
-        $image = app(AiImageEditor::class)->completePending($image);
+        $image = app(ImageCreationService::class)->completePending($image);
 
         Http::assertSent(fn (HttpRequest $request) => str_starts_with($request->url(), 'http://42.112.31.227:22150/v1/images/generations?_request_id=')
             && $request['model'] === 'xai/grok-imagine-image-quality'
@@ -605,7 +509,7 @@ class AiImageEditorTest extends TestCase
             ->map(fn (int $index): UploadedFile => UploadedFile::fake()->image($index.'.png'))
             ->all();
 
-        $image = app(AiImageEditor::class)->create($request, $photos, 'Merge these references');
+        $image = app(ImageCreationService::class)->create($request, $photos, 'Merge these references');
 
         Http::assertSent(fn (HttpRequest $request) => is_array($request['images'])
             && count($request['images']) === 5
@@ -637,7 +541,7 @@ class AiImageEditorTest extends TestCase
         $request->setLaravelSession($session);
         $this->actingAs(User::factory()->create());
 
-        $image = app(AiImageEditor::class)->createPending(
+        $image = app(ImageCreationService::class)->createPending(
             $request,
             [UploadedFile::fake()->image('source.png', 2000, 1000)],
             'A cute cat wearing a hat',
@@ -648,7 +552,7 @@ class AiImageEditorTest extends TestCase
         $this->assertIsString($pendingPath);
         Storage::disk('public')->assertExists($pendingPath);
 
-        $image = app(AiImageEditor::class)->completePending($image);
+        $image = app(ImageCreationService::class)->completePending($image);
 
         ImageReviewAgent::assertPrompted(fn ($prompt): bool => $prompt->attachments->first() instanceof Base64Image);
         Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
@@ -695,7 +599,7 @@ class AiImageEditorTest extends TestCase
             ],
         ]);
 
-        app(AiImageEditor::class)->completePending($image);
+        app(ImageCreationService::class)->completePending($image);
 
         Http::assertSent(fn (HttpRequest $request): bool => count($request['images']) === 5
             && str_contains($request['prompt'], 'PRIMARY_PRODUCT')
@@ -735,14 +639,14 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $child = app(AiImageEditor::class)->createPending(
+        $child = app(ImageCreationService::class)->createPending(
             $request,
             [],
             'Make the lighting warmer',
             parentId: $parent->id,
             parentReferenceIndexes: [0],
         );
-        $child = app(AiImageEditor::class)->completePending($child);
+        $child = app(ImageCreationService::class)->completePending($child);
 
         Http::assertSent(fn (HttpRequest $request): bool => str_contains($request['prompt'], 'Original prompt: Original parent prompt')
             && str_contains($request['prompt'], 'Edit instructions: Make the lighting warmer'));
@@ -768,7 +672,7 @@ class AiImageEditorTest extends TestCase
         $this->expectExceptionMessage('Prompt không phù hợp để tạo hoặc publish ảnh.');
 
         try {
-            app(AiImageEditor::class)->create($request, [UploadedFile::fake()->image('politician.png')], 'Chế ảnh ác quỷ');
+            app(ImageCreationService::class)->create($request, [UploadedFile::fake()->image('politician.png')], 'Chế ảnh ác quỷ');
         } finally {
             ImageReviewAgent::assertPrompted(fn ($prompt): bool => $prompt->attachments->first() instanceof Base64Image);
             $this->assertSame(0, GeneratedMedia::query()->count());
@@ -793,7 +697,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $image = app(AiImageEditor::class)->create($request, [], 'Tạo ảnh comic bất kì');
+        $image = app(ImageCreationService::class)->create($request, [], 'Tạo ảnh comic bất kì');
 
         $this->assertSame('succeeded', $image->status);
         Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations');
@@ -841,7 +745,7 @@ class AiImageEditorTest extends TestCase
         $this->assertStringContainsString('Cho phép người nổi tiếng không giữ vai trò chính trị', $agent->instructions());
         $this->assertStringContainsString('mô phỏng giao diện hồ sơ mạng xã hội', $agent->instructions());
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -905,7 +809,7 @@ class AiImageEditorTest extends TestCase
             ->assertSee('Banner nước hoa cao cấp')
             ->assertSee("title: 'Banner nước hoa cao cấp'", false);
 
-        $this->actingAs(User::factory()->create())->get(route('search.index', ['q' => 'nước hoa']))
+        $this->get(route('gallery.index', ['q' => 'nước hoa']))
             ->assertOk()
             ->assertSee('Banner nước hoa cao cấp')
             ->assertDontSee('Vẽ chân dung cổ điển');
@@ -985,7 +889,7 @@ class AiImageEditorTest extends TestCase
         ImageReviewAgent::fake([$this->allowedReview()]);
         ImageMetadataAgent::fake([$this->publishReview('other', [])]);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -1012,7 +916,7 @@ class AiImageEditorTest extends TestCase
         ImageReviewAgent::fake([$this->allowedReview()]);
         ImageMetadataAgent::fake([$this->publishReview('other', [])]);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -1050,7 +954,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
         $image = GeneratedMedia::create([
-            'visitor_key' => app(AiImageEditor::class)->visitorKey($request),
+            'visitor_key' => app(ImageCreationService::class)->visitorKey($request),
             'prompt' => 'Chân dung mèo trong studio',
             'provider' => 'openai',
             'model' => 'cx/gpt-5.5-image',
@@ -1058,7 +962,7 @@ class AiImageEditorTest extends TestCase
             'result_path' => 'ai-images/cat.png',
         ]);
 
-        $published = app(AiImageEditor::class)->publish($image, $request);
+        $published = app(ImageCreationService::class)->publish($image, $request);
 
         $this->assertSame('Cute cat studio portrait', $published->getTranslationWithoutFallback('title', 'en'));
         $this->assertSame('A cute cat portrait with soft studio lighting and expressive details for polished visual inspiration.', $published->getTranslationWithoutFallback('description', 'en'));
@@ -1074,7 +978,7 @@ class AiImageEditorTest extends TestCase
         ImageReviewAgent::fake([$this->allowedReview()]);
         ImageMetadataAgent::fake([$this->publishReview('other', [], $prompt)]);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -1120,7 +1024,7 @@ class AiImageEditorTest extends TestCase
                 'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
             ]);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -1163,7 +1067,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.image_to_prompt_model', 'gpt-5.5-vision');
         ImageToPromptAgent::fake([['prompt' => 'A cinematic portrait with soft window light.']]);
 
-        $prompt = app(AiImageEditor::class)->promptFromImage(UploadedFile::fake()->image('source.png', 1600, 900));
+        $prompt = app(ImageCreationService::class)->promptFromImage(UploadedFile::fake()->image('source.png', 1600, 900));
 
         $this->assertSame('A cinematic portrait with soft window light.', $prompt);
         ImageToPromptAgent::assertPrompted(function ($prompt): bool {
@@ -1187,7 +1091,7 @@ class AiImageEditorTest extends TestCase
         $advancedPrompt = str_repeat('Chi tiết thị giác chuyên sâu. ', 150);
         ImageToPromptAgent::fake([['prompt' => $advancedPrompt]]);
 
-        $prompt = app(AiImageEditor::class)->promptFromImage(UploadedFile::fake()->image('source.jpg'));
+        $prompt = app(ImageCreationService::class)->promptFromImage(UploadedFile::fake()->image('source.jpg'));
 
         $this->assertGreaterThan(2000, mb_strlen($prompt));
         $this->assertSame(trim($advancedPrompt), $prompt);
@@ -1200,7 +1104,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.image_to_prompt_model', '');
         ImageToPromptAgent::fake([['prompt' => 'A detailed image prompt.']]);
 
-        app(AiImageEditor::class)->promptFromImage(UploadedFile::fake()->image('source.jpg'));
+        app(ImageCreationService::class)->promptFromImage(UploadedFile::fake()->image('source.jpg'));
 
         ImageToPromptAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-default-text');
     }
@@ -1212,7 +1116,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.text_model', 'gpt-5.5-default-text');
         ProjectNameAgent::fake([['name' => '  "Túi da nâu"  ']]);
 
-        $name = app(AiImageEditor::class)->projectNameFromImage(
+        $name = app(ImageCreationService::class)->projectNameFromImage(
             UploadedFile::fake()->image('bag.jpg', 800, 800),
             'vi',
             'Leather handbag',
@@ -1233,7 +1137,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.prompt_translation_model', 'gpt-5.5-translation');
         PromptTranslationAgent::fake([['prompt' => 'Một chú mèo đội chiếc mũ nhỏ.']]);
 
-        $prompt = app(AiImageEditor::class)->translatePrompt('A cat wearing a tiny hat.');
+        $prompt = app(ImageCreationService::class)->translatePrompt('A cat wearing a tiny hat.');
 
         $this->assertSame('Một chú mèo đội chiếc mũ nhỏ.', $prompt);
         PromptTranslationAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-translation'
@@ -1247,7 +1151,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.prompt_translation_model', '');
         PromptTranslationAgent::fake([['prompt' => 'Một chú mèo.']]);
 
-        app(AiImageEditor::class)->translatePrompt('A cat.');
+        app(ImageCreationService::class)->translatePrompt('A cat.');
 
         PromptTranslationAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-default-text');
     }
@@ -1258,7 +1162,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.prompt_rewrite_model', 'gpt-5.5-rewrite');
         PromptRewriteAgent::fake([['prompt' => 'A cinematic portrait of a cat wearing a tiny hat.']]);
 
-        $prompt = app(AiImageEditor::class)->rewritePrompt('cat with hat', 'make it cinematic');
+        $prompt = app(ImageCreationService::class)->rewritePrompt('cat with hat', 'make it cinematic');
 
         $this->assertSame('A cinematic portrait of a cat wearing a tiny hat.', $prompt);
         PromptRewriteAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-rewrite'
@@ -1273,7 +1177,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.prompt_rewrite_model', '');
         PromptRewriteAgent::fake([['prompt' => 'A cinematic portrait of a cat wearing a tiny hat.']]);
 
-        app(AiImageEditor::class)->rewritePrompt('cat with hat');
+        app(ImageCreationService::class)->rewritePrompt('cat with hat');
 
         PromptRewriteAgent::assertPrompted(fn ($prompt): bool => $prompt->model === 'gpt-5.5-default-text');
     }
@@ -1283,7 +1187,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.openai_api_key', 'test-key');
         PromptRewriteAgent::fake([['prompt' => 'A cinematic portrait of a cat wearing a tiny hat.']]);
 
-        $prompt = app(AiImageEditor::class)->rewritePrompt('', 'create a cinematic cat portrait');
+        $prompt = app(ImageCreationService::class)->rewritePrompt('', 'create a cinematic cat portrait');
 
         $this->assertSame('A cinematic portrait of a cat wearing a tiny hat.', $prompt);
         PromptRewriteAgent::assertPrompted(fn ($prompt): bool => str_contains($prompt->prompt, 'create a cinematic cat portrait'));
@@ -1295,7 +1199,7 @@ class AiImageEditorTest extends TestCase
         Setting::putValue('ai.openai_api_key', 'test-key');
         ImageReviewAgent::fake([['allowed' => false, 'blocked_policy' => 'political', 'reason' => 'Không phù hợp.', 'matches_prompt' => true]]);
 
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
         $session = new Store('test', new ArraySessionHandler(120));
         $session->start();
@@ -1345,7 +1249,7 @@ class AiImageEditorTest extends TestCase
         $this->actingAs($user);
 
         try {
-            app(AiImageEditor::class)->publish($image, $request);
+            app(ImageCreationService::class)->publish($image, $request);
             $this->fail('Non-admin publish retry should be blocked.');
         } catch (\InvalidArgumentException $e) {
             $this->assertSame('Prompt không phù hợp để tạo hoặc publish ảnh.', $e->getMessage());
@@ -1354,7 +1258,7 @@ class AiImageEditorTest extends TestCase
         ImageReviewAgent::assertNeverPrompted();
 
         $this->actingAs($admin);
-        $published = app(AiImageEditor::class)->publish($image, $request, requireOwner: false);
+        $published = app(ImageCreationService::class)->publish($image, $request, requireOwner: false);
 
         $this->assertTrue($published->is_published);
         $this->assertNull(data_get($published->response_meta, 'publish_error'));
@@ -1362,7 +1266,7 @@ class AiImageEditorTest extends TestCase
 
     public function test_related_images_are_ranked_by_shared_tags(): void
     {
-        $editor = app(AiImageEditor::class);
+        $editor = app(ImageCreationService::class);
         $selected = $this->publishedImage('Ảnh nước hoa', now()->subMinutes(4));
         $best = $this->publishedImage('Ảnh nước hoa studio', now()->subMinutes(10));
         $ok = $this->publishedImage('Ảnh sản phẩm', now()->subMinutes(2));
@@ -1407,7 +1311,7 @@ class AiImageEditorTest extends TestCase
             ->assertSee(__('Featured'));
 
         $this->assertTrue($featured->fresh()->is_featured);
-        $this->assertSame([$featured->id, $newer->id], app(AiImageEditor::class)->publishedGallery(sort: 'featured')->pluck('id')->take(2)->all());
+        $this->assertSame([$featured->id, $newer->id], app(ImageCreationService::class)->publishedGallery(sort: 'featured')->pluck('id')->take(2)->all());
 
         Livewire::actingAs(User::factory()->create())
             ->test('gallery.detail', ['selectedImageId' => $featured->id, 'show' => true, 'standalone' => true])
@@ -1532,7 +1436,7 @@ class AiImageEditorTest extends TestCase
         $request->setLaravelSession($session);
         $this->actingAs(User::factory()->create());
 
-        $image = app(AiImageEditor::class)->createPending(
+        $image = app(ImageCreationService::class)->createPending(
             $request,
             [UploadedFile::fake()->image('source.png', 2000, 1000)],
             'A cute cat wearing a hat',
@@ -1548,7 +1452,7 @@ class AiImageEditorTest extends TestCase
         $this->assertSame('1536x864', data_get($storedImage->request_meta, 'size'));
         $this->assertSame('original', data_get($storedImage->request_meta, 'image_detail'));
 
-        $image = app(AiImageEditor::class)->completePending($image);
+        $image = app(ImageCreationService::class)->completePending($image);
 
         Http::assertSent(fn (HttpRequest $request) => $request->url() === 'http://42.112.31.227:22150/v1/images/generations'
             && $request['size'] === '1536x864'
@@ -1586,7 +1490,7 @@ class AiImageEditorTest extends TestCase
         $this->assertSame(941, $resultSize[1] ?? null);
 
         $image->update(['status' => 'failed']);
-        $retried = app(AiImageEditor::class)->retryFailed($image->refresh(), $request);
+        $retried = app(ImageCreationService::class)->retryFailed($image->refresh(), $request);
         $this->assertSame('16:9', data_get($retried->request_meta, 'aspect_ratio'));
         $this->assertSame('2k', data_get($retried->request_meta, 'resolution'));
         $this->assertSame('1536x864', data_get($retried->request_meta, 'size'));
@@ -1613,7 +1517,7 @@ class AiImageEditorTest extends TestCase
         $request->setLaravelSession($session);
         $this->actingAs(User::factory()->create());
 
-        $image = app(AiImageEditor::class)->createPending(
+        $image = app(ImageCreationService::class)->createPending(
             $request,
             [],
             'Small provider output',
@@ -1623,7 +1527,7 @@ class AiImageEditorTest extends TestCase
             resolution: '2k',
         );
 
-        $image = app(AiImageEditor::class)->completePending($image);
+        $image = app(ImageCreationService::class)->completePending($image);
         $this->assertSame('failed', $image->status);
         $this->assertStringContainsString('nhỏ hơn cấu hình', (string) $image->error);
     }
@@ -1638,7 +1542,7 @@ class AiImageEditorTest extends TestCase
         $session->start();
         $request->setLaravelSession($session);
 
-        $image = app(AiImageEditor::class)->createPending(
+        $image = app(ImageCreationService::class)->createPending(
             $request,
             [],
             'Selected model image',
@@ -1670,11 +1574,11 @@ class AiImageEditorTest extends TestCase
         $request->setLaravelSession($session);
         $this->actingAs(User::factory()->create());
 
-        $image = app(AiImageEditor::class)->createPending($request, [], 'Landscape portrait');
+        $image = app(ImageCreationService::class)->createPending($request, [], 'Landscape portrait');
         $this->assertNull(data_get($image->request_meta, 'size'));
         $this->assertNull(data_get($image->request_meta, 'image_detail'));
 
-        $image = app(AiImageEditor::class)->completePending($image);
+        $image = app(ImageCreationService::class)->completePending($image);
 
         Http::assertSent(fn (HttpRequest $request) => $request['size'] === '1024x1536'
             && $request['image_detail'] === 'high'
@@ -1682,14 +1586,14 @@ class AiImageEditorTest extends TestCase
         $this->assertSame('succeeded', $image->status);
     }
 
-    public function test_generator_persists_aspect_resolution_and_image_quality(): void
+    public function test_creator_persists_aspect_resolution_and_image_quality(): void
     {
         Bus::fake();
         Setting::putValue('ai.image_models', ['cx/gpt-5.5-image', 'cx/composer-image']);
 
         $this->actingAs(User::factory()->create());
 
-        Livewire::test('gallery.generator')
+        Livewire::test('gallery.creator')
             ->set('showComposer', true)
             ->set('prompt', 'Wide landscape with correct options')
             ->set('aspectRatio', '16:9')

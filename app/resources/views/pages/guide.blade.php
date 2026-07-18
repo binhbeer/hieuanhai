@@ -291,40 +291,62 @@ new #[Title('User guide')] class extends Component {
         [__('How do I secure my account?'), __('Verify your email, use a unique password or passkey, enable two-factor authentication, and store recovery codes offline.')],
         [__('What happens when I regenerate an API key?'), __('The old token stops working immediately. Your quota, request statistics, and logs remain attached to the same key record.')],
     ];
+
+    $isApiGuide = $routeName === 'guide.api';
+    $focusRing = $isApiGuide ? 'focus-visible:ring-amber-500' : 'focus-visible:ring-violet-500';
+    $markerBg = $isApiGuide ? 'bg-amber-500' : 'bg-violet-600';
+    $chipClass = $isApiGuide
+        ? 'rounded-full border border-amber-200/90 bg-white/80 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:border-white/15 dark:bg-white/5 dark:text-zinc-300'
+        : 'rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 dark:border-white/15 dark:bg-white/5 dark:text-zinc-300';
+    $ctaBox = $isApiGuide
+        ? 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10'
+        : 'border-violet-200 bg-violet-50 dark:border-violet-400/20 dark:bg-violet-400/10';
+    $cardHover = $isApiGuide
+        ? 'group-hover:border-amber-400/50'
+        : 'group-hover:border-violet-400/50';
+    $navActive = $isApiGuide
+        ? 'bg-amber-100 text-amber-950 dark:bg-amber-400 dark:text-amber-950'
+        : 'bg-zinc-100 text-zinc-950 dark:bg-white dark:text-zinc-950';
+    $navActiveMuted = $isApiGuide
+        ? 'text-amber-800/80 dark:text-amber-950/70'
+        : 'text-zinc-500 dark:text-zinc-600';
 @endphp
 
-<section class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8" aria-labelledby="guide-title">
-    <div class="relative isolate overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-950 px-6 py-10 text-white shadow-2xl shadow-zinc-950/10 sm:px-10 sm:py-14 dark:border-white/10">
-        <div class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_15%,rgba(139,92,246,.35),transparent_35%),radial-gradient(circle_at_85%_80%,rgba(14,165,233,.22),transparent_32%)]"></div>
-        <div class="max-w-3xl">
-            <div class="mb-5 flex flex-wrap items-center gap-3 text-sm text-zinc-300">
-                <a class="transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" href="{{ route('home') }}" wire:navigate>{{ __('Home') }}</a>
-                <flux:icon.chevron-right class="size-4" aria-hidden="true" />
-                <span>{{ __('User guide') }}</span>
-            </div>
-            <p class="text-sm font-semibold uppercase tracking-[0.18em] text-violet-300">{{ $content['eyebrow'] }}</p>
-            <h1 id="guide-title" class="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl">{{ $content['title'] }}</h1>
-            <p class="mt-5 max-w-2xl text-base leading-7 text-zinc-300 sm:text-lg">{{ $content['intro'] }}</p>
-            <div class="mt-7 flex flex-wrap items-center gap-3">
-                @if ($routeName === 'guide.index')
-                    <flux:button :href="route('guide.getting-started')" variant="primary" color="violet" icon:trailing="arrow-right" wire:navigate>{{ __('Start with your first image') }}</flux:button>
-                    <flux:button :href="route('guide.api')" variant="filled" icon="code-bracket" wire:navigate>{{ __('Explore the API') }}</flux:button>
-                @else
-                    <flux:badge color="zinc" size="sm">{{ $content['readingTime'] }}</flux:badge>
-                @endif
-            </div>
-        </div>
-    </div>
+<section class="mx-auto w-full max-w-7xl space-y-8 px-3 pb-6 sm:px-6 sm:pb-10 sm:py-5">
+    <flux:breadcrumbs>
+        <flux:breadcrumbs.item :href="route('home')" wire:navigate>{{ __('Home') }}</flux:breadcrumbs.item>
+        <flux:breadcrumbs.item>{{ __('User guide') }}</flux:breadcrumbs.item>
+    </flux:breadcrumbs>
 
-    <div class="mt-8 grid items-start gap-8 lg:grid-cols-[17rem_minmax(0,1fr)]">
+    <section class="max-w-3xl" aria-labelledby="guide-title">
+        @if ($isApiGuide)
+            <flux:badge color="amber" icon="code-bracket">{{ __('For developers') }}</flux:badge>
+        @else
+            <flux:badge color="violet" icon="book-open">{{ $content['eyebrow'] }}</flux:badge>
+        @endif
+        <h1 id="guide-title" class="mt-3 text-2xl font-semibold tracking-[-.04em] text-zinc-950 sm:text-3xl lg:text-4xl dark:text-white">{{ $content['title'] }}</h1>
+        <p class="mt-3 text-base leading-6 sm:leading-7 text-zinc-600 sm:text-lg dark:text-zinc-300">{{ $content['intro'] }}</p>
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+            @if ($routeName === 'guide.index')
+                <flux:button :href="route('guide.getting-started')" variant="primary" color="violet" icon:trailing="arrow-right" wire:navigate>{{ __('Start with your first image') }}</flux:button>
+                <flux:button :href="route('guide.api')" variant="outline" color="amber" icon="code-bracket" wire:navigate>{{ __('Explore the API') }}</flux:button>
+            @elseif ($isApiGuide)
+                <span class="{{ $chipClass }}">POST /api/ai/images</span>
+                <span class="{{ $chipClass }}">{{ __('Bearer token') }}</span>
+                <span class="{{ $chipClass }}">{{ __('Quota aware') }}</span>
+            @endif
+        </div>
+    </section>
+
+    <div class="grid items-start gap-8 lg:grid-cols-[17rem_minmax(0,1fr)]">
         <aside class="lg:sticky lg:top-6" aria-label="{{ __('Guide sections') }}">
             <nav class="rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-white/5">
                 @foreach ($guidePages as $name => $page)
-                    <a class="group flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 {{ $routeName === $name ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10' }}" href="{{ route($name) }}" @if ($routeName === $name) aria-current="page" @endif wire:navigate>
+                    <a class="group flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 {{ $focusRing }} {{ $routeName === $name ? $navActive : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-white/10' }}" href="{{ route($name) }}" @if ($routeName === $name) aria-current="page" @endif wire:navigate>
                         <flux:icon :name="$page['icon']" class="mt-0.5 size-5 shrink-0" />
                         <span>
                             <span class="block text-sm font-medium">{{ $page['label'] }}</span>
-                            <span class="mt-0.5 block text-xs leading-5 {{ $routeName === $name ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $page['description'] }}</span>
+                            <span class="mt-0.5 block text-xs leading-5 {{ $routeName === $name ? $navActiveMuted : 'text-zinc-500 dark:text-zinc-400' }}">{{ $page['description'] }}</span>
                         </span>
                     </a>
                 @endforeach
@@ -340,16 +362,16 @@ new #[Title('User guide')] class extends Component {
                     </div>
                     <div class="mt-6 grid gap-4 sm:grid-cols-2">
                         @foreach (array_slice($guidePages, 1, null, true) as $name => $page)
-                            <a class="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-800" href="{{ route($name) }}" wire:navigate>
-                                <flux:card class="h-full transition group-hover:-translate-y-0.5 group-hover:border-violet-400/50 group-hover:shadow-lg">
+                            <a class="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 {{ $focusRing }} focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-800" href="{{ route($name) }}" wire:navigate>
+                                <flux:card class="h-full transition group-hover:-translate-y-0.5 {{ $cardHover }} group-hover:shadow-lg">
                                     <div class="flex items-start gap-4">
-                                        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300">
+                                        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl {{ $name === 'guide.api' ? 'bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300' : 'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300' }}">
                                             <flux:icon :name="$page['icon']" class="size-5" />
                                         </span>
                                         <div>
                                             <flux:heading level="3" size="lg">{{ $page['label'] }}</flux:heading>
                                             <flux:text class="mt-2 leading-6!">{{ $page['description'] }}</flux:text>
-                                            <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-violet-600 dark:text-violet-300">{{ __('Open guide') }} <flux:icon.arrow-right class="size-4 transition group-hover:translate-x-0.5" /></span>
+                                            <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium {{ $name === 'guide.api' ? 'text-amber-700 dark:text-amber-300' : 'text-violet-600 dark:text-violet-300' }}">{{ __('Open guide') }} <flux:icon.arrow-right class="size-4 transition group-hover:translate-x-0.5" /></span>
                                         </div>
                                     </div>
                                 </flux:card>
@@ -365,7 +387,7 @@ new #[Title('User guide')] class extends Component {
                     </div>
                     @foreach ($faqs as [$question, $answer])
                         <details class="group rounded-2xl border border-zinc-200 bg-white p-5 open:shadow-sm dark:border-white/10 dark:bg-white/5">
-                            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:text-white">
+                            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-zinc-950 focus-visible:outline-none focus-visible:ring-2 {{ $focusRing }} dark:text-white">
                                 {{ $question }}
                                 <flux:icon.chevron-down class="size-5 shrink-0 text-zinc-500 transition group-open:rotate-180" aria-hidden="true" />
                             </summary>
@@ -389,7 +411,7 @@ new #[Title('User guide')] class extends Component {
                     @foreach ($content['sections'] as $section)
                         <article id="{{ $section['id'] }}" class="scroll-mt-6 rounded-2xl border border-zinc-200 bg-white p-5 sm:p-7 dark:border-white/10 dark:bg-white/5">
                             <div class="flex items-start gap-4 sm:gap-5">
-                                <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-zinc-950 text-sm font-semibold text-white dark:bg-white dark:text-zinc-950">{{ $section['number'] }}</span>
+                                <span class="flex size-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold {{ $isApiGuide ? 'bg-amber-500 text-white' : 'bg-zinc-200 text-zinc-800 dark:bg-white dark:text-zinc-950' }}">{{ $section['number'] }}</span>
                                 <div class="min-w-0">
                                     <flux:heading level="2" size="xl">{{ $section['title'] }}</flux:heading>
                                     <p class="mt-3 leading-7 text-zinc-600 dark:text-zinc-300">{{ $section['body'] }}</p>
@@ -437,7 +459,7 @@ new #[Title('User guide')] class extends Component {
                     <div class="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 shadow-xl shadow-zinc-950/10 dark:border-white/10 dark:bg-zinc-900 {{ ($screenshot['width'] ?? 1440) < 600 ? 'mx-auto max-w-sm' : '' }}">
                         <img class="h-auto w-full" src="{{ asset('images/guide/'.$screenshot['file']) }}" alt="{{ $screenshot['alt'] }}" width="{{ $screenshot['width'] ?? 1440 }}" height="{{ $screenshot['height'] ?? 900 }}" loading="lazy">
                         @foreach ($screenshot['markers'] as $marker)
-                            <span class="absolute flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-violet-600 text-sm font-bold text-white shadow-lg shadow-black/30" style="left: {{ $marker['x'] }}%; top: {{ $marker['y'] }}%" aria-hidden="true">{{ $marker['number'] }}</span>
+                            <span class="absolute flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white {{ $markerBg }} text-sm font-bold text-white shadow-lg shadow-black/30" style="left: {{ $marker['x'] }}%; top: {{ $marker['y'] }}%" aria-hidden="true">{{ $marker['number'] }}</span>
                         @endforeach
                     </div>
                     <figcaption>
@@ -445,7 +467,7 @@ new #[Title('User guide')] class extends Component {
                         <ol class="mt-3 grid gap-3 sm:grid-cols-2">
                             @foreach ($screenshot['markers'] as $marker)
                                 <li class="flex items-start gap-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                                    <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-semibold text-white">{{ $marker['number'] }}</span>
+                                    <span class="flex size-6 shrink-0 items-center justify-center rounded-full {{ $markerBg }} text-xs font-semibold text-white">{{ $marker['number'] }}</span>
                                     <span>{{ $marker['text'] }}</span>
                                 </li>
                             @endforeach
@@ -454,17 +476,25 @@ new #[Title('User guide')] class extends Component {
                 </figure>
             @endforeach
 
-            <section class="rounded-3xl border border-violet-200 bg-violet-50 p-6 sm:p-8 dark:border-violet-400/20 dark:bg-violet-400/10" aria-labelledby="guide-next-step">
+            <section class="rounded-3xl border p-6 sm:p-8 {{ $ctaBox }}" aria-labelledby="guide-next-step">
                 <flux:heading id="guide-next-step" level="2" size="xl">{{ __('Ready for the next step?') }}</flux:heading>
                 <flux:text class="mt-2 max-w-2xl leading-7!">{{ __('Put the guide into practice, or continue with the next topic when you need a deeper workflow.') }}</flux:text>
                 <div class="mt-5 flex flex-wrap gap-3">
-                    @auth
-                        <flux:modal.trigger name="image-composer">
-                            <flux:button type="button" variant="primary" icon="sparkles" x-data x-on:click="$dispatch('open-image-composer')">{{ __('Create image') }}</flux:button>
-                        </flux:modal.trigger>
+                    @if ($isApiGuide)
+                        @auth
+                            <flux:button type="button" variant="primary" color="amber" icon="key" x-data x-on:click="$dispatch('open-account-modal', { component: 'settings.api-key' })">{{ __('Open API key') }}</flux:button>
+                        @else
+                            <flux:button type="button" variant="primary" color="amber" icon="key" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in for an API key') }}</flux:button>
+                        @endauth
                     @else
-                        <flux:button type="button" variant="primary" icon="sparkles" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in to create images') }}</flux:button>
-                    @endauth
+                        @auth
+                            <flux:modal.trigger name="image-composer">
+                                <flux:button type="button" variant="primary" color="emerald" icon="sparkles" x-data x-on:click="$dispatch('open-image-composer')">{{ __('Create image') }}</flux:button>
+                            </flux:modal.trigger>
+                        @else
+                            <flux:button type="button" variant="primary" color="emerald" icon="sparkles" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in to create images') }}</flux:button>
+                        @endauth
+                    @endif
                     @if ($routeName !== 'guide.faq')
                         <flux:button :href="route('guide.faq')" variant="ghost" icon:trailing="arrow-right" wire:navigate>{{ __('Read common questions') }}</flux:button>
                     @endif

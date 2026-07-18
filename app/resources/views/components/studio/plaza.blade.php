@@ -30,7 +30,7 @@
     <div class="space-y-4">
         <div class="flex items-center justify-between gap-4">
             <flux:heading size="lg">{{ __('Recent projects') }}</flux:heading>
-            <flux:button size="sm" variant="ghost" :href="route('skills.index', ['view' => 'projects'])" wire:navigate>{{ __('View all') }}</flux:button>
+            <flux:button size="sm" variant="ghost" :href="route('studio.index', ['view' => 'projects'])" wire:navigate>{{ __('View all') }}</flux:button>
         </div>
 
         @if ($page->recentProjects->isEmpty())
@@ -39,7 +39,7 @@
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 @foreach ($page->recentProjects as $item)
                     @php($cover = $item->media->firstWhere('status', 'succeeded'))
-                    <a @if ($item->submitted_at) href="{{ route('skills.index', ['view' => 'projects', 'project' => $item->id]) }}" wire:navigate @else href="#" wire:click.prevent="resumeProject({{ $item->id }})" @endif class="overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-white/5" aria-label="{{ __('Edit project :name', ['name' => $item->name]) }}">
+                    <a @if ($item->submitted_at) href="{{ route('studio.index', ['view' => 'projects', 'project' => $item->id]) }}" wire:navigate @else href="#" wire:click.prevent="resumeProject({{ $item->id }})" @endif class="overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-white/5" aria-label="{{ __('Edit project :name', ['name' => $item->name]) }}">
                         <div class="aspect-[4/3] bg-zinc-100 dark:bg-white/10">
                             @if ($cover && $page->imageUrl($cover, 'sm'))
                                 <img class="size-full object-cover" src="{{ $page->imageUrl($cover, 'sm') }}" alt="{{ $item->name }}" loading="lazy">

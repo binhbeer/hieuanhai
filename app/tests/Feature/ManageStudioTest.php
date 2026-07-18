@@ -3,41 +3,41 @@
 namespace Tests\Feature;
 
 use App\Models\GeneratedMedia;
-use App\Models\SkillProject;
+use App\Models\StudioProject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-class ManageSkillsTest extends TestCase
+class ManageStudioTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_non_admin_cannot_access_manage_skills(): void
+    public function test_non_admin_cannot_access_manage_studio(): void
     {
         $user = User::factory()->create(['id' => 2]);
 
         $this->actingAs($user)
-            ->get(route('manage.skills.index'))
+            ->get(route('manage.studio.index'))
             ->assertForbidden();
     }
 
-    public function test_admin_can_list_and_filter_skill_projects(): void
+    public function test_admin_can_list_and_filter_studio_projects(): void
     {
         $admin = User::factory()->create(['id' => 1]);
         $creator = User::factory()->create(['name' => 'Creator Alpha']);
         $otherCreator = User::factory()->create(['name' => 'Creator Beta']);
 
-        $productDraft = SkillProject::create([
+        $productDraft = StudioProject::create([
             'user_id' => $creator->id,
-            'skill' => 'product-detail',
+            'tool' => 'product-detail',
             'name' => 'Alpha product draft',
             'form_data' => [],
             'input_paths' => [],
         ]);
-        $posterSubmitted = SkillProject::create([
+        $posterSubmitted = StudioProject::create([
             'user_id' => $otherCreator->id,
-            'skill' => 'marketing-poster',
+            'tool' => 'marketing-poster',
             'name' => 'Beta poster submitted',
             'form_data' => [],
             'input_paths' => [],
@@ -45,17 +45,17 @@ class ManageSkillsTest extends TestCase
         ]);
         GeneratedMedia::create([
             'user_id' => $otherCreator->id,
-            'visitor_key' => 'skill-media-beta',
-            'skill_project_id' => $posterSubmitted->id,
+            'visitor_key' => 'studio-media-beta',
+            'studio_project_id' => $posterSubmitted->id,
             'prompt' => 'Poster prompt',
             'provider' => 'openai',
             'model' => 'cx/gpt-5.5-image',
             'status' => 'succeeded',
-            'result_path' => 'ai-images/skill-poster.png',
+            'result_path' => 'ai-images/studio-poster.png',
         ]);
-        $creating = SkillProject::create([
+        $creating = StudioProject::create([
             'user_id' => $creator->id,
-            'skill' => 'product-detail',
+            'tool' => 'product-detail',
             'name' => 'Alpha creating project',
             'form_data' => [],
             'input_paths' => [],
@@ -63,8 +63,8 @@ class ManageSkillsTest extends TestCase
         ]);
         GeneratedMedia::create([
             'user_id' => $creator->id,
-            'visitor_key' => 'skill-media-creating',
-            'skill_project_id' => $creating->id,
+            'visitor_key' => 'studio-media-creating',
+            'studio_project_id' => $creating->id,
             'prompt' => 'Creating prompt',
             'provider' => 'openai',
             'model' => 'cx/gpt-5.5-image',
@@ -72,7 +72,7 @@ class ManageSkillsTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->get(route('manage.skills.index'))
+            ->get(route('manage.studio.index'))
             ->assertOk()
             ->assertSee(__('Manage AI Studio'))
             ->assertSee('Alpha product draft')
@@ -80,16 +80,16 @@ class ManageSkillsTest extends TestCase
             ->assertSee('Alpha creating project');
 
         Livewire::actingAs($admin)
-            ->test('pages::manage.skills')
+            ->test('pages::manage.studio')
             ->assertSee(__('Total projects'))
             ->assertSee(__('Draft projects'))
             ->assertSee(__('Submitted projects'))
             ->assertSee(__('Studio media'))
-            ->set('skill', 'product-detail')
+            ->set('tool', 'product-detail')
             ->assertSee('Alpha product draft')
             ->assertSee('Alpha creating project')
             ->assertDontSee('Beta poster submitted')
-            ->set('skill', 'all')
+            ->set('tool', 'all')
             ->set('status', 'draft')
             ->assertSee('Alpha product draft')
             ->assertDontSee('Beta poster submitted')
@@ -112,23 +112,23 @@ class ManageSkillsTest extends TestCase
             ->assertDontSee('Alpha creating project');
     }
 
-    public function test_skills_page_groups_project_activity_for_the_last_thirty_days(): void
+    public function test_studio_page_groups_project_activity_for_the_last_thirty_days(): void
     {
         $admin = User::factory()->create(['id' => 1]);
         $user = User::factory()->create();
 
-        $draft = SkillProject::create([
+        $draft = StudioProject::create([
             'user_id' => $user->id,
-            'skill' => 'product-detail',
+            'tool' => 'product-detail',
             'name' => 'Recent draft',
             'form_data' => [],
             'input_paths' => [],
         ]);
         $draft->forceFill(['created_at' => now()->subDay()])->save();
 
-        $submitted = SkillProject::create([
+        $submitted = StudioProject::create([
             'user_id' => $user->id,
-            'skill' => 'marketing-poster',
+            'tool' => 'marketing-poster',
             'name' => 'Recent submitted',
             'form_data' => [],
             'input_paths' => [],
@@ -136,9 +136,9 @@ class ManageSkillsTest extends TestCase
         ]);
         $submitted->forceFill(['created_at' => now()->subDay()])->save();
 
-        $old = SkillProject::create([
+        $old = StudioProject::create([
             'user_id' => $user->id,
-            'skill' => 'product-detail',
+            'tool' => 'product-detail',
             'name' => 'Old project',
             'form_data' => [],
             'input_paths' => [],
@@ -146,7 +146,7 @@ class ManageSkillsTest extends TestCase
         ]);
         $old->forceFill(['created_at' => now()->subDays(30)])->save();
 
-        $component = Livewire::actingAs($admin)->test('pages::manage.skills');
+        $component = Livewire::actingAs($admin)->test('pages::manage.studio');
         $stats = $component->get('dailyStats');
         $day = collect($stats)->first(fn (array $row): bool => $row['date']->isSameDay(now()->subDay()));
 

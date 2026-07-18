@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Events\AiImageCompleted;
 use App\Models\GeneratedMedia;
-use App\Services\AiImageEditor;
+use App\Services\ImageCreationService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -34,22 +34,27 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
         return 'image:'.$this->imageId;
     }
 
-    public function handle(AiImageEditor $editor): void
+    public function handle(ImageCreationService $service): void
     {
-        $image = GeneratedMedia::find($this->imageId);
+        $image = (new GeneratedMedia)
+            ->disableModelCaching()
+            ->newQuery()
+            ->find($this->imageId);
 
         if (! $image || $image->status !== 'pending') {
             return;
         }
 
-        $image = $editor->completePending($image);
+        $image = $service->completePending($image);
 
         AiImageCompleted::dispatch($image);
     }
 
     public function failed(?Throwable $exception): bool
     {
-        $image = GeneratedMedia::query()
+        $image = (new GeneratedMedia)
+            ->disableModelCaching()
+            ->newQuery()
             ->whereKey($this->imageId)
             ->where('status', 'pending')
             ->first();
@@ -63,7 +68,9 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
         unset($requestMeta['parent_prompt'], $requestMeta['pending_uploads']);
         $requestMeta['progress'] = 'failed';
 
-        $updated = GeneratedMedia::query()
+        $updated = (new GeneratedMedia)
+            ->disableModelCaching()
+            ->newQuery()
             ->whereKey($image->id)
             ->where('status', 'pending')
             ->where('updated_at', $image->updated_at)
@@ -88,7 +95,17 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
             report($e);
         }
 
-        AiImageCompleted::dispatch($image->refresh());
+        (new GeneratedMedia)->flushCache();
+        $image = (new GeneratedMedia)
+            ->disableModelCaching()
+            ->newQuery()
+            ->find($image->id);
+
+        if (! $image) {
+            return false;
+        }
+
+        AiImageCompleted::dispatch($image);
 
         return true;
     }

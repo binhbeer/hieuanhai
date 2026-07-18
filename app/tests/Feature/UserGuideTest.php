@@ -54,19 +54,22 @@ class UserGuideTest extends TestCase
             ->assertSee('<link rel="alternate" hreflang="vi" href="'.$viUrl.'">', false)
             ->assertSee('<link rel="alternate" hreflang="en" href="'.$enUrl.'">', false)
             ->assertSee('Manage your complete image workflow')
-            ->assertSee('href="'.$viUrl.'">Tiếng Việt</a>', false);
+            ->assertSee('href="'.$viUrl.'"', false)
+            ->assertSee('aria-label="Tiếng Việt"', false);
     }
 
     public function test_guide_is_linked_from_user_menu_but_not_public_sidebar(): void
     {
         $this->get(route('home'))
             ->assertOk()
-            ->assertDontSee(route('guide.index'), false);
+            ->assertDontSee('href="'.route('guide.index').'"', false)
+            ->assertSee(__('Appearance'), false);
 
         $this->actingAs(User::factory()->create())
             ->get(route('home'))
             ->assertOk()
-            ->assertSee(route('guide.index'), false)
-            ->assertSeeInOrder([__('Appearance'), __('User guide'), __('Log out')]);
+            ->assertSee('href="'.route('guide.index').'"', false)
+            ->assertSeeInOrder([__('User guide'), __('Log out')])
+            ->assertSee(__('Appearance'), false);
     }
 }

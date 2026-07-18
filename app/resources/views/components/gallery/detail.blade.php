@@ -4,7 +4,7 @@ use App\Jobs\CreateAiImage;
 use App\Models\GeneratedMedia;
 use App\Models\MediaFavorite;
 use App\Models\User;
-use App\Services\AiImageEditor;
+use App\Services\GeneratedMediaService;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
 use Flux\Flux;
@@ -93,6 +93,10 @@ new class extends Component
 
         unset($this->selectedImage);
         $this->dispatch('image-usage-updated');
+
+        if (($payload['status'] ?? null) === 'failed') {
+            Flux::toast(text: __('Could not create this image.'));
+        }
     }
 
     public function toggleFavorite(int $id): void
@@ -168,7 +172,7 @@ new class extends Component
         }
     }
 
-    public function cancelPending(int $id, AiImageEditor $editor): void
+    public function cancelPending(int $id, GeneratedMediaService $editor): void
     {
         if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
@@ -192,7 +196,7 @@ new class extends Component
         Flux::toast(text: __('Image creation cancelled.'));
     }
 
-    public function retryImage(int $id, AiImageEditor $editor): void
+    public function retryImage(int $id, GeneratedMediaService $editor): void
     {
         if (! Auth::check()) {
             $this->dispatch('open-account-modal', component: 'auth.login');
@@ -268,6 +272,28 @@ new class extends Component
         return $this->selectedImageId ? $this->visibleImage($this->selectedImageId) : null;
     }
 
+    /**
+     * @return array{previous: ?GeneratedMedia, next: ?GeneratedMedia}
+     */
+    #[Computed]
+    public function navigationImages(): array
+    {
+        $selected = $this->selectedImage();
+
+        if (! $selected || ! $this->isPublicImage($selected)) {
+            return ['previous' => null, 'next' => null];
+        }
+
+        $query = GeneratedMedia::query()
+            ->publiclyVisible()
+            ->when(app()->getLocale() === 'en', fn ($query) => $query->englishReady());
+
+        return [
+            'previous' => (clone $query)->where('id', '>', $selected->id)->oldest('id')->first(),
+            'next' => (clone $query)->where('id', '<', $selected->id)->latest('id')->first(),
+        ];
+    }
+
     #[Computed]
     public function favoriteIds(): array
     {
@@ -296,19 +322,19 @@ new class extends Component
         return array_values(array_filter(
             array_map(
                 fn (string $path): ?string => $disk->exists($path) ? $disk->url($path) : null,
-                app(AiImageEditor::class)->referenceSourcePaths($image),
+                app(GeneratedMediaService::class)->referenceSourcePaths($image),
             ),
         ));
     }
 
     public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
     {
-        return app(AiImageEditor::class)->imageUrl($image, $size);
+        return app(GeneratedMediaService::class)->imageUrl($image, $size);
     }
 
     public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
     {
-        return app(AiImageEditor::class)->imageSize($image, $size);
+        return app(GeneratedMediaService::class)->imageSize($image, $size);
     }
 
     public function detailUrl(GeneratedMedia $image): string
@@ -421,13 +447,17 @@ new class extends Component
 
     private function latestCreatedImage(): ?GeneratedMedia
     {
-        return app(AiImageEditor::class)->guestHistory(request(), 1)->first();
+        return app(GeneratedMediaService::class)->guestHistory(request(), 1)->first();
     }
 
     private function visibleImage(int $id): ?GeneratedMedia
     {
         $user = Auth::user();
-        $query = GeneratedMedia::query()->with(['category', 'user', 'tags'])->whereKey($id);
+        $query = (new GeneratedMedia)
+            ->disableModelCaching()
+            ->newQuery()
+            ->with(['category', 'user', 'tags'])
+            ->whereKey($id);
 
         if ($user instanceof User && $user->isAdmin()) {
             return $query->first();
@@ -520,6 +550,33 @@ new class extends Component
 
         this.finishLoading();
     },
+    touchStartX: null,
+    touchStartY: null,
+    startSwipe(event) {
+        const touch = event.changedTouches[0];
+
+        this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
+    },
+    endSwipe(event, previous, next) {
+        if (this.touchStartX === null || this.touchStartY === null) return;
+
+        const touch = event.changedTouches[0];
+        const deltaX = touch.clientX - this.touchStartX;
+        const deltaY = touch.clientY - this.touchStartY;
+
+        this.touchStartX = null;
+        this.touchStartY = null;
+
+        if (Math.abs(deltaY) < 60 || Math.abs(deltaY) <= Math.abs(deltaX)) return;
+
+        this.navigateImage(deltaY < 0 ? next : previous);
+    },
+    navigateImage(image) {
+        if (!image || this.loadingImageId !== null) return;
+
+        this.openImage(image.id, image.url, image.title, image.preview);
+    },
     closeImage() {
         if (this.previousUrl) {
             history.replaceState(null, '', this.previousUrl);
@@ -533,7 +590,7 @@ new class extends Component
         this.preview = null;
         $wire.closeImage();
     },
-}" x-on:keydown.escape.window="if (!document.querySelector('.lightbox3-overlay')) { {{ $standalone ? "window.location.href = '" . route('home') . "'" : 'closeImage()' }} }" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title, $event.detail.preview)" @endif>
+}" x-on:keydown.escape.window="if (!document.querySelector('.lightbox3-overlay')) { {{ $standalone ? "window.location.href = '" . route('gallery.index') . "'" : 'closeImage()' }} }" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title, $event.detail.preview)" @endif>
     @if (!$standalone)
         <div x-show="loading" x-cloak class="fixed inset-0 z-60 flex flex-col overflow-hidden bg-zinc-100/90 text-zinc-950 backdrop-blur dark:bg-zinc-950/80 dark:text-white md:grid md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)]" role="dialog" x-transition:leave="transition-opacity ease-out duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" aria-modal="true" aria-label="{{ __('Image details') }}">
             <div class="relative flex min-h-0 items-start justify-center pt-16 sm:p-4 sm:pt-16 md:items-center md:p-20">
@@ -552,6 +609,11 @@ new class extends Component
     @php($selectedOriginalSize = $this->imageSize($selected))
     @php($progressStep = $this->progressStep($selected))
     @php($selectedTitle = $selected->title ?: $selected->prompt)
+    @php($navigationImages = $this->navigationImages())
+    @php($previousImage = $navigationImages['previous'])
+    @php($nextImage = $navigationImages['next'])
+    @php($previousImageData = $previousImage ? ['id' => $previousImage->id, 'url' => $this->detailUrl($previousImage), 'title' => Str::limit($previousImage->title ?: $previousImage->prompt, 70, ''), 'preview' => $this->imageUrl($previousImage, 'md')] : null)
+    @php($nextImageData = $nextImage ? ['id' => $nextImage->id, 'url' => $this->detailUrl($nextImage), 'title' => Str::limit($nextImage->title ?: $nextImage->prompt, 70, ''), 'preview' => $this->imageUrl($nextImage, 'md')] : null)
     @php($canViewFullPrompt = Auth::check())
     @php($visiblePrompt = $canViewFullPrompt ? $selected->prompt : Str::limit($selected->prompt, 160))
     @php($generationOptions = $this->generationOptions($selected))
@@ -561,7 +623,7 @@ new class extends Component
     @endif
 
     <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 dark:bg-zinc-950/80 dark:text-white md:grid md:backdrop-blur md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-[.985]" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
-        <div class="relative flex flex-col shrink-0 md:shrink md:flex-1">
+        <div class="group/image-column relative flex flex-col shrink-0 md:shrink md:flex-1" x-on:touchstart.passive="startSwipe($event)" x-on:touchend.passive="endSwipe($event, @js($previousImageData), @js($nextImageData))">
             <div class="fixed inset-x-0 top-0 z-20 flex h-16 min-w-0 items-center gap-3 bg-zinc-100/90 px-4 backdrop-blur dark:bg-zinc-950/80 md:absolute md:inset-x-4 md:top-4 md:h-auto md:bg-transparent md:p-0 md:backdrop-blur-none">
                 @if (filled($selected->title))
                     <h1 class="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight" title="{{ $selected->title }}">{{ $selected->title }}</h1>
@@ -584,7 +646,7 @@ new class extends Component
                     @endif
 
                     @if ($standalone)
-                        <flux:button size="sm" :href="route('home')" wire:navigate :variant="'primary'">
+                        <flux:button size="sm" :href="route('gallery.index')" wire:navigate :variant="'primary'">
                             <x-slot name="icon"><x-iconsax-bul-close-circle class="size-5" /></x-slot>
                             Esc
                         </flux:button>
@@ -596,6 +658,18 @@ new class extends Component
                     @endif
                 </div>
             </div>
+
+            @if ($previousImageData)
+                <button class="absolute top-1/2 left-4 z-20 hidden size-12 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-950/70 text-white opacity-0 shadow-lg backdrop-blur transition hover:scale-105 hover:bg-zinc-950 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:flex md:group-hover/image-column:opacity-100" type="button" x-on:click="navigateImage(@js($previousImageData))" aria-label="{{ __('Previous image') }}">
+                    <x-iconsax-two-arrow-left class="size-6" />
+                </button>
+            @endif
+
+            @if ($nextImageData)
+                <button class="absolute top-1/2 right-4 z-20 hidden size-12 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-950/70 text-white opacity-0 shadow-lg backdrop-blur transition hover:scale-105 hover:bg-zinc-950 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:flex md:group-hover/image-column:opacity-100" type="button" x-on:click="navigateImage(@js($nextImageData))" aria-label="{{ __('Next image') }}">
+                    <x-iconsax-two-arrow-left class="size-6 rotate-180" />
+                </button>
+            @endif
 
             <div class="flex flex-1 items-start justify-center overflow-hidden pt-16 sm:px-4 sm:pb-4 md:min-h-0 md:items-center md:p-4">
                 <div class="flex flex-1 items-center justify-center gap-4 p-0 md:px-16 md:py-16">

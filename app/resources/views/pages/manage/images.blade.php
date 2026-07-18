@@ -3,7 +3,7 @@
 use App\Models\GeneratedMedia;
 use App\Models\Category;
 use App\Models\User;
-use App\Services\AiImageEditor;
+use App\Services\GeneratedMediaService;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -74,7 +74,7 @@ new #[Title('Manage created images')] class extends Component {
 		Flux::toast(variant: 'success', text: __('Category updated.'));
 	}
 
-	public function publishImage(int $id, AiImageEditor $editor): void
+	public function publishImage(int $id, GeneratedMediaService $editor): void
 	{
 		$image = GeneratedMedia::query()->findOrFail($id);
 
@@ -190,12 +190,12 @@ new #[Title('Manage created images')] class extends Component {
 
 	public function imageUrl(GeneratedMedia $image, string $size = 'original'): ?string
 	{
-		return app(AiImageEditor::class)->imageUrl($image, $size);
+		return app(GeneratedMediaService::class)->imageUrl($image, $size);
 	}
 
 	public function imageSize(GeneratedMedia $image, string $size = 'original'): ?array
 	{
-		return app(AiImageEditor::class)->imageSize($image, $size);
+		return app(GeneratedMediaService::class)->imageSize($image, $size);
 	}
 
 	private function refreshData(): void
@@ -353,7 +353,7 @@ new #[Title('Manage created images')] class extends Component {
 					<flux:select.option value="{{ $category->id }}">{{ $category->name }}</flux:select.option>
 				@endforeach
 			</flux:select>
-			<flux:select wire:model.live="creatorId" variant="listbox" searchable :label="__('Creator')">
+			<flux:select wire:model.live="creatorId" variant="listbox" searchable :label="__('Image creator')">
 				<x-slot name="search">
 					<flux:select.search :placeholder="__('Search users...')" />
 				</x-slot>

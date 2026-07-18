@@ -60,7 +60,8 @@ class LocalizationSeoTest extends TestCase
             ->assertSee('<link rel="canonical" href="'.$enUrl.'">', false)
             ->assertSee('<link rel="alternate" hreflang="vi" href="'.$viUrl.'">', false)
             ->assertSee('<link rel="alternate" hreflang="en" href="'.$enUrl.'">', false)
-            ->assertSee('href="'.$viUrl.'">Tiếng Việt</a>', false)
+            ->assertSee('href="'.$viUrl.'"', false)
+            ->assertSee('aria-label="Tiếng Việt"', false)
             ->assertDontSee('/vi/c/', false)
             ->assertSee('"inLanguage":"en"', false)
             ->assertSee('Browse expressive AI portraits');
@@ -106,7 +107,7 @@ class LocalizationSeoTest extends TestCase
 
     public function test_private_skills_variant_is_noindex(): void
     {
-        $this->get(route('skills.index', ['view' => 'projects']))
+        $this->get(route('studio.index', ['view' => 'projects']))
             ->assertOk()
             ->assertSee('<meta name="robots" content="noindex,nofollow">', false);
     }
