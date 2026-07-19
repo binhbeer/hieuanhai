@@ -64,6 +64,13 @@ new class extends Component {};
                 viewable
             />
 
+            <flux:text class="text-center text-sm" variant="subtle">
+                {{ __('By creating an account, you agree to the') }}
+                <flux:link :href="route('legal.terms')" wire:navigate>{{ __('Terms of Service') }}</flux:link>
+                {{ __('and acknowledge the') }}
+                <flux:link :href="route('legal.privacy')" wire:navigate>{{ __('Privacy Policy') }}</flux:link>.
+            </flux:text>
+
             <div class="flex items-center justify-end">
                 <flux:button type="submit" variant="primary" class="w-full" x-bind:disabled="submitting" data-test="register-user-button">
                     {{ __('Create account') }}

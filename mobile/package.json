@@ -1,0 +1,31 @@
+{
+  "name": "genanh-mobile",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "expo": "~57.0.7",
+    "expo-dev-client": "~57.0.7",
+    "expo-file-system": "^57.0.1",
+    "expo-sharing": "^57.0.6",
+    "expo-splash-screen": "^57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.8",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-webview": "13.16.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "check": "tsc --noEmit && npm run test:policy",
+    "test:policy": "node --experimental-strip-types --no-warnings scripts/url-policy-check.ts"
+  },
+  "private": true
+}

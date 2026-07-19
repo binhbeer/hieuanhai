@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Events\AiImageCompleted;
 use App\Models\GeneratedMedia;
+use App\Models\User;
 use App\Services\ImageCreationService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -45,9 +46,17 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if ($this->userId !== null && ! User::query()->whereKey($this->userId)->exists()) {
+            $this->deleteAbandonedImage($image);
+
+            return;
+        }
+
         $image = $service->completePending($image);
 
-        AiImageCompleted::dispatch($image);
+        if (GeneratedMedia::query()->whereKey($image->id)->exists()) {
+            AiImageCompleted::dispatch($image);
+        }
     }
 
     public function failed(?Throwable $exception): bool
@@ -60,6 +69,12 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
             ->first();
 
         if (! $image) {
+            return false;
+        }
+
+        if ($this->userId !== null && ! User::query()->whereKey($this->userId)->exists()) {
+            $this->deleteAbandonedImage($image);
+
             return false;
         }
 
@@ -108,5 +123,19 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
         AiImageCompleted::dispatch($image);
 
         return true;
+    }
+
+    private function deleteAbandonedImage(GeneratedMedia $image): void
+    {
+        $pendingUploads = data_get($image->request_meta, 'pending_uploads', []);
+
+        if (is_array($pendingUploads)) {
+            Storage::disk('public')->delete(array_values(array_filter(array_map(
+                fn ($upload) => is_array($upload) && is_string($upload['path'] ?? null) ? $upload['path'] : null,
+                $pendingUploads,
+            ))));
+        }
+
+        $image->delete();
     }
 }

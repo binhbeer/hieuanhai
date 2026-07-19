@@ -25,7 +25,7 @@ class Setting extends BaseModel
         'site.keywords.en' => null,
         'locales.en.enabled' => false,
         'analytics.google_measurement_id' => null,
-        'contact.zalo_url' => 'http://zalo.me/0963559309',
+        'contact.zalo_url' => 'https://zalo.me/0963559309',
         'auth.registration_enabled' => true,
         'auth.email_verification_required' => true,
         'auth.auto_verify_email' => false,

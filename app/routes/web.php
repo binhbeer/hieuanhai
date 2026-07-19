@@ -54,6 +54,10 @@ Route::translate(function (): void {
     Route::livewire(Localizer::url('huong-dan/ung-dung-web'), 'pages::guide')->name('guide.web');
     Route::livewire(Localizer::url('huong-dan/api'), 'pages::guide')->name('guide.api');
     Route::livewire(Localizer::url('huong-dan/faq'), 'pages::guide')->name('guide.faq');
+    Route::livewire(Localizer::url('chinh-sach-bao-mat'), 'pages::legal')->name('legal.privacy');
+    Route::livewire(Localizer::url('dieu-khoan-su-dung'), 'pages::legal')->name('legal.terms');
+    Route::livewire(Localizer::url('ho-tro'), 'pages::legal')->name('legal.support');
+    Route::livewire(Localizer::url('xoa-tai-khoan'), 'pages::legal')->name('legal.delete-account');
     Route::livewire(Localizer::url('c/{category}'), 'pages::gallery')->name('categories.show');
     Route::livewire(Localizer::url('t/{tag}'), 'pages::gallery')->name('tags.show');
     Route::get(Localizer::url('anh/{image}/download'), ImageDownloadController::class)->name('images.download');

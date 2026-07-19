@@ -113,10 +113,13 @@ new #[Title('AI image creation and editing')] class extends Component { };
 
         <footer class="flex flex-col gap-3 border-t border-zinc-200/80 pt-6 text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between dark:border-white/10 dark:text-zinc-400">
             <span>{{ __('Built for ideas that deserve a clear visual form.') }}</span>
-            <div class="flex items-center gap-4">
+            <nav class="flex flex-wrap items-center gap-x-4 gap-y-2" aria-label="{{ __('Legal and support') }}">
                 <a href="{{ route('gallery.index') }}" wire:navigate class="hover:text-zinc-900 hover:underline dark:hover:text-white">{{ __('Gallery') }}</a>
-                <a href="{{ route('guide.api') }}" wire:navigate class="hover:text-zinc-900 hover:underline dark:hover:text-white">{{ __('API guide') }}</a>
-            </div>
+                <a href="{{ route('legal.privacy') }}" wire:navigate class="hover:text-zinc-900 hover:underline dark:hover:text-white">{{ __('Privacy Policy') }}</a>
+                <a href="{{ route('legal.terms') }}" wire:navigate class="hover:text-zinc-900 hover:underline dark:hover:text-white">{{ __('Terms of Service') }}</a>
+                <a href="{{ route('legal.support') }}" wire:navigate class="hover:text-zinc-900 hover:underline dark:hover:text-white">{{ __('Support') }}</a>
+                <a href="{{ route('legal.delete-account') }}" wire:navigate class="hover:text-zinc-900 hover:underline dark:hover:text-white">{{ __('Delete Account') }}</a>
+            </nav>
         </footer>
     </main>
 </div>

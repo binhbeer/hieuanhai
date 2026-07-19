@@ -326,6 +326,12 @@ class ImageCreationService
         $pendingUploads = $requestMeta['pending_uploads'] ?? [];
         $sourcePaths = [];
 
+        if ($image->user_id !== null && ! User::query()->whereKey($image->user_id)->exists()) {
+            $this->deletePendingUploads($pendingUploads);
+
+            return $image;
+        }
+
         try {
             $photos = $this->pendingUploadedFiles($pendingUploads);
             $parentPrompt = $requestMeta['parent_prompt'] ?? null;
@@ -348,8 +354,15 @@ class ImageCreationService
             $size = is_string($requestMeta['size'] ?? null) ? $requestMeta['size'] : null;
             $imageDetail = is_string($requestMeta['image_detail'] ?? null) ? $requestMeta['image_detail'] : null;
             $result = $this->generateImage($image, $photos, $finalPrompt, $image->provider, $image->model, $sourcePaths, $size, $imageDetail);
+            $freshImage = $image->fresh();
 
-            if ($image->fresh()->status !== 'pending') {
+            if (! $freshImage || ($image->user_id !== null && ! User::query()->whereKey($image->user_id)->exists())) {
+                $image->getMedia()->each->delete();
+
+                return $image;
+            }
+
+            if ($freshImage->status !== 'pending') {
                 if ($sourcePaths !== []) {
                     $image->update([
                         'response_meta' => [
@@ -418,7 +431,15 @@ class ImageCreationService
                 }
             }
         } catch (Throwable $e) {
-            if ($image->fresh()->status !== 'pending') {
+            $freshImage = $image->fresh();
+
+            if (! $freshImage) {
+                $image->getMedia()->each->delete();
+
+                return $image;
+            }
+
+            if ($freshImage->status !== 'pending') {
                 if ($sourcePaths !== []) {
                     $image->update([
                         'response_meta' => [
@@ -456,7 +477,7 @@ class ImageCreationService
             $this->deletePendingUploads($pendingUploads);
         }
 
-        return $image->refresh();
+        return $image->fresh() ?? $image;
     }
 
     /**

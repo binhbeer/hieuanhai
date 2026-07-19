@@ -1,0 +1,42 @@
+# GenAnh services outside Expo app
+app/
+data/
+log/
+.cursor/
+.claude/
+.gitnexus/
+.docker-php/
+docker-compose.yml
+AGENTS.md
+CLAUDE.md
+
+# Mobile dependencies and local Expo state
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/expo-env.d.ts
+mobile/*.tsbuildinfo
+
+# Generated native projects and credentials
+mobile/android/
+mobile/ios/
+mobile/.kotlin/
+mobile/*.orig.*
+mobile/*.jks
+mobile/*.keystore
+mobile/*.p8
+mobile/*.p12
+mobile/*.pem
+mobile/*.key
+mobile/*.mobileprovision
+
+# Local environment and debug files
+mobile/.env
+mobile/.env.*
+!mobile/.env.example
+mobile/.metro-health-check*
+mobile/npm-debug.*
+mobile/yarn-debug.*
+mobile/yarn-error.*
+.DS_Store

@@ -692,7 +692,7 @@ new #[Title('Settings')] class extends Component
             <flux:textarea wire:model="siteDescription" rows="3" label="Description" />
             <flux:textarea wire:model="siteKeywords" rows="2" label="Keywords" />
             <flux:input wire:model="googleMeasurementId" :label="__('Google Analytics measurement ID')" placeholder="G-SZ9BZEKLZ1" />
-            <flux:input wire:model="zaloUrl" type="url" :label="__('Upgrade Zalo URL')" :description="__('Leave blank to hide upgrade buttons.')" placeholder="http://zalo.me/0963559309" />
+            <flux:input wire:model="zaloUrl" type="url" :label="__('Upgrade Zalo URL')" :description="__('Leave blank to hide upgrade buttons.')" placeholder="https://zalo.me/0963559309" />
         </flux:card>
 
         <flux:card class="space-y-4">

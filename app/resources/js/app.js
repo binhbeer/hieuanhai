@@ -30,6 +30,11 @@ const requestNativeMedia = async (type, url) => {
     if (! response.ok) throw new Error(response.statusText);
 
     const { url: signedUrl } = await response.json();
+
+    if (typeof signedUrl !== 'string' || ! signedUrl.startsWith(`${window.location.origin}/`)) {
+        throw new Error('Invalid native media URL.');
+    }
+
     const requestId = crypto.randomUUID();
     const result = new Promise((resolve, reject) => {
         const timeout = window.setTimeout(() => {

@@ -85,6 +85,10 @@ Artisan::command('sitemap:generate', function (): void {
         'quick.id-photo',
         'creator.index',
         'studio.index',
+        'legal.privacy',
+        'legal.terms',
+        'legal.support',
+        'legal.delete-account',
     ];
     $pages = SitemapFile::create();
 

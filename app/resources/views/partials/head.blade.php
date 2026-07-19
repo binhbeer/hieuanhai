@@ -22,9 +22,10 @@
     $isHome = \App\Support\LocalizedRoute::is('home');
     $isPrivateStudioView = $baseRouteName === 'studio.index' && (request()->query('view') === 'projects' || request()->filled('project'));
     $isGuide = $baseRouteName !== null && \Illuminate\Support\Str::is('guide.*', $baseRouteName);
+    $isLegal = $baseRouteName !== null && \Illuminate\Support\Str::is('legal.*', $baseRouteName);
     $isQuickEdit = $baseRouteName !== null && \Illuminate\Support\Str::is('quick.*', $baseRouteName);
     $isStudioSample = $baseRouteName === 'studio.sample' && $studioSample !== null;
-    $isIndexable = (in_array($baseRouteName, ['home', 'gallery.index', 'creator.index', 'studio.index', 'categories.show', 'tags.show', 'images.show'], true) || $isQuickEdit || $isGuide || $isStudioSample) && ! $isPrivateStudioView;
+    $isIndexable = (in_array($baseRouteName, ['home', 'gallery.index', 'creator.index', 'studio.index', 'categories.show', 'tags.show', 'images.show'], true) || $isQuickEdit || $isGuide || $isLegal || $isStudioSample) && ! $isPrivateStudioView;
     $englishEnabled = \App\Support\AppSettings::bool('locales.en.enabled');
     $englishReady = match (true) {
         $metaImage !== null => $metaImage->englishReady(),
@@ -52,6 +53,10 @@
         \App\Support\LocalizedRoute::is('guide.web') => __('Manage your complete image workflow'),
         \App\Support\LocalizedRoute::is('guide.api') => __('Create images through the API'),
         \App\Support\LocalizedRoute::is('guide.faq') => __('Frequently asked questions'),
+        \App\Support\LocalizedRoute::is('legal.privacy') => __('Privacy Policy'),
+        \App\Support\LocalizedRoute::is('legal.terms') => __('Terms of Service'),
+        \App\Support\LocalizedRoute::is('legal.support') => __('Support'),
+        \App\Support\LocalizedRoute::is('legal.delete-account') => __('Delete Account'),
         default => isset($title) ? __($title) : null,
     };
 
@@ -82,6 +87,10 @@
         \App\Support\LocalizedRoute::is('guide.web') => __('Track generations, improve results, publish your best work, and collect ideas from the community.'),
         \App\Support\LocalizedRoute::is('guide.api') => __('Generate a key, send a secure request, and understand quota and error responses.'),
         \App\Support\LocalizedRoute::is('guide.faq') => __('Quick answers about quota, privacy, account access, and common generation problems.'),
+        \App\Support\LocalizedRoute::is('legal.privacy') => __('Learn what information GenAnh processes, why it is used, how long it is kept, and how to exercise your privacy choices.'),
+        \App\Support\LocalizedRoute::is('legal.terms') => __('Read the rules for using GenAnh accounts, AI tools, uploads, generated output, public content, and API services.'),
+        \App\Support\LocalizedRoute::is('legal.support') => __('Contact GenAnh for help with accounts, image generation, Studio projects, API access, privacy, and account deletion.'),
+        \App\Support\LocalizedRoute::is('legal.delete-account') => __('Permanently delete your GenAnh account, prompts, uploaded images, generated results, projects, favorites, keys, and related data.'),
         default => $siteDescription,
     };
 
@@ -96,7 +105,7 @@
         \App\Support\LocalizedRoute::is('creator.index') => route('creator.index'),
         \App\Support\LocalizedRoute::is('studio.index') => route('studio.index'),
         $isStudioSample => route('studio.sample', ['sample' => $routeStudioSample]),
-        $isGuide && $baseRouteName !== null => route($baseRouteName),
+        ($isGuide || $isLegal) && $baseRouteName !== null => route($baseRouteName),
         default => url()->current(),
     };
 
@@ -208,11 +217,11 @@
         ];
     }
 
-    if ($isGuide) {
+    if ($isGuide || $isLegal) {
         $schema[] = [
             '@context' => 'https://schema.org',
             '@type' => 'WebPage',
-            'name' => filled($metaTitle) ? $metaTitle : __('User guide'),
+            'name' => filled($metaTitle) ? $metaTitle : ($isLegal ? __('Legal information') : __('User guide')),
             'url' => $metaUrl,
             'description' => $metaDescription,
             'inLanguage' => $locale,

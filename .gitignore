@@ -24,6 +24,19 @@ app/vendor/
 app/node_modules/
 app/public/build/
 app/public/hot
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/android/
+mobile/ios/
+mobile/.env
+mobile/.env.*
+!mobile/.env.example
+mobile/*.jks
+mobile/*.keystore
+mobile/*.mobileprovision
+mobile/*.p8
+mobile/*.p12
 
 # Nested git metadata backup
 app/.git-backup/

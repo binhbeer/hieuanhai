@@ -30,6 +30,10 @@
 					<x-slot name="icon"><x-iconsax-two-book class="mr-1.5 size-5" /></x-slot>
 					{{ __('User guide') }}
 				</flux:menu.item>
+				<flux:menu.item :href="route('legal.support')" wire:navigate>{{ __('Support') }}</flux:menu.item>
+				<flux:menu.item :href="route('legal.privacy')" wire:navigate>{{ __('Privacy Policy') }}</flux:menu.item>
+				<flux:menu.item :href="route('legal.terms')" wire:navigate>{{ __('Terms of Service') }}</flux:menu.item>
+				<flux:menu.item :href="route('legal.delete-account')" wire:navigate>{{ __('Delete Account') }}</flux:menu.item>
 				<form class="w-full" method="POST" action="{{ route('logout') }}">
 					@csrf
 					<flux:menu.item class="w-full cursor-pointer" data-test="logout-button" as="button" type="submit">
@@ -52,5 +56,11 @@
 			</flux:button>
 		@endif
 	</div>
+	<nav class="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400" aria-label="{{ __('Legal and support') }}">
+		<a href="{{ route('legal.privacy') }}" wire:navigate class="hover:underline">{{ __('Privacy Policy') }}</a>
+		<a href="{{ route('legal.terms') }}" wire:navigate class="hover:underline">{{ __('Terms of Service') }}</a>
+		<a href="{{ route('legal.support') }}" wire:navigate class="hover:underline">{{ __('Support') }}</a>
+		<a href="{{ route('legal.delete-account') }}" wire:navigate class="hover:underline">{{ __('Delete Account') }}</a>
+	</nav>
 </div>
 @endauth
