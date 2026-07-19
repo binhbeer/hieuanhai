@@ -56,58 +56,58 @@ new #[Title('AI image creation and editing')] class extends Component { };
             </div>
 
             <div class="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div class="group flex items-start gap-4 rounded-4xl bg-amber-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-amber-950/5 dark:bg-amber-400/10 dark:hover:shadow-black/20">
+                <div class="group flex items-start gap-4 rounded-4xl bg-zinc-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:bg-amber-50/70 hover:shadow-xl hover:shadow-amber-950/5 dark:bg-white/5 dark:hover:bg-amber-400/10 dark:hover:shadow-black/20">
                     <div class="min-w-0 flex-1">
                         <flux:heading class="text-amber-700! dark:text-amber-300!" size="lg">{{ __('Quick') }}</flux:heading>
                         <flux:text class="mt-2 font-medium text-zinc-700! dark:text-zinc-200!">{{ __('Restore old photos, swap faces, replace backgrounds, remove objects, change outfits, add a person, and ID photos.') }}</flux:text>
                         <flux:button class="mt-5" :href="route('quick.index')" size="sm" variant="filled" color="amber" icon:trailing="arrow-right" wire:navigate>{{ __('Quick photo edit') }}</flux:button>
                     </div>
-                    <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-amber-100 text-amber-700 transition group-hover:scale-105 dark:bg-amber-300/15 dark:text-amber-200"><x-iconsax-two-flash class="size-9" /></span>
+                    <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-zinc-100 text-zinc-500 transition group-hover:scale-105 group-hover:bg-amber-100 group-hover:text-amber-700 dark:bg-white/10 dark:text-zinc-400 dark:group-hover:bg-amber-300/15 dark:group-hover:text-amber-200"><x-iconsax-two-flash class="size-9" /></span>
                 </div>
 
-                <div class="group flex items-start gap-4 rounded-4xl bg-emerald-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-950/5 dark:bg-emerald-400/10 dark:hover:shadow-black/20">
+                <div class="group flex items-start gap-4 rounded-4xl bg-zinc-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:bg-emerald-50/70 hover:shadow-xl hover:shadow-emerald-950/5 dark:bg-white/5 dark:hover:bg-emerald-400/10 dark:hover:shadow-black/20">
                     <div class="min-w-0 flex-1">
                         <flux:heading class="text-emerald-700! dark:text-emerald-300!" size="lg">{{ __('Creator') }}</flux:heading>
                         <flux:text class="mt-2 font-medium text-zinc-700! dark:text-zinc-200!">{{ __('Turn a rough idea into a sharp prompt - references, model, ratio, rewrite, and translate in one place.') }}</flux:text>
                         <flux:button class="mt-5" :href="route('creator.index')" size="sm" variant="filled" color="emerald" icon:trailing="arrow-right" wire:navigate>{{ __('Create images') }}</flux:button>
                     </div>
-                    <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-emerald-100 text-emerald-700 transition group-hover:scale-105 dark:bg-emerald-300/15 dark:text-emerald-200"><x-iconsax-two-magicpen class="size-9" /></span>
+                    <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-zinc-100 text-zinc-500 transition group-hover:scale-105 group-hover:bg-emerald-100 group-hover:text-emerald-700 dark:bg-white/10 dark:text-zinc-400 dark:group-hover:bg-emerald-300/15 dark:group-hover:text-emerald-200"><x-iconsax-two-magicpen class="size-9" /></span>
                 </div>
 
-                <div class="group flex items-start gap-4 rounded-4xl bg-violet-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-violet-950/5 dark:bg-violet-400/10 dark:hover:shadow-black/20">
+                <div class="group flex items-start gap-4 rounded-4xl bg-zinc-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:bg-violet-50/70 hover:shadow-xl hover:shadow-violet-950/5 dark:bg-white/5 dark:hover:bg-violet-400/10 dark:hover:shadow-black/20">
                     <div class="min-w-0 flex-1">
                         <flux:heading class="text-violet-700! dark:text-violet-300!" size="lg">{{ __('Studio') }}</flux:heading>
                         <flux:text class="mt-2 font-medium text-zinc-700! dark:text-zinc-200!">{{ __('Product sets, campaign posters, menus, and presentation slides - with projects, versions, and batch runs.') }}</flux:text>
                         <flux:button class="mt-5" :href="route('studio.index')" size="sm" variant="filled" color="violet" icon:trailing="arrow-right" wire:navigate>{{ __('Batch edit') }}</flux:button>
                     </div>
-                    <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-violet-100 text-violet-700 transition group-hover:scale-105 dark:bg-violet-300/15 dark:text-violet-200"><x-iconsax-two-layer class="size-9" /></span>
+                    <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-zinc-100 text-zinc-500 transition group-hover:scale-105 group-hover:bg-violet-100 group-hover:text-violet-700 dark:bg-white/10 dark:text-zinc-400 dark:group-hover:bg-violet-300/15 dark:group-hover:text-violet-200"><x-iconsax-two-layer class="size-9" /></span>
                 </div>
 
-                <div class="group flex items-start gap-4 rounded-4xl bg-blue-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-950/5 dark:bg-blue-400/10 dark:hover:shadow-black/20">
+                <div class="group flex items-start gap-4 rounded-4xl bg-zinc-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:bg-blue-50/70 hover:shadow-xl hover:shadow-blue-950/5 dark:bg-white/5 dark:hover:bg-blue-400/10 dark:hover:shadow-black/20">
                     <div class="min-w-0 flex-1">
                         <flux:heading class="text-blue-700! dark:text-blue-300!" size="lg">{{ __('Gallery') }}</flux:heading>
                         <flux:text class="mt-2 font-medium text-zinc-700! dark:text-zinc-200!">{{ __('Find fresh looks by category and tag, then open any image for the prompt and a starting point of your own.') }}</flux:text>
                         <flux:button class="mt-5" :href="route('gallery.index')" size="sm" variant="filled" color="blue" icon:trailing="arrow-right" wire:navigate>{{ __('Browse Gallery') }}</flux:button>
                     </div>
-                    <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-blue-100 text-blue-700 transition group-hover:scale-105 dark:bg-blue-300/15 dark:text-blue-200"><x-iconsax-two-image class="size-9" /></span>
+                    <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-zinc-100 text-zinc-500 transition group-hover:scale-105 group-hover:bg-blue-100 group-hover:text-blue-700 dark:bg-white/10 dark:text-zinc-400 dark:group-hover:bg-blue-300/15 dark:group-hover:text-blue-200"><x-iconsax-two-image class="size-9" /></span>
                 </div>
             </div>
         </section>
 
-        <section class="relative overflow-hidden rounded-4xl border border-amber-200/80 bg-amber-50/70 px-6 py-8 shadow-sm sm:px-10 sm:py-10 dark:border-white/10 dark:bg-zinc-950 dark:text-white dark:shadow-xl" aria-labelledby="api-title">
-            <div class="pointer-events-none absolute -top-24 right-0 size-72 rounded-full bg-amber-300/25 blur-3xl dark:bg-amber-400/20"></div>
+        <section class="relative overflow-hidden rounded-4xl bg-zinc-50/70 px-6 py-8 sm:px-10 sm:py-10 dark:bg-zinc-950 dark:text-white" aria-labelledby="api-title">
+            <div class="pointer-events-none absolute -top-24 right-0 size-72 rounded-full bg-zinc-300/25 blur-3xl dark:bg-white/10"></div>
             <div class="relative flex flex-col justify-between gap-8 lg:flex-row lg:items-center">
                 <div class="max-w-2xl">
-                    <flux:badge color="amber" icon="code-bracket">{{ __('For developers') }}</flux:badge>
-                    <flux:heading id="api-title" class="mt-4 text-zinc-950! dark:text-white!" size="xl">{{ __('Automate image creation with the GenAnh API') }}</flux:heading>
-                    <flux:text class="mt-3 text-zinc-600! dark:text-zinc-300!">{{ __('Create private or published images from your own product with a secure API key. Successful generations use one quota.') }}</flux:text>
+                    <flux:badge icon="code-bracket">{{ __('For developers') }}</flux:badge>
+                    <flux:heading id="api-title" class="mt-4" size="xl">{{ __('Automate image creation with the GenAnh API') }}</flux:heading>
+                    <flux:text class="mt-3" variant="subtle">{{ __('Create private or published images from your own product with a secure API key. Successful generations use one quota.') }}</flux:text>
                     <div class="mt-5 flex flex-wrap gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        <span class="rounded-full border border-amber-200/90 bg-white/80 px-3 py-1.5 dark:border-white/15 dark:bg-white/5">POST /api/ai/images</span>
-                        <span class="rounded-full border border-amber-200/90 bg-white/80 px-3 py-1.5 dark:border-white/15 dark:bg-white/5">{{ __('Bearer token') }}</span>
-                        <span class="rounded-full border border-amber-200/90 bg-white/80 px-3 py-1.5 dark:border-white/15 dark:bg-white/5">{{ __('Quota aware') }}</span>
+                        <span class="rounded-full border border-zinc-200/90 bg-white/80 px-3 py-1.5 dark:border-white/15 dark:bg-white/5">POST /api/ai/images</span>
+                        <span class="rounded-full border border-zinc-200/90 bg-white/80 px-3 py-1.5 dark:border-white/15 dark:bg-white/5">{{ __('Bearer token') }}</span>
+                        <span class="rounded-full border border-zinc-200/90 bg-white/80 px-3 py-1.5 dark:border-white/15 dark:bg-white/5">{{ __('Quota aware') }}</span>
                     </div>
                 </div>
-                <flux:button class="shrink-0" :href="route('guide.api')" variant="primary" color="amber" icon:trailing="arrow-up-right" wire:navigate>{{ __('Explore the API') }}</flux:button>
+                <flux:button class="shrink-0" :href="route('guide.api')" variant="primary" icon:trailing="arrow-up-right" wire:navigate>{{ __('Explore the API') }}</flux:button>
             </div>
         </section>
 

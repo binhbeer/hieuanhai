@@ -22,8 +22,11 @@ Schedule::command('horizon:snapshot')->everyFiveMinutes();
 Schedule::command('ai-images:recover-stale')->everyMinute()->withoutOverlapping();
 Schedule::command('queue:monitor redis:default --max=10')->everyMinute()->withoutOverlapping();
 Schedule::command('sitemap:generate')->everyTenMinutes();
-// Schedule::command('categories:backfill-descriptions')->dailyAt('01:30')->withoutOverlapping();
-// Schedule::command('tags:backfill-descriptions')->dailyAt('02:00')->withoutOverlapping();
+Schedule::command('categories:backfill-descriptions')->dailyAt('01:30')->withoutOverlapping();
+Schedule::command('tags:backfill-descriptions')->dailyAt('02:00')->withoutOverlapping();
+Schedule::command('content:translate-en --type=all --limit=100 --batch=10')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(30);
 
 Artisan::command('sitemap:generate', function (): void {
     $publicImages = fn () => GeneratedMedia::query()->publiclyVisible();

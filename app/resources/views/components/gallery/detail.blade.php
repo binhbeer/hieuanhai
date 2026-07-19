@@ -491,6 +491,7 @@ new class extends Component
 <div class="contents" x-data="{
     previousUrl: null,
     previousTitle: null,
+    dismissed: false,
     loading: false,
     loadingImageId: null,
     preview: null,
@@ -508,14 +509,27 @@ new class extends Component
 
         if (title) document.title = `${title} - ${this.siteName}`;
 
+        this.dismissed = false;
         this.preview = preview;
         this.loadingImageId = id;
         this.loading = Boolean(preview);
-        $wire.openImage(id).catch(() => {
+        $wire.openImage(id).then(() => {
+            if (this.dismissed) {
+                $wire.closeImage();
+            }
+        }).catch(() => {
             if (this.loadingImageId === id) this.finishLoading();
         });
     },
     finishLoading() {
+        if (this.dismissed) {
+            this.loading = false;
+            this.loadingImageId = null;
+            this.preview = null;
+
+            return;
+        }
+
         const finishedPreview = this.preview;
 
         this.loading = false;
@@ -578,6 +592,13 @@ new class extends Component
         this.openImage(image.id, image.url, image.title, image.preview);
     },
     closeImage() {
+        const alreadyDismissed = this.dismissed;
+
+        this.dismissed = true;
+        this.loading = false;
+        this.loadingImageId = null;
+        this.preview = null;
+
         if (this.previousUrl) {
             history.replaceState(null, '', this.previousUrl);
             document.title = this.previousTitle;
@@ -585,10 +606,9 @@ new class extends Component
             this.previousTitle = null;
         }
 
-        this.loading = false;
-        this.loadingImageId = null;
-        this.preview = null;
-        $wire.closeImage();
+        if (! alreadyDismissed) {
+            $wire.closeImage();
+        }
     },
 }" x-on:keydown.escape.window="if (!document.querySelector('.lightbox3-overlay')) { {{ $standalone ? "window.location.href = '" . route('gallery.index') . "'" : 'closeImage()' }} }" @if (!$standalone) x-on:open-image-detail.window="openImage($event.detail.id, $event.detail.url, $event.detail.title, $event.detail.preview)" @endif>
     @if (!$standalone)
@@ -622,7 +642,7 @@ new class extends Component
         <div x-init="finishLoading()"></div>
     @endif
 
-    <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 dark:bg-zinc-950/80 dark:text-white md:grid md:backdrop-blur md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-[.985]" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
+    <div class="{{ $standalone ? 'h-dvh' : 'fixed inset-0 z-50' }} flex flex-col overflow-y-auto bg-zinc-100/90 text-zinc-950 dark:bg-zinc-950/80 dark:text-white md:grid md:backdrop-blur md:grid-cols-[1fr_480px] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden" @if (!$standalone) x-show="!dismissed" x-cloak role="dialog" aria-modal="true" aria-label="{{ __('Image details') }}" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-[.985]" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif wire:key="image-detail-{{ $selected->id }}" @if ($selected->status === 'pending') wire:poll.2s @endif>
         <div class="group/image-column relative flex flex-col shrink-0 md:shrink md:flex-1" x-on:touchstart.passive="startSwipe($event)" x-on:touchend.passive="endSwipe($event, @js($previousImageData), @js($nextImageData))">
             <div class="fixed inset-x-0 top-0 z-20 flex h-16 min-w-0 items-center gap-3 bg-zinc-100/90 px-4 backdrop-blur dark:bg-zinc-950/80 md:absolute md:inset-x-4 md:top-4 md:h-auto md:bg-transparent md:p-0 md:backdrop-blur-none">
                 @if (filled($selected->title))
