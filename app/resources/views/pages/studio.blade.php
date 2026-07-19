@@ -89,7 +89,10 @@ new #[Title('Studio')] class extends Component
         }
 
         if (request()->boolean('wizard') && ! $this->showWizard) {
-            $this->openWizard();
+            $requestedTool = request()->query('tool');
+            $this->openTool(is_string($requestedTool) && in_array($requestedTool, StudioProject::TOOLS, true)
+                ? $requestedTool
+                : StudioProject::TOOLS[0]);
         }
     }
 

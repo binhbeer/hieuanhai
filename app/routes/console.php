@@ -7,6 +7,7 @@ use App\Models\GeneratedMedia;
 use App\Models\Tag;
 use App\Support\AppSettings;
 use App\Support\LocalizedRoute;
+use App\Support\StudioSamples;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Inspiring;
@@ -72,6 +73,12 @@ Artisan::command('sitemap:generate', function (): void {
         'quick.restore-old-photo',
         'quick.replace-background',
         'quick.product-photo',
+        'quick.expand-image',
+        'quick.enhance-image',
+        'quick.advertising-image',
+        'quick.cinematic-portrait',
+        'quick.premium-studio',
+        'quick.ghibli-style',
         'quick.face-swap',
         'quick.change-outfit',
         'quick.add-person',
@@ -89,6 +96,10 @@ Artisan::command('sitemap:generate', function (): void {
         $pages->add($url(LocalizedRoute::url($guideRoute, locale: 'vi'), now()));
     }
 
+    foreach (array_keys(StudioSamples::all()) as $sample) {
+        $pages->add($url(LocalizedRoute::url('studio.sample', ['sample' => $sample], 'vi'), now()));
+    }
+
     if ($englishEnabled) {
         foreach ($publicRoutes as $publicRoute) {
             $pages->add($url(LocalizedRoute::url($publicRoute, locale: 'en'), $publicRoute === 'gallery.index' ? $latestImageUpdate : now()));
@@ -96,6 +107,10 @@ Artisan::command('sitemap:generate', function (): void {
 
         foreach ($guideRoutes as $guideRoute) {
             $pages->add($url(LocalizedRoute::url($guideRoute, locale: 'en'), now()));
+        }
+
+        foreach (array_keys(StudioSamples::all()) as $sample) {
+            $pages->add($url(LocalizedRoute::url('studio.sample', ['sample' => $sample], 'en'), now()));
         }
     }
     $pagesLastModified = $write('sitemap-pages.xml', $pages, now());

@@ -15,6 +15,50 @@ window.Echo = new Echo({
 
 Lightbox.init();
 
+const requestNativeMedia = async (type, url) => {
+    const bridge = window.GenAnhNativeBridge;
+
+    if (! window.ReactNativeWebView?.postMessage || bridge?.version !== 1 || ! bridge.capabilities?.includes(type)) {
+        return false;
+    }
+
+    const response = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+    });
+
+    if (! response.ok) throw new Error(response.statusText);
+
+    const { url: signedUrl } = await response.json();
+    const requestId = crypto.randomUUID();
+    const result = new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+            window.removeEventListener('genanh:native-result', listener);
+            reject(new Error('Native media request timed out.'));
+        }, 120000);
+        const listener = (event) => {
+            if (event.detail?.version !== 1 || event.detail?.requestId !== requestId) return;
+
+            window.clearTimeout(timeout);
+            window.removeEventListener('genanh:native-result', listener);
+            event.detail.ok ? resolve(true) : reject(new Error(event.detail.error));
+        };
+
+        window.addEventListener('genanh:native-result', listener);
+    });
+
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+        version: 1,
+        type,
+        requestId,
+        payload: { url: signedUrl },
+    }));
+
+    return result;
+};
+
+window.shareImage = (url) => requestNativeMedia('shareImage', url);
+
 window.downloadImage = async (url, trigger) => {
     if (trigger.hasAttribute('data-flux-loading')) return;
 
@@ -27,6 +71,8 @@ window.downloadImage = async (url, trigger) => {
     loadingIcon?.classList.remove('hidden');
 
     try {
+        if (await requestNativeMedia('downloadImage', url)) return;
+
         const response = await fetch(url);
 
         if (! response.ok) throw new Error(response.statusText);

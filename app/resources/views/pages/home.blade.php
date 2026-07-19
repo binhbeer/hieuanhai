@@ -59,7 +59,7 @@ new #[Title('AI image creation and editing')] class extends Component { };
                 <div class="group flex items-start gap-4 rounded-4xl bg-zinc-50/70 p-6 transition duration-300 hover:-translate-y-1 hover:bg-amber-50/70 hover:shadow-xl hover:shadow-amber-950/5 dark:bg-white/5 dark:hover:bg-amber-400/10 dark:hover:shadow-black/20">
                     <div class="min-w-0 flex-1">
                         <flux:heading class="text-amber-700! dark:text-amber-300!" size="lg">{{ __('Quick') }}</flux:heading>
-                        <flux:text class="mt-2 font-medium text-zinc-700! dark:text-zinc-200!">{{ __('Restore old photos, swap faces, replace backgrounds, remove objects, change outfits, add a person, and ID photos.') }}</flux:text>
+                        <flux:text class="mt-2 font-medium text-zinc-700! dark:text-zinc-200!">{{ __('Remove objects, expand and enhance photos, create ads, cinematic portraits, premium studio images, Ghibli-inspired animation, and more.') }}</flux:text>
                         <flux:button class="mt-5" :href="route('quick.index')" size="sm" variant="filled" color="amber" icon:trailing="arrow-right" wire:navigate>{{ __('Quick photo edit') }}</flux:button>
                     </div>
                     <span class="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-zinc-100 text-zinc-500 transition group-hover:scale-105 group-hover:bg-amber-100 group-hover:text-amber-700 dark:bg-white/10 dark:text-zinc-400 dark:group-hover:bg-amber-300/15 dark:group-hover:text-amber-200"><x-iconsax-two-flash class="size-9" /></span>

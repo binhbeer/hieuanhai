@@ -120,6 +120,26 @@ new class extends Component
         $this->selectSuggestion($index);
     }
 
+    public function updatedResolvedTool(?string $value): void
+    {
+        if (! is_string($value) || \App\Support\QuickEditTools::get($value) === null) {
+            return;
+        }
+
+        foreach ($this->suggestions as $index => $suggestion) {
+            if (($suggestion['tool'] ?? null) === $value) {
+                $this->selectSuggestion($index);
+
+                return;
+            }
+        }
+
+        $this->selectedSuggestion = null;
+        $this->analyzed = true;
+        $this->errorMessage = null;
+        $this->applyDefaultRoles($value, true);
+    }
+
     public function createImage(QuickImageService $editor): void
     {
         if (! Auth::check()) {
@@ -310,20 +330,57 @@ new class extends Component
                             <flux:heading id="quick-suggestions-heading" size="sm">{{ __('Choose a suitable edit') }}</flux:heading>
                             <flux:text class="mt-1" variant="subtle">{{ __('GenAnh selected the best match first. Choose another option if needed.') }}</flux:text>
                         </div>
-                        <div class="grid gap-2" role="radiogroup" aria-label="{{ __('AI edit suggestions') }}">
+
+                        <flux:accordion exclusive transition>
                             @foreach ($suggestions as $index => $suggestion)
                                 @php($suggestedTool = $tools[$suggestion['tool']] ?? null)
                                 @if ($suggestedTool)
-                                    <button type="button" class="w-full rounded-xl border p-3 text-start transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 {{ $selectedSuggestion === $index ? 'border-amber-400 bg-amber-50 dark:border-amber-300/40 dark:bg-amber-300/10' : 'border-zinc-200 hover:border-amber-300 dark:border-white/10 dark:hover:border-amber-300/30' }}" role="radio" aria-checked="{{ $selectedSuggestion === $index ? 'true' : 'false' }}" wire:click="chooseSuggestion({{ $index }})">
-                                        <span class="flex items-center justify-between gap-3">
-                                            <span class="font-medium text-zinc-950 dark:text-white">{{ __($suggestedTool['title']) }}</span>
-                                            @if ($selectedSuggestion === $index)<flux:badge color="amber">{{ __('Selected') }}</flux:badge>@endif
-                                        </span>
-                                        <span class="mt-1 block text-sm leading-5 text-zinc-500 dark:text-zinc-400">{{ $suggestion['reason'] }}</span>
-                                    </button>
+                                    <flux:accordion.item wire:key="quick-suggestion-{{ $index }}-{{ $suggestion['tool'] }}" :expanded="$selectedSuggestion === $index">
+                                        <flux:accordion.heading wire:click="chooseSuggestion({{ $index }})">
+                                            <span class="flex items-center justify-between gap-3 pe-2">
+                                                <span>{{ __($suggestedTool['title']) }}</span>
+                                                @if ($selectedSuggestion === $index)
+                                                    <flux:badge color="amber">{{ __('Selected') }}</flux:badge>
+                                                @endif
+                                            </span>
+                                        </flux:accordion.heading>
+                                        <flux:accordion.content>
+                                            <p class="text-sm leading-5 text-zinc-500 dark:text-zinc-400">{{ $suggestion['reason'] }}</p>
+                                        </flux:accordion.content>
+                                    </flux:accordion.item>
                                 @endif
                             @endforeach
-                        </div>
+                        </flux:accordion>
+
+                        <flux:select
+                            wire:model.live="resolvedTool"
+                            variant="listbox"
+                            searchable
+                            :label="__('Other edits')"
+                            :placeholder="__('Search other edits...')"
+                        >
+                            <x-slot name="search">
+                                <flux:select.search :placeholder="__('Search other edits...')" />
+                            </x-slot>
+                            @foreach ($tools as $slug => $toolConfig)
+                                <flux:select.option value="{{ $slug }}" wire:key="quick-tool-option-{{ $slug }}" :label="__($toolConfig['title'])">
+                                    <div class="flex items-center gap-2.5">
+                                        @if (! empty($toolConfig['thumbnail']))
+                                            <img
+                                                src="{{ asset($toolConfig['thumbnail']) }}"
+                                                alt=""
+                                                width="40"
+                                                height="28"
+                                                class="h-7 w-10 shrink-0 rounded-md object-cover"
+                                                loading="lazy"
+                                                decoding="async"
+                                            >
+                                        @endif
+                                        <span class="min-w-0 truncate">{{ __($toolConfig['title']) }}</span>
+                                    </div>
+                                </flux:select.option>
+                            @endforeach
+                        </flux:select>
                     </section>
                 @endif
 
@@ -356,7 +413,7 @@ new class extends Component
 
             <div class="shrink-0 border-t border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
                 <flux:button class="w-full" type="submit" variant="primary" color="amber" :disabled="!$analyzed" wire:loading.attr="disabled" wire:target="newPhotos,analyzeImages,createImage">
-                    <span wire:loading.remove wire:target="createImage">{{ __('Create edited image') }}</span>
+                    <span wire:loading.remove wire:target="createImage">{{ __('Create image') }}</span>
                     <span wire:loading wire:target="createImage">{{ __('Creating image...') }}</span>
                 </flux:button>
             </div>

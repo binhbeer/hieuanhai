@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\GeneratedMedia;
 use GdImage;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Spatie\ImageOptimizer\OptimizerChainFactory;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -14,15 +16,18 @@ use Throwable;
 
 class ImageDownloadController extends Controller
 {
-    public function __invoke(GeneratedMedia $image): BinaryFileResponse
+    public function __invoke(GeneratedMedia $image): BinaryFileResponse|JsonResponse
     {
-        $user = Auth::user();
-        abort_unless(
-            $image->status === 'succeeded'
-            && is_string($image->result_path)
-            && ($image->is_published || ($user && ($user->isAdmin() || $image->user_id === $user->id))),
-            404,
-        );
+        $this->authorizeImage($image);
+
+        if (request()->expectsJson()) {
+            $routeName = request()->route()?->getName();
+            abort_unless(is_string($routeName), 404);
+
+            return response()->json([
+                'url' => URL::temporarySignedRoute($routeName, now()->addMinutes(2), ['image' => $image]),
+            ])->header('Cache-Control', 'no-store');
+        }
 
         $sourcePath = Storage::disk('public')->path($image->result_path);
         abort_unless(is_file($sourcePath), 404);
@@ -55,6 +60,19 @@ class ImageDownloadController extends Controller
 
             throw $e;
         }
+    }
+
+    private function authorizeImage(GeneratedMedia $image): void
+    {
+        $user = Auth::user();
+        abort_unless(
+            $image->status === 'succeeded'
+            && is_string($image->result_path)
+            && ($image->is_published
+                || request()->hasValidSignature()
+                || ($user && ($user->isAdmin() || $image->user_id === $user->id))),
+            404,
+        );
     }
 
     private function createJpeg(string $sourcePath, string $destinationPath): void

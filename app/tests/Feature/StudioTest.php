@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\StudioProject;
 use App\Models\User;
 use App\Services\StudioImageService;
+use App\Support\StudioSamples;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
@@ -32,6 +33,59 @@ class StudioTest extends TestCase
         $this->get(route('home'))
             ->assertOk()
             ->assertSee(route('studio.index'), false);
+    }
+
+    public function test_studio_examples_are_public_without_creating_projects(): void
+    {
+        $samples = [
+            'wireless-headphones' => 'Wireless Bluetooth headphones',
+            'luxury-perfume' => 'Luxury perfume',
+            'leather-handbag' => 'Leather handbag',
+            'coffee-combo-menu' => 'Coffee shop combo menu',
+        ];
+
+        foreach ($samples as $slug => $title) {
+            $url = route('studio.sample', ['sample' => $slug]);
+
+            $this->get($url)
+                ->assertOk()
+                ->assertSee(__($title))
+                ->assertSee(__('Create design'))
+                ->assertSee('open-account-modal', false)
+                ->assertSee('<link rel="canonical" href="'.$url.'">', false)
+                ->assertSee('<meta name="robots" content="index,follow,max-image-preview:large">', false)
+                ->assertSee('images/studio-samples/'.$slug, false);
+
+            $sample = StudioSamples::get($slug);
+            $this->assertNotNull($sample);
+
+            foreach ([...$sample['inputs'], ...$sample['results']] as $image) {
+                $this->assertFileExists(public_path($image['image']));
+            }
+        }
+
+        $this->assertDatabaseCount('studio_projects', 0);
+        $this->get(route('studio.sample', ['sample' => 'missing-example']))->assertNotFound();
+    }
+
+    public function test_studio_example_cta_opens_matching_empty_wizard_for_user(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('studio.sample', ['sample' => 'coffee-combo-menu']))
+            ->assertOk()
+            ->assertSee(route('studio.index', ['wizard' => 1, 'tool' => 'marketing-poster']));
+
+        Livewire::actingAs($user)
+            ->withQueryParams(['wizard' => '1', 'tool' => 'marketing-poster'])
+            ->test('pages::studio')
+            ->assertSet('showWizard', true)
+            ->assertSet('tool', 'marketing-poster')
+            ->assertSet('posterTopic', '')
+            ->assertSet('newPhotos', []);
+
+        $this->assertDatabaseCount('studio_projects', 0);
     }
 
     public function test_guest_opening_tool_requests_login(): void

@@ -13,15 +13,18 @@
     $routeImage = request()->route('image');
     $routeCategory = request()->route('category');
     $routeTag = request()->route('tag');
+    $routeStudioSample = request()->route('sample');
     $metaImage = $routeImage instanceof \App\Models\GeneratedMedia && $routeImage->is_published && $routeImage->status === 'succeeded' && filled($routeImage->result_path) ? $routeImage : null;
     $metaCategory = $routeCategory instanceof \App\Models\Category ? $routeCategory : null;
     $metaTag = $routeTag instanceof \App\Models\Tag ? $routeTag : null;
+    $studioSample = is_string($routeStudioSample) ? \App\Support\StudioSamples::get($routeStudioSample) : null;
     $baseRouteName = \App\Support\LocalizedRoute::name();
     $isHome = \App\Support\LocalizedRoute::is('home');
     $isPrivateStudioView = $baseRouteName === 'studio.index' && (request()->query('view') === 'projects' || request()->filled('project'));
     $isGuide = $baseRouteName !== null && \Illuminate\Support\Str::is('guide.*', $baseRouteName);
     $isQuickEdit = $baseRouteName !== null && \Illuminate\Support\Str::is('quick.*', $baseRouteName);
-    $isIndexable = (in_array($baseRouteName, ['home', 'gallery.index', 'creator.index', 'studio.index', 'categories.show', 'tags.show', 'images.show'], true) || $isQuickEdit || $isGuide) && ! $isPrivateStudioView;
+    $isStudioSample = $baseRouteName === 'studio.sample' && $studioSample !== null;
+    $isIndexable = (in_array($baseRouteName, ['home', 'gallery.index', 'creator.index', 'studio.index', 'categories.show', 'tags.show', 'images.show'], true) || $isQuickEdit || $isGuide || $isStudioSample) && ! $isPrivateStudioView;
     $englishEnabled = \App\Support\AppSettings::bool('locales.en.enabled');
     $englishReady = match (true) {
         $metaImage !== null => $metaImage->englishReady(),
@@ -29,7 +32,7 @@
         $metaTag !== null => $metaTag->englishReady(),
         default => true,
     };
-    $routeParameters = array_filter(['image' => $metaImage, 'category' => $metaCategory, 'tag' => $metaTag]);
+    $routeParameters = array_filter(['image' => $metaImage, 'category' => $metaCategory, 'tag' => $metaTag, 'sample' => $isStudioSample ? $routeStudioSample : null]);
 
     $quickEditTool = is_string(request()->route('tool')) ? \App\Support\QuickEditTools::get(request()->route('tool')) : null;
 
@@ -43,6 +46,7 @@
         $isQuickEdit && $quickEditTool !== null => __($quickEditTool['seo_title'] ?? $quickEditTool['title']),
         \App\Support\LocalizedRoute::is('creator.index') => __('Creator'),
         \App\Support\LocalizedRoute::is('studio.index') => __('Studio'),
+        $isStudioSample => __($studioSample['title']),
         \App\Support\LocalizedRoute::is('guide.index') => __('User guide'),
         \App\Support\LocalizedRoute::is('guide.getting-started') => __('Create your first AI image'),
         \App\Support\LocalizedRoute::is('guide.web') => __('Manage your complete image workflow'),
@@ -72,6 +76,7 @@
         \App\Support\LocalizedRoute::is('gallery.index') => __('Browse published AI images from the GenAnh community by category, tag, and visual idea.'),
         \App\Support\LocalizedRoute::is('creator.index') => __('Create AI images from prompts and references with advanced model, ratio, resolution, rewrite, and translation controls.'),
         \App\Support\LocalizedRoute::is('studio.index') => __('Build product image sets and marketing posters with projects, drafts, versions, and batch outputs.'),
+        $isStudioSample => __($studioSample['description']),
         \App\Support\LocalizedRoute::is('guide.index') => __('Step-by-step guides for image creation, workflow management, publishing, account security, and API integration.'),
         \App\Support\LocalizedRoute::is('guide.getting-started') => __('From signing in to downloading a finished image, follow this practical workflow.'),
         \App\Support\LocalizedRoute::is('guide.web') => __('Track generations, improve results, publish your best work, and collect ideas from the community.'),
@@ -90,6 +95,7 @@
         $isQuickEdit && $baseRouteName !== null => route($baseRouteName),
         \App\Support\LocalizedRoute::is('creator.index') => route('creator.index'),
         \App\Support\LocalizedRoute::is('studio.index') => route('studio.index'),
+        $isStudioSample => route('studio.sample', ['sample' => $routeStudioSample]),
         $isGuide && $baseRouteName !== null => route($baseRouteName),
         default => url()->current(),
     };
@@ -99,13 +105,14 @@
     $metaImageOriginalUrl = $metaImageOriginalUrl && ! \Illuminate\Support\Str::startsWith($metaImageOriginalUrl, ['http://', 'https://']) ? url($metaImageOriginalUrl) : $metaImageOriginalUrl;
     $homeLogoUrl = $isHome ? asset('logo.png').'?v='.$assetVersion : null;
     $quickCoverUrl = $quickEditTool && isset($quickEditTool['thumbnail']) ? asset($quickEditTool['thumbnail']) : null;
-    $metaImageUrl = $metaImage ? $imageEditor->imageUrl($metaImage, 'og') : ($quickCoverUrl ?? $homeLogoUrl);
+    $studioSampleCoverUrl = $isStudioSample ? asset($studioSample['results'][0]['image']) : null;
+    $metaImageUrl = $metaImage ? $imageEditor->imageUrl($metaImage, 'og') : ($studioSampleCoverUrl ?? $quickCoverUrl ?? $homeLogoUrl);
     $metaImageUrl = $metaImageUrl && ! \Illuminate\Support\Str::startsWith($metaImageUrl, ['http://', 'https://']) ? url($metaImageUrl) : $metaImageUrl;
     $metaImageAlt = $metaImage
         ? \Illuminate\Support\Str::limit($metaImage->title ?: $metaImage->prompt, 120, '')
-        : ($quickEditTool ? __($quickEditTool['cover_alt'] ?? $quickEditTool['title']) : ($isHome ? $siteName.' logo' : null));
-    $metaImageWidth = $isHome ? 1254 : ($quickCoverUrl ? 320 : 1200);
-    $metaImageHeight = $isHome ? 1254 : ($quickCoverUrl ? 200 : 630);
+        : ($isStudioSample ? __($studioSample['title']) : ($quickEditTool ? __($quickEditTool['cover_alt'] ?? $quickEditTool['title']) : ($isHome ? $siteName.' logo' : null)));
+    $metaImageWidth = $isHome ? 1254 : ($studioSampleCoverUrl ? 800 : ($quickCoverUrl ? 320 : 1200));
+    $metaImageHeight = $isHome ? 1254 : ($studioSampleCoverUrl ? 800 : ($quickCoverUrl ? 200 : 630));
     $metaKeywords = $metaImage
         ? $metaImage->tags->map(fn (\App\Models\Tag $tag): string => (string) $tag->getTranslationWithoutFallback('name', $locale))->filter()->implode(', ')
         : ($quickEditTool && isset($quickEditTool['keywords']) ? __($quickEditTool['keywords']) : $siteKeywords);
@@ -155,7 +162,7 @@
         ];
     }
 
-    if ($isQuickEdit || \App\Support\LocalizedRoute::is('creator.index', 'studio.index')) {
+    if ($isQuickEdit || $isStudioSample || \App\Support\LocalizedRoute::is('creator.index', 'studio.index')) {
         $schema[] = [
             '@context' => 'https://schema.org',
             '@type' => 'WebPage',
@@ -311,7 +318,7 @@
         gtag('config', @js($googleMeasurementId));
     </script>
 @endif
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="{{ $siteName }}">

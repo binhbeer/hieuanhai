@@ -146,8 +146,14 @@ class QuickTest extends TestCase
             ->assertSet('request', 'Đổi nền thành studio sáng tối giản')
             ->assertSet('analyzed', true)
             ->assertSee(__('Choose a suitable edit'))
+            ->assertSee(__('Other edits'))
             ->call('chooseSuggestion', 1)
             ->assertSet('resolvedTool', 'remove-object')
+            ->assertSet('request', 'Xóa biển hiệu phía sau chủ thể')
+            ->set('resolvedTool', 'enhance-image')
+            ->assertSet('selectedSuggestion', null)
+            ->assertSet('resolvedTool', 'enhance-image')
+            ->assertSet('analyzed', true)
             ->assertSet('request', 'Xóa biển hiệu phía sau chủ thể');
 
         QuickEditOptionAgent::assertPrompted(fn ($prompt): bool => $prompt->contains('Current landing context: restore-old-photo. It is not a constraint.')
@@ -301,6 +307,15 @@ class QuickTest extends TestCase
 
     public function test_all_tools_generate_distinct_role_contracts_and_valid_related_links(): void
     {
+        $this->assertEmpty(array_diff([
+            'expand-image',
+            'enhance-image',
+            'advertising-image',
+            'cinematic-portrait',
+            'premium-studio',
+            'ghibli-style',
+        ], QuickEditTools::slugs()));
+
         foreach (QuickEditTools::all() as $slug => $tool) {
             $contract = QuickEditTools::contract($slug, [$tool['source_role']], 'Test request');
 

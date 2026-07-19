@@ -214,7 +214,7 @@ new #[Title('AI Gallery')] class extends Component {
 					@endif
 				</div>
 				<div class="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
-					<form class="flex min-w-0 flex-1 items-center gap-2 sm:flex-none" action="{{ route('gallery.index') }}" method="GET" x-data="{ query: @js($search) }">
+					<form class="flex min-w-0 flex-1 items-center gap-2 sm:flex-none lg:hidden" action="{{ route('gallery.index') }}" method="GET" x-data="{ query: @js($search) }">
 						<div class="min-w-0 flex-1 sm:w-72 sm:flex-none">
 							<flux:input
 								x-model="query"
