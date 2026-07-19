@@ -26,14 +26,14 @@
 					</flux:menu.item>
 				@endif
 				<flux:menu.separator />
-				<flux:menu.item :href="route('guide.index')" wire:navigate>
-					<x-slot name="icon"><x-iconsax-two-book class="mr-1.5 size-5" /></x-slot>
-					{{ __('User guide') }}
-				</flux:menu.item>
-				<flux:menu.item :href="route('legal.support')" wire:navigate>{{ __('Support') }}</flux:menu.item>
-				<flux:menu.item :href="route('legal.privacy')" wire:navigate>{{ __('Privacy Policy') }}</flux:menu.item>
-				<flux:menu.item :href="route('legal.terms')" wire:navigate>{{ __('Terms of Service') }}</flux:menu.item>
-				<flux:menu.item :href="route('legal.delete-account')" wire:navigate>{{ __('Delete Account') }}</flux:menu.item>
+				<flux:menu.submenu :heading="__('Help')">
+					<x-slot name="icon"><x-iconsax-two-message-question class="mr-1.5 size-5" /></x-slot>
+					<flux:menu.item :href="route('guide.index')" wire:navigate>{{ __('User guide') }}</flux:menu.item>
+					<flux:menu.item :href="route('legal.support')" wire:navigate>{{ __('Support') }}</flux:menu.item>
+					<flux:menu.item :href="route('legal.privacy')" wire:navigate>{{ __('Privacy Policy') }}</flux:menu.item>
+					<flux:menu.item :href="route('legal.terms')" wire:navigate>{{ __('Terms of Service') }}</flux:menu.item>
+					<flux:menu.item :href="route('legal.delete-account')" wire:navigate>{{ __('Delete Account') }}</flux:menu.item>
+				</flux:menu.submenu>
 				<form class="w-full" method="POST" action="{{ route('logout') }}">
 					@csrf
 					<flux:menu.item class="w-full cursor-pointer" data-test="logout-button" as="button" type="submit">
