@@ -23,6 +23,7 @@ use App\Support\QuickEditTools;
 use App\Support\UserActivityLock;
 use GdImage;
 use GeneaLabs\LaravelModelCaching\CachedBuilder;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -184,6 +185,11 @@ class ImageCreationService
         }
 
         $userId = (int) Auth::id();
+
+        if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
+            throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
+        }
+
         $model = AppSettings::resolveImageModel($model);
         $size = is_string($size) && GptImageOptions::isValidSize($size) ? $size : null;
         $imageDetail = is_string($imageDetail) && GptImageOptions::isValidImageDetail($imageDetail) ? $imageDetail : null;
@@ -194,73 +200,77 @@ class ImageCreationService
             $size = GptImageOptions::size($aspectRatio, $resolution);
         }
 
-        return $this->activityLock->run($userId, fn (): GeneratedMedia => DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution, $model, $metadata) {
-            if (! User::query()->whereKey($userId)->lockForUpdate()->exists()) {
-                throw new \InvalidArgumentException('Tài khoản không còn tồn tại.');
-            }
+        try {
+            return $this->activityLock->run($userId, fn (): GeneratedMedia => DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution, $model, $metadata) {
+                if (! User::query()->whereKey($userId)->lockForUpdate()->exists()) {
+                    throw new \InvalidArgumentException('Tài khoản không còn tồn tại.');
+                }
 
-            if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
-                throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
-            }
+                if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
+                    throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
+                }
 
-            $prompt = trim($prompt);
+                $prompt = trim($prompt);
 
-            if ($prompt === '') {
-                throw new \InvalidArgumentException('Prompt là bắt buộc.');
-            }
+                if ($prompt === '') {
+                    throw new \InvalidArgumentException('Prompt là bắt buộc.');
+                }
 
-            $parent = $parentId
-                ? GeneratedMedia::query()->where('user_id', $userId)->find($parentId)
-                : null;
+                $parent = $parentId
+                    ? GeneratedMedia::query()->where('user_id', $userId)->find($parentId)
+                    : null;
 
-            if ($parentId && ! $parent) {
-                throw new \InvalidArgumentException('Không tìm thấy ảnh gốc để chỉnh sửa.');
-            }
+                if ($parentId && ! $parent) {
+                    throw new \InvalidArgumentException('Không tìm thấy ảnh gốc để chỉnh sửa.');
+                }
 
-            $parentReferenceUploads = $parent
-                ? $this->storeParentReferenceUploads($parent, $parentReferenceIndexes)
-                : [];
-            $referenceImageIds = array_slice(array_values(array_unique(array_map('intval', $referenceImageIds))), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads)));
-            $referenceUploads = $this->storeReferenceImageUploads($referenceImageIds);
-            $photos = array_slice(array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile)), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads) - count($referenceUploads)));
-            $pendingUploads = [...$parentReferenceUploads, ...$referenceUploads, ...$this->storePendingUploads($photos)];
-            $photo = $photos[0] ?? null;
-            $safeMetadata = collect($metadata)->only([
-                'generation_mode',
-                'reference_roles',
-                'intent_summary',
-                'prompt_contract',
-                'preflight_confidence',
-            ])->all();
+                $parentReferenceUploads = $parent
+                    ? $this->storeParentReferenceUploads($parent, $parentReferenceIndexes)
+                    : [];
+                $referenceImageIds = array_slice(array_values(array_unique(array_map('intval', $referenceImageIds))), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads)));
+                $referenceUploads = $this->storeReferenceImageUploads($referenceImageIds);
+                $photos = array_slice(array_values(array_filter($photos, fn ($item) => $item instanceof UploadedFile)), 0, max(0, AppSettings::maxReferencePhotos() - count($parentReferenceUploads) - count($referenceUploads)));
+                $pendingUploads = [...$parentReferenceUploads, ...$referenceUploads, ...$this->storePendingUploads($photos)];
+                $photo = $photos[0] ?? null;
+                $safeMetadata = collect($metadata)->only([
+                    'generation_mode',
+                    'reference_roles',
+                    'intent_summary',
+                    'prompt_contract',
+                    'preflight_confidence',
+                ])->all();
 
-            return GeneratedMedia::create([
-                'user_id' => $userId,
-                'parent_id' => $parent?->id,
-                'visitor_key' => $this->visitorKey($request),
-                'ip_address' => $request->ip(),
-                'prompt' => $prompt,
-                'source' => is_string($metadata['source'] ?? null) ? Str::limit($metadata['source'], 120, '') : 'web',
-                'provider' => AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai')),
-                'model' => $model,
-                'preset' => is_string($metadata['preset'] ?? null) ? Str::limit($metadata['preset'], 120, '') : null,
-                'status' => 'pending',
-                'request_meta' => array_filter([
-                    'upload_name' => $photo?->getClientOriginalName(),
-                    'upload_mime' => $photo?->getClientMimeType(),
-                    'upload_size' => $photo?->getSize(),
-                    'upload_count' => count($pendingUploads),
-                    'reference_image_ids' => array_values(array_filter(array_map(fn (array $upload) => $upload['image_id'] ?? null, $referenceUploads))),
-                    'parent_prompt' => $parent?->prompt,
-                    'pending_uploads' => $pendingUploads,
-                    'aspect_ratio' => $aspectRatio,
-                    'resolution' => $resolution,
-                    'size' => $size,
-                    'image_detail' => $imageDetail,
-                    'progress' => 'queued',
-                    ...$safeMetadata,
-                ], fn (mixed $value): bool => $value !== null),
-            ]);
-        }));
+                return GeneratedMedia::create([
+                    'user_id' => $userId,
+                    'parent_id' => $parent?->id,
+                    'visitor_key' => $this->visitorKey($request),
+                    'ip_address' => $request->ip(),
+                    'prompt' => $prompt,
+                    'source' => is_string($metadata['source'] ?? null) ? Str::limit($metadata['source'], 120, '') : 'web',
+                    'provider' => AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai')),
+                    'model' => $model,
+                    'preset' => is_string($metadata['preset'] ?? null) ? Str::limit($metadata['preset'], 120, '') : null,
+                    'status' => 'pending',
+                    'request_meta' => array_filter([
+                        'upload_name' => $photo?->getClientOriginalName(),
+                        'upload_mime' => $photo?->getClientMimeType(),
+                        'upload_size' => $photo?->getSize(),
+                        'upload_count' => count($pendingUploads),
+                        'reference_image_ids' => array_values(array_filter(array_map(fn (array $upload) => $upload['image_id'] ?? null, $referenceUploads))),
+                        'parent_prompt' => $parent?->prompt,
+                        'pending_uploads' => $pendingUploads,
+                        'aspect_ratio' => $aspectRatio,
+                        'resolution' => $resolution,
+                        'size' => $size,
+                        'image_detail' => $imageDetail,
+                        'progress' => 'queued',
+                        ...$safeMetadata,
+                    ], fn (mixed $value): bool => $value !== null),
+                ]);
+            }));
+        } catch (LockTimeoutException) {
+            throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
+        }
     }
 
     public function cancelPending(GeneratedMedia $image): bool

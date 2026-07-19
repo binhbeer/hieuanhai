@@ -17,6 +17,8 @@ use App\Models\User;
 use App\Services\ImageCreationService;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
+use App\Support\UserActivityLock;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\Request;
@@ -220,6 +222,28 @@ class ImageCreationServiceTest extends TestCase
             'model' => 'cx/gpt-5.5-image',
             'status' => 'pending',
         ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
+
+        $editor->createPending($request, [], 'Ảnh khác');
+    }
+
+    public function test_pending_image_lock_timeout_returns_concurrency_message(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $activityLock = $this->mock(UserActivityLock::class, function ($mock) use ($user): void {
+            $mock->shouldReceive('run')
+                ->once()
+                ->with($user->id, \Mockery::type('callable'))
+                ->andThrow(new LockTimeoutException);
+        });
+        $editor = app(ImageCreationService::class);
+        $request = Request::create('/', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $session = new Store('test', new ArraySessionHandler(120));
+        $session->start();
+        $request->setLaravelSession($session);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
