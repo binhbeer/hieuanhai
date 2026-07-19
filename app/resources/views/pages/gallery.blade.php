@@ -214,18 +214,23 @@ new #[Title('AI Gallery')] class extends Component {
 					@endif
 				</div>
 				<div class="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
-					<div class="min-w-0 flex-1 sm:w-72 sm:flex-none">
-						<flux:input
-							wire:model.live.debounce.300ms="search"
-							type="search"
-							size="sm"
-							:placeholder="__('Search images...')"
-							:aria-label="__('Search images')"
-							clearable
-						>
-							<x-slot name="icon"><x-iconsax-two-search-normal class="size-4" /></x-slot>
-						</flux:input>
-					</div>
+					<form class="flex min-w-0 flex-1 items-center gap-2 sm:flex-none" action="{{ route('gallery.index') }}" method="GET" x-data="{ query: @js($search) }">
+						<div class="min-w-0 flex-1 sm:w-72 sm:flex-none">
+							<flux:input
+								x-model="query"
+								name="q"
+								type="search"
+								size="sm"
+								:placeholder="__('Search images...')"
+								class="[&_input::-webkit-search-cancel-button]:appearance-none"
+								:aria-label="__('Search images')"
+								clearable
+							>
+								<x-slot name="icon"><x-iconsax-two-search-normal class="size-4" /></x-slot>
+							</flux:input>
+						</div>
+						<flux:button x-show="query.trim()" x-cloak type="submit" size="sm" variant="primary" square :aria-label="__('Search')"><x-iconsax-two-search-normal class="size-4" /></flux:button>
+					</form>
 					<flux:tabs class="shrink-0" variant="segmented" size="sm">
 						<flux:tab wire:click="$set('sort', 'new')" :selected="$sort === 'new'">{{ __('New') }}</flux:tab>
 						<flux:tab wire:click="$set('sort', 'featured')" :selected="$sort === 'featured'">{{ __('Featured') }}</flux:tab>

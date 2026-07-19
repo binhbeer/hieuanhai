@@ -298,12 +298,6 @@ new #[Title('User guide')] class extends Component {
     $chipClass = $isApiGuide
         ? 'rounded-full border border-amber-200/90 bg-white/80 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:border-white/15 dark:bg-white/5 dark:text-zinc-300'
         : 'rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 dark:border-white/15 dark:bg-white/5 dark:text-zinc-300';
-    $ctaBox = $isApiGuide
-        ? 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10'
-        : 'border-violet-200 bg-violet-50 dark:border-violet-400/20 dark:bg-violet-400/10';
-    $cardHover = $isApiGuide
-        ? 'group-hover:border-amber-400/50'
-        : 'group-hover:border-violet-400/50';
     $navActive = $isApiGuide
         ? 'bg-amber-100 text-amber-950 dark:bg-amber-400 dark:text-amber-950'
         : 'bg-zinc-100 text-zinc-950 dark:bg-white dark:text-zinc-950';
@@ -362,19 +356,18 @@ new #[Title('User guide')] class extends Component {
                     </div>
                     <div class="mt-6 grid gap-4 sm:grid-cols-2">
                         @foreach (array_slice($guidePages, 1, null, true) as $name => $page)
-                            <a class="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 {{ $focusRing }} focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-800" href="{{ route($name) }}" wire:navigate>
-                                <flux:card class="h-full transition group-hover:-translate-y-0.5 {{ $cardHover }} group-hover:shadow-lg">
-                                    <div class="flex items-start gap-4">
-                                        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl {{ $name === 'guide.api' ? 'bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300' : 'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300' }}">
-                                            <flux:icon :name="$page['icon']" class="size-5" />
-                                        </span>
-                                        <div>
-                                            <flux:heading level="3" size="lg">{{ $page['label'] }}</flux:heading>
-                                            <flux:text class="mt-2 leading-6!">{{ $page['description'] }}</flux:text>
-                                            <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium {{ $name === 'guide.api' ? 'text-amber-700 dark:text-amber-300' : 'text-violet-600 dark:text-violet-300' }}">{{ __('Open guide') }} <flux:icon.arrow-right class="size-4 transition group-hover:translate-x-0.5" /></span>
-                                        </div>
-                                    </div>
-                                </flux:card>
+                            @php($pathColor = $name === 'guide.api' ? 'amber' : 'violet')
+                            <a class="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 {{ $focusRing }} focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-800" href="{{ route($name) }}" wire:navigate>
+                                <flux:callout class="h-full transition group-hover:-translate-y-0.5 group-hover:shadow-lg">
+                                    <x-slot name="icon">
+                                        <flux:icon :name="$page['icon']" class="size-5 {{ $pathColor === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-violet-600 dark:text-violet-400' }}" />
+                                    </x-slot>
+                                    <flux:callout.heading>{{ $page['label'] }}</flux:callout.heading>
+                                    <flux:callout.text>
+                                        <p>{{ $page['description'] }}</p>
+                                        <p class="mt-3 inline-flex items-center gap-1 font-medium {{ $pathColor === 'amber' ? 'text-amber-700 dark:text-amber-300' : 'text-violet-600 dark:text-violet-300' }}">{{ __('Open guide') }} <flux:icon.arrow-right class="size-4 transition group-hover:translate-x-0.5" /></p>
+                                    </flux:callout.text>
+                                </flux:callout>
                             </a>
                         @endforeach
                     </div>
@@ -385,18 +378,19 @@ new #[Title('User guide')] class extends Component {
                         <flux:heading id="faq-heading" level="2" size="xl">{{ __('Common questions') }}</flux:heading>
                         <flux:text class="mt-2 text-base! leading-7!">{{ __('Clear answers for the decisions that affect privacy, usage, and security.') }}</flux:text>
                     </div>
-                    @foreach ($faqs as [$question, $answer])
-                        <details class="group rounded-2xl border border-zinc-200 bg-white p-5 open:shadow-sm dark:border-white/10 dark:bg-white/5">
-                            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-zinc-950 focus-visible:outline-none focus-visible:ring-2 {{ $focusRing }} dark:text-white">
-                                {{ $question }}
-                                <flux:icon.chevron-down class="size-5 shrink-0 text-zinc-500 transition group-open:rotate-180" aria-hidden="true" />
-                            </summary>
-                            <p class="mt-4 max-w-3xl leading-7 text-zinc-600 dark:text-zinc-300">{{ $answer }}</p>
-                        </details>
-                    @endforeach
+                    <flux:accordion transition>
+                        @foreach ($faqs as [$question, $answer])
+                            <flux:accordion.item :heading="$question">
+                                {{ $answer }}
+                            </flux:accordion.item>
+                        @endforeach
+                    </flux:accordion>
                 </section>
 
-                <flux:callout variant="secondary" icon="lifebuoy">
+                <flux:callout>
+                    <x-slot name="icon">
+                        <flux:icon name="lifebuoy" class="size-5 text-violet-600 dark:text-violet-400" />
+                    </x-slot>
                     <flux:callout.heading>{{ __('Still need help?') }}</flux:callout.heading>
                     <flux:callout.text>{{ __('Open the relevant image or request log first. Its current status and safe error message usually identify the next step.') }}</flux:callout.text>
                 </flux:callout>
@@ -409,22 +403,24 @@ new #[Title('User guide')] class extends Component {
 
                 <div class="space-y-6">
                     @foreach ($content['sections'] as $section)
-                        <article id="{{ $section['id'] }}" class="scroll-mt-6 rounded-2xl border border-zinc-200 bg-white p-5 sm:p-7 dark:border-white/10 dark:bg-white/5">
-                            <div class="flex items-start gap-4 sm:gap-5">
-                                <span class="flex size-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold {{ $isApiGuide ? 'bg-amber-500 text-white' : 'bg-zinc-200 text-zinc-800 dark:bg-white dark:text-zinc-950' }}">{{ $section['number'] }}</span>
-                                <div class="min-w-0">
-                                    <flux:heading level="2" size="xl">{{ $section['title'] }}</flux:heading>
-                                    <p class="mt-3 leading-7 text-zinc-600 dark:text-zinc-300">{{ $section['body'] }}</p>
-                                    <ul class="mt-5 space-y-2">
+                        <article id="{{ $section['id'] }}" class="scroll-mt-6">
+                            <flux:callout>
+                                <x-slot name="icon">
+                                    <span class="inline-flex size-5 items-center justify-center rounded text-[10px] font-semibold leading-none {{ $isApiGuide ? 'bg-amber-500 text-white' : 'bg-violet-600 text-white' }}">{{ $section['number'] }}</span>
+                                </x-slot>
+                                <flux:callout.heading>{{ $section['title'] }}</flux:callout.heading>
+                                <flux:callout.text>
+                                    <p>{{ $section['body'] }}</p>
+                                    <ul class="mt-4 space-y-2">
                                         @foreach ($section['tips'] as $tip)
-                                            <li class="flex items-start gap-2.5 text-sm leading-6 text-zinc-700 dark:text-zinc-200">
-                                                <flux:icon.check-circle class="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                                            <li class="flex items-start gap-2.5">
+                                                <flux:icon.check-circle class="mt-0.5 size-4 shrink-0 {{ $isApiGuide ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400' }}" aria-hidden="true" />
                                                 <span>{{ $tip }}</span>
                                             </li>
                                         @endforeach
                                     </ul>
-                                </div>
-                            </div>
+                                </flux:callout.text>
+                            </flux:callout>
                         </article>
                     @endforeach
                 </div>
@@ -447,7 +443,10 @@ new #[Title('User guide')] class extends Component {
   -F "model=cx/gpt-5.5-image" \
   -F "images[]=@/path/to/reference.jpg"</code></pre>
                     </div>
-                    <flux:callout variant="warning" icon="shield-check">
+                    <flux:callout>
+                        <x-slot name="icon">
+                            <flux:icon name="shield-check" class="size-5 text-amber-600 dark:text-amber-400" />
+                        </x-slot>
                         <flux:callout.heading>{{ __('Protect the token') }}</flux:callout.heading>
                         <flux:callout.text>{{ __('The example uses a placeholder. Keep the real key in a server-side secret manager or environment variable, never in client-side code.') }}</flux:callout.text>
                     </flux:callout>
@@ -476,29 +475,34 @@ new #[Title('User guide')] class extends Component {
                 </figure>
             @endforeach
 
-            <section class="rounded-3xl border p-6 sm:p-8 {{ $ctaBox }}" aria-labelledby="guide-next-step">
-                <flux:heading id="guide-next-step" level="2" size="xl">{{ __('Ready for the next step?') }}</flux:heading>
-                <flux:text class="mt-2 max-w-2xl leading-7!">{{ __('Put the guide into practice, or continue with the next topic when you need a deeper workflow.') }}</flux:text>
-                <div class="mt-5 flex flex-wrap gap-3">
-                    @if ($isApiGuide)
-                        @auth
-                            <flux:button type="button" variant="primary" color="amber" icon="key" x-data x-on:click="$dispatch('open-account-modal', { component: 'settings.api-key' })">{{ __('Open API key') }}</flux:button>
+            <section aria-labelledby="guide-next-step">
+                <flux:callout>
+                    <x-slot name="icon">
+                        <flux:icon :name="$isApiGuide ? 'key' : 'sparkles'" class="size-5 {{ $isApiGuide ? 'text-amber-600 dark:text-amber-400' : 'text-violet-600 dark:text-violet-400' }}" />
+                    </x-slot>
+                    <flux:callout.heading id="guide-next-step">{{ __('Ready for the next step?') }}</flux:callout.heading>
+                    <flux:callout.text>{{ __('Put the guide into practice, or continue with the next topic when you need a deeper workflow.') }}</flux:callout.text>
+                    <x-slot name="actions">
+                        @if ($isApiGuide)
+                            @auth
+                                <flux:button type="button" variant="primary" color="amber" icon="key" x-data x-on:click="$dispatch('open-account-modal', { component: 'settings.api-key' })">{{ __('Open API key') }}</flux:button>
+                            @else
+                                <flux:button type="button" variant="primary" color="amber" icon="key" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in for an API key') }}</flux:button>
+                            @endauth
                         @else
-                            <flux:button type="button" variant="primary" color="amber" icon="key" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in for an API key') }}</flux:button>
-                        @endauth
-                    @else
-                        @auth
-                            <flux:modal.trigger name="image-composer">
-                                <flux:button type="button" variant="primary" color="emerald" icon="sparkles" x-data x-on:click="$dispatch('open-image-composer')">{{ __('Create image') }}</flux:button>
-                            </flux:modal.trigger>
-                        @else
-                            <flux:button type="button" variant="primary" color="emerald" icon="sparkles" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in to create images') }}</flux:button>
-                        @endauth
-                    @endif
-                    @if ($routeName !== 'guide.faq')
-                        <flux:button :href="route('guide.faq')" variant="ghost" icon:trailing="arrow-right" wire:navigate>{{ __('Read common questions') }}</flux:button>
-                    @endif
-                </div>
+                            @auth
+                                <flux:modal.trigger name="image-composer">
+                                    <flux:button type="button" variant="primary" color="emerald" icon="sparkles" x-data x-on:click="$dispatch('open-image-composer')">{{ __('Create image') }}</flux:button>
+                                </flux:modal.trigger>
+                            @else
+                                <flux:button type="button" variant="primary" color="emerald" icon="sparkles" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">{{ __('Log in to create images') }}</flux:button>
+                            @endauth
+                        @endif
+                        @if ($routeName !== 'guide.faq')
+                            <flux:button :href="route('guide.faq')" variant="ghost" icon:trailing="arrow-right" wire:navigate>{{ __('Read common questions') }}</flux:button>
+                        @endif
+                    </x-slot>
+                </flux:callout>
             </section>
         </div>
     </div>

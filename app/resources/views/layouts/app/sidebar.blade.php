@@ -138,8 +138,32 @@
 			<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 			<x-app-logo class="ms-1 lg:hidden" href="{{ route('home') }}" wire:navigate />
 
+			<form class="hidden w-full max-w-lg items-center gap-2 lg:flex" action="{{ route('gallery.index') }}" method="GET" x-data="{ query: @js(request()->query('q', '')) }">
+				<div class="min-w-0 flex-1">
+					<flux:input x-model="query" name="q" type="search" size="sm" :placeholder="__('Search images...')" :aria-label="__('Search images')">
+						<x-slot name="icon"><x-iconsax-two-search-normal class="size-4" /></x-slot>
+					</flux:input>
+				</div>
+				<flux:button x-show="query.trim()" x-cloak type="submit" size="sm" variant="primary" square :aria-label="__('Search')"><x-iconsax-two-search-normal class="size-4" /></flux:button>
+			</form>
+
 			<flux:spacer />
 			<div class="flex items-center gap-2">
+				<flux:dropdown class="lg:hidden" position="bottom" align="end" x-data x-on:click="$nextTick(() => $refs.gallerySearch?.focus())">
+					<flux:button type="button" size="sm" variant="ghost" square :aria-label="__('Search')">
+						<x-slot name="icon"><x-iconsax-two-search-normal class="size-5" /></x-slot>
+					</flux:button>
+					<flux:popover class="w-[calc(100vw-1.5rem)] max-w-sm p-3">
+						<form class="flex items-center gap-2" action="{{ route('gallery.index') }}" method="GET" x-data="{ query: @js(request()->query('q', '')) }">
+							<div class="min-w-0 flex-1">
+								<flux:input x-ref="gallerySearch" x-model="query" name="q" type="search" :placeholder="__('Search images...')" :aria-label="__('Search images')" autofocus>
+									<x-slot name="icon"><x-iconsax-two-search-normal class="size-4" /></x-slot>
+								</flux:input>
+							</div>
+							<flux:button x-show="query.trim()" x-cloak type="submit" variant="primary" square :aria-label="__('Search')"><x-iconsax-two-search-normal class="size-4" /></flux:button>
+						</form>
+					</flux:popover>
+				</flux:dropdown>
 				@unless (auth()->user()?->isAdmin() && \App\Support\LocalizedRoute::is('manage.*'))
 					<flux:dropdown position="bottom" align="end">
 						<flux:button size="sm" variant="ghost" square aria-label="{{ __('Create image') }}" tooltip="{{ __('Create image') }}" tooltip:position="bottom">
