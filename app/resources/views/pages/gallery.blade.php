@@ -44,6 +44,12 @@ new #[Title('AI Gallery')] class extends Component {
 		unset($this->images);
 	}
 
+	public function updatedSort(): void
+	{
+		$this->perPage = 36;
+		unset($this->images);
+	}
+
 	#[On('gallery-updated')]
 	public function refreshGallery(): void
 	{
@@ -207,17 +213,23 @@ new #[Title('AI Gallery')] class extends Component {
 						<p class="mt-2 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">{{ $category?->description ?? $tag?->description }}</p>
 					@endif
 				</div>
-				<div class="w-full sm:w-72 sm:shrink-0">
-					<flux:input
-						wire:model.live.debounce.300ms="search"
-						type="search"
-						size="sm"
-						:placeholder="__('Search images...')"
-						:aria-label="__('Search images')"
-						clearable
-					>
-						<x-slot name="icon"><x-iconsax-two-search-normal class="size-4" /></x-slot>
-					</flux:input>
+				<div class="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
+					<div class="min-w-0 flex-1 sm:w-72 sm:flex-none">
+						<flux:input
+							wire:model.live.debounce.300ms="search"
+							type="search"
+							size="sm"
+							:placeholder="__('Search images...')"
+							:aria-label="__('Search images')"
+							clearable
+						>
+							<x-slot name="icon"><x-iconsax-two-search-normal class="size-4" /></x-slot>
+						</flux:input>
+					</div>
+					<flux:tabs class="shrink-0" variant="segmented" size="sm">
+						<flux:tab wire:click="$set('sort', 'new')" :selected="$sort === 'new'">{{ __('New') }}</flux:tab>
+						<flux:tab wire:click="$set('sort', 'featured')" :selected="$sort === 'featured'">{{ __('Featured') }}</flux:tab>
+					</flux:tabs>
 				</div>
 			</div>
 

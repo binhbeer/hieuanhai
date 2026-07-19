@@ -61,7 +61,14 @@ new #[Title('Quick')] class extends Component {
                     </div>
                     <span class="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-300/15 dark:text-amber-200"><x-iconsax-two-hierarchy class="size-5" /></span>
                 </div>
-                <p class="mt-5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{{ __('Upload a photo to get three edits based on what is visible. Review the suggestion before creating the result.') }}</p>
+                <ol class="mt-5 space-y-4 text-sm">
+                    @foreach ([__('Click to upload a photo'), __('Click to pick the right tool'), __('Click to edit and get it now')] as $index => $label)
+                        <li class="flex items-start gap-3">
+                            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950">{{ $index + 1 }}</span>
+                            <span class="pt-0.5 text-zinc-600 dark:text-zinc-300">{{ $label }}</span>
+                        </li>
+                    @endforeach
+                </ol>
             </div>
         @endif
     </section>

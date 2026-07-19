@@ -289,15 +289,6 @@ new class extends Component
                                         <flux:button type="button" size="xs" variant="filled" icon="x-mark" wire:click="removePhoto({{ $index }})" :aria-label="__('Remove reference image :number', ['number' => $index + 1])" />
                                     </div>
                                 </div>
-                                @if (count($photos) > 1)
-                                    <div class="p-1.5">
-                                        <flux:select wire:model.live="roles.{{ $index }}" :aria-label="__('Image role')">
-                                            @foreach (\App\Support\QuickEditTools::roles() as $role)
-                                                <flux:select.option :value="$role">{{ __(ucfirst($role)) }}</flux:select.option>
-                                            @endforeach
-                                        </flux:select>
-                                    </div>
-                                @endif
                             </article>
                         @endforeach
                     </x-image-upload-grid>

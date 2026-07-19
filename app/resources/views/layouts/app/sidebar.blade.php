@@ -14,12 +14,6 @@
 
 		@php($sidebarCategories = \App\Models\Category::query()->active()->when(app()->getLocale() === 'en', fn($query) => $query->englishReady())->ordered()->get())
 		@php($selectedSidebarCategory = request()->route('category'))
-		@php($gallerySearch = is_string(request('q')) ? trim(request('q')) : '')
-		@php($gallerySort = is_string(request('sort')) && in_array(request('sort'), ['featured', 'new', 'popular'], true) ? request('sort') : 'new')
-		@php($galleryBaseUrl = $selectedSidebarCategory instanceof \App\Models\Category ? route('categories.show', $selectedSidebarCategory) : (\App\Support\LocalizedRoute::is('tags.show') ? route('tags.show', request()->route('tag')) : route('gallery.index')))
-		@php($isGalleryRoute = \App\Support\LocalizedRoute::is('gallery.index', 'categories.show', 'tags.show'))
-		@php($galleryTabUrl = fn(string $sort) => ($query = array_filter(['q' => $gallerySearch !== '' ? $gallerySearch : null, 'sort' => $sort === 'new' ? null : $sort], fn($value) => filled($value))) === [] ? $galleryBaseUrl : $galleryBaseUrl . '?' . http_build_query($query))
-
 		<div class="min-h-0 flex-1 overflow-y-auto">
 			@if (auth()->user()?->isAdmin() && \App\Support\LocalizedRoute::is('manage.*'))
 				<flux:sidebar.nav>
@@ -143,20 +137,6 @@
 		<flux:header class="sticky top-0 border-b border-zinc-200 bg-white/70 px-3! md:px-4! dark:border-zinc-700 dark:bg-zinc-900/70 backdrop-blur border-none">
 			<flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 			<x-app-logo class="ms-1 lg:hidden" href="{{ route('home') }}" wire:navigate />
-
-			@if ($isGalleryRoute)
-				<flux:tabs class="ms-2 hidden sm:inline-flex" variant="segmented" size="sm">
-					<flux:tab :href="$galleryTabUrl('new')" :selected="$gallerySort === 'new'" wire:navigate>
-						{{ __('New') }}
-					</flux:tab>
-					{{-- <flux:tab :href="$galleryTabUrl('popular')" :selected="$gallerySort === 'popular'" wire:navigate>
-																														{{ __('Popular') }}
-					</flux:tab> --}}
-					<flux:tab :href="$galleryTabUrl('featured')" :selected="$gallerySort === 'featured'" wire:navigate>
-						{{ __('Featured') }}
-					</flux:tab>
-				</flux:tabs>
-			@endif
 
 			<flux:spacer />
 			<div class="flex items-center gap-2">

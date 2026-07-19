@@ -41,14 +41,14 @@ new #[Lazy] class extends Component {
     {
         // Match loaded grid: 1 hero (2×2 from sm) + 6 tiles. Plain divs — flux:skeleton defaults to h-4.
         return <<<'HTML'
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-5" aria-hidden="true">
-                <div class="col-span-2 aspect-square w-full animate-pulse rounded-3xl bg-zinc-200 dark:bg-white/10 sm:row-span-2"></div>
-                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10"></div>
-                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10"></div>
-                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10"></div>
-                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10"></div>
-                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10"></div>
-                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10"></div>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-5 md:h-72 md:auto-rows-fr" aria-hidden="true">
+                <div class="col-span-2 aspect-square w-full animate-pulse rounded-3xl bg-zinc-200 dark:bg-white/10 sm:row-span-2 md:aspect-auto"></div>
+                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10 md:aspect-auto"></div>
+                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10 md:aspect-auto"></div>
+                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10 md:aspect-auto"></div>
+                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10 md:aspect-auto"></div>
+                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10 md:aspect-auto"></div>
+                <div class="aspect-square w-full animate-pulse rounded-2xl bg-zinc-200 dark:bg-white/10 md:aspect-auto"></div>
             </div>
             HTML;
     }
@@ -65,7 +65,7 @@ new #[Lazy] class extends Component {
             <flux:button class="mt-5" :href="route('gallery.index')" variant="filled" icon:trailing="arrow-up-right" wire:navigate>{{ __('Browse Gallery') }}</flux:button>
         </div>
     @else
-        <div class="grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="{{ __('Featured community images') }}">
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-5 md:h-72 md:auto-rows-fr" aria-label="{{ __('Featured community images') }}">
             @foreach ($this->images as $image)
                 @php($url = $this->imageUrl($image))
                 @php($imageSize = $this->imageSize())
@@ -77,7 +77,7 @@ new #[Lazy] class extends Component {
                         :detail-url="$this->detailUrl($image)"
                         :creator="$this->creatorName($image)"
                         loading="lazy"
-                        class="mb-0! aspect-square rounded-2xl! shadow-none first:col-span-2 first:rounded-3xl! sm:first:row-span-2 [&_a]:h-full [&_img]:h-full [&_img]:object-cover"
+                        class="mb-0! aspect-square rounded-2xl! shadow-none first:col-span-2 first:rounded-3xl! sm:first:row-span-2 md:aspect-auto [&_a]:h-full [&_img]:h-full [&_img]:object-cover"
                         wire:key="home-featured-image-{{ $image->id }}"
                     />
                 @endif

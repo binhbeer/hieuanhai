@@ -32,3 +32,4 @@ app/.git-backup/
 .DS_Store
 Thumbs.db
 app/.pnpm-store/
+app/composer.lock
