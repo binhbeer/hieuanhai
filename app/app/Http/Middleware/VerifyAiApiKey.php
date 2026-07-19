@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\ApiKey;
 use App\Models\User;
+use App\Support\UserActivityLock;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,6 +12,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class VerifyAiApiKey
 {
+    public function __construct(private UserActivityLock $activityLock) {}
+
     /**
      * @param  Closure(Request): Response  $next
      */
@@ -35,6 +38,10 @@ class VerifyAiApiKey
 
         if ($user->isBanned()) {
             return response()->json(['message' => 'This account has been suspended.'], 403);
+        }
+
+        if ($this->activityLock->deleting($user->id)) {
+            return $this->unauthorized();
         }
 
         $key->forceFill(['last_used_at' => now()])->save();

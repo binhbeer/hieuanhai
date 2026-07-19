@@ -3,41 +3,64 @@
 namespace App\Support;
 
 use App\Exceptions\AccountDeletedException;
-use Illuminate\Cache\Repository;
 use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
-use Throwable;
 
 class UserActivityLock
 {
     public const SECONDS = 1500;
 
-    /** @template T */
-    /** @param  callable(): T  $callback */
-    /** @return T */
-    public function run(int $userId, callable $callback): mixed
+    public function __construct(private ?Repository $repository = null) {}
+
+    /** @var array<int, int> */
+    private static array $held = [];
+
+    /**
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    public function run(int $userId, callable $callback, int $waitSeconds = 5): mixed
     {
         if ($this->deleting($userId)) {
             throw new AccountDeletedException;
         }
 
-        return $this->lock($userId)->block(self::SECONDS, function () use ($callback, $userId): mixed {
+        if (isset(self::$held[$userId])) {
+            return $callback();
+        }
+
+        return $this->lock($userId)->block($waitSeconds, function () use ($callback, $userId): mixed {
             if ($this->deleting($userId)) {
                 throw new AccountDeletedException;
             }
 
-            return $callback();
+            self::$held[$userId] = (self::$held[$userId] ?? 0) + 1;
+
+            try {
+                return $callback();
+            } finally {
+                if (--self::$held[$userId] === 0) {
+                    unset(self::$held[$userId]);
+                }
+            }
         });
     }
 
-    /** @template T */
-    /** @param  callable(): T  $callback */
-    /** @return T */
+    /**
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
     public function delete(int $userId, callable $callback): mixed
     {
         $cache = $this->cache();
         $marker = $this->marker($userId);
-        $cache->put($marker, true, self::SECONDS);
+        $cache->put($marker, true, self::SECONDS * 2);
 
         try {
             return $this->lock($userId)->block(self::SECONDS, $callback);
@@ -53,7 +76,13 @@ class UserActivityLock
 
     private function lock(int $userId): Lock
     {
-        return $this->cache()->lock('user-activity:'.$userId, self::SECONDS);
+        $store = $this->cache()->getStore();
+
+        if (! $store instanceof LockProvider) {
+            throw new \RuntimeException('Cache store does not support locks.');
+        }
+
+        return $store->lock('user-activity:'.$userId, self::SECONDS);
     }
 
     private function marker(int $userId): string
@@ -63,13 +92,6 @@ class UserActivityLock
 
     private function cache(): Repository
     {
-        try {
-            $store = Cache::store('redis');
-            $store->getStore()->lock('user-activity-probe')->release();
-
-            return $store;
-        } catch (Throwable) {
-            return Cache::store();
-        }
+        return $this->repository ?? Cache::store();
     }
 }

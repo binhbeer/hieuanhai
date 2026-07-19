@@ -3,9 +3,11 @@
 namespace App\Jobs;
 
 use App\Events\AiImageCompleted;
+use App\Exceptions\AccountDeletedException;
 use App\Models\GeneratedMedia;
 use App\Models\User;
 use App\Services\ImageCreationService;
+use App\Support\UserActivityLock;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -35,7 +37,26 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
         return 'image:'.$this->imageId;
     }
 
-    public function handle(ImageCreationService $service): void
+    public function handle(ImageCreationService $service, ?UserActivityLock $activityLock = null): void
+    {
+        $activityLock ??= app(UserActivityLock::class);
+
+        if ($this->userId !== null) {
+            try {
+                $activityLock->run($this->userId, function () use ($service): void {
+                    $this->complete($service);
+                }, UserActivityLock::SECONDS);
+            } catch (AccountDeletedException) {
+                $this->deleteAbandonedImageById();
+            }
+
+            return;
+        }
+
+        $this->complete($service);
+    }
+
+    private function complete(ImageCreationService $service): void
     {
         $image = (new GeneratedMedia)
             ->disableModelCaching()
@@ -123,6 +144,18 @@ class CreateAiImage implements ShouldBeUnique, ShouldQueue
         AiImageCompleted::dispatch($image);
 
         return true;
+    }
+
+    private function deleteAbandonedImageById(): void
+    {
+        $image = (new GeneratedMedia)
+            ->disableModelCaching()
+            ->newQuery()
+            ->find($this->imageId);
+
+        if ($image) {
+            $this->deleteAbandonedImage($image);
+        }
     }
 
     private function deleteAbandonedImage(GeneratedMedia $image): void

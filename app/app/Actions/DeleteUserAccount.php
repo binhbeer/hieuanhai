@@ -8,6 +8,8 @@ use App\Models\GeneratedMedia;
 use App\Models\MediaFavorite;
 use App\Models\StudioProject;
 use App\Models\User;
+use App\Support\UserActivityLock;
+use App\Support\UserSessionData;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -16,7 +18,19 @@ use Throwable;
 
 class DeleteUserAccount
 {
+    public function __construct(
+        private UserActivityLock $activityLock,
+        private UserSessionData $sessions,
+    ) {}
+
     public function __invoke(User $user): void
+    {
+        $this->activityLock->delete($user->id, function () use ($user): void {
+            $this->delete($user);
+        });
+    }
+
+    private function delete(User $user): void
     {
         [$mediaIds, $paths] = DB::transaction(function () use ($user): array {
             $user = User::query()->lockForUpdate()->find($user->id);
@@ -79,6 +93,8 @@ class DeleteUserAccount
         if ($paths !== [] && ! Storage::disk('public')->delete($paths)) {
             report(new RuntimeException('Không xóa được toàn bộ file của tài khoản.'));
         }
+
+        $this->sessions->delete($user->id);
     }
 
     /** @return array<int, int|string> */

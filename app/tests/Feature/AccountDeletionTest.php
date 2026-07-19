@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\DeleteUserAccount;
 use App\Events\AiImageCompleted;
+use App\Exceptions\AccountDeletedException;
 use App\Jobs\CreateAiImage;
 use App\Models\ApiKey;
 use App\Models\ApiRequest;
@@ -12,7 +13,10 @@ use App\Models\MediaFavorite;
 use App\Models\StudioProject;
 use App\Models\User;
 use App\Services\ImageCreationService;
+use App\Support\UserActivityLock;
+use App\Support\UserSessionData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
@@ -136,6 +140,43 @@ class AccountDeletionTest extends TestCase
         $this->assertNotNull($other->fresh());
         $this->assertNotNull($otherImage->fresh());
         $this->assertNotNull($otherProject->fresh());
+    }
+
+    public function test_deletion_marker_blocks_new_user_activity_until_cleanup_finishes(): void
+    {
+        config(['cache.stores.deletion-test' => ['driver' => 'array']]);
+        $cache = Cache::store('deletion-test');
+        $lock = new UserActivityLock($cache);
+        $ran = false;
+
+        $cache->put('user-deleting:42', true, 60);
+
+        try {
+            $lock->run(42, function () use (&$ran): void {
+                $ran = true;
+            });
+            $this->fail('Expected account deletion marker to block activity.');
+        } catch (AccountDeletedException) {
+            $this->assertFalse($ran);
+        } finally {
+            $cache->forget('user-deleting:42');
+        }
+    }
+
+    public function test_session_cleanup_always_removes_database_sessions(): void
+    {
+        $user = User::factory()->create();
+        DB::table('sessions')->insert([
+            'id' => 'cleanup-session',
+            'user_id' => $user->id,
+            'payload' => 'payload',
+            'last_activity' => time(),
+        ]);
+        config(['session.driver' => 'array']);
+
+        app(UserSessionData::class)->delete($user->id);
+
+        $this->assertDatabaseMissing('sessions', ['id' => 'cleanup-session']);
     }
 
     public function test_queued_job_after_account_deletion_cleans_abandoned_row_and_upload(): void

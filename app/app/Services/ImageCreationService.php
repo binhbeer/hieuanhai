@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Support\AppSettings;
 use App\Support\GptImageOptions;
 use App\Support\QuickEditTools;
+use App\Support\UserActivityLock;
 use GdImage;
 use GeneaLabs\LaravelModelCaching\CachedBuilder;
 use Illuminate\Contracts\Support\Arrayable;
@@ -42,6 +43,8 @@ use Throwable;
 
 class ImageCreationService
 {
+    public function __construct(protected UserActivityLock $activityLock) {}
+
     public const ERROR_IMAGE_REVIEW_SEXUAL = 1001;
 
     public const ERROR_IMAGE_REVIEW_POLITICAL = 1002;
@@ -68,6 +71,18 @@ class ImageCreationService
      * @param  array<int, mixed>  $photos
      */
     public function create(Request $request, array $photos, string $prompt, ?string $model = null): GeneratedMedia
+    {
+        $userId = Auth::id();
+
+        if ($userId !== null) {
+            return $this->activityLock->run((int) $userId, fn (): GeneratedMedia => $this->createImage($request, $photos, $prompt, $model));
+        }
+
+        return $this->createImage($request, $photos, $prompt, $model);
+    }
+
+    /** @param  array<int, mixed>  $photos */
+    private function createImage(Request $request, array $photos, string $prompt, ?string $model): GeneratedMedia
     {
         $prompt = trim($prompt);
 
@@ -179,8 +194,10 @@ class ImageCreationService
             $size = GptImageOptions::size($aspectRatio, $resolution);
         }
 
-        return DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution, $model, $metadata) {
-            User::query()->whereKey($userId)->lockForUpdate()->first();
+        return $this->activityLock->run($userId, fn (): GeneratedMedia => DB::transaction(function () use ($request, $photos, $prompt, $referenceImageIds, $parentId, $parentReferenceIndexes, $userId, $size, $imageDetail, $aspectRatio, $resolution, $model, $metadata) {
+            if (! User::query()->whereKey($userId)->lockForUpdate()->exists()) {
+                throw new \InvalidArgumentException('Tài khoản không còn tồn tại.');
+            }
 
             if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
                 throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
@@ -243,7 +260,7 @@ class ImageCreationService
                     ...$safeMetadata,
                 ], fn (mixed $value): bool => $value !== null),
             ]);
-        });
+        }));
     }
 
     public function cancelPending(GeneratedMedia $image): bool
@@ -284,8 +301,10 @@ class ImageCreationService
 
         $userId = (int) $image->user_id;
 
-        return DB::transaction(function () use ($image, $request, $userId) {
-            User::query()->whereKey($userId)->lockForUpdate()->first();
+        return $this->activityLock->run($userId, fn (): GeneratedMedia => DB::transaction(function () use ($image, $request, $userId) {
+            if (! User::query()->whereKey($userId)->lockForUpdate()->exists()) {
+                throw new \InvalidArgumentException('Tài khoản không còn tồn tại.');
+            }
 
             if (GeneratedMedia::query()->where('user_id', $userId)->where('status', 'pending')->exists()) {
                 throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
@@ -313,7 +332,7 @@ class ImageCreationService
             ]);
 
             return $image->refresh();
-        });
+        }));
     }
 
     public function completePending(GeneratedMedia $image): GeneratedMedia

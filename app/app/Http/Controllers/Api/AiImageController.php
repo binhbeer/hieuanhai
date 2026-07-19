@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\AccountDeletedException;
 use App\Http\Controllers\Controller;
 use App\Models\ApiKey;
 use App\Models\ApiRequest;
@@ -11,6 +12,7 @@ use App\Models\Tag;
 use App\Services\ImageCreationService;
 use App\Support\AppSettings;
 use App\Support\LocalizedRoute;
+use App\Support\UserActivityLock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -20,6 +22,8 @@ use Throwable;
 
 class AiImageController extends Controller
 {
+    public function __construct(private UserActivityLock $activityLock) {}
+
     public function store(Request $request, ImageCreationService $editor): JsonResponse
     {
         return $this->storeImage($request, $editor, publish: false);
@@ -146,21 +150,29 @@ class AiImageController extends Controller
         $image = null;
 
         try {
-            $files = $request->file('images', []);
-            $photos = is_array($files) ? array_values($files) : [$files];
-            $requestedModel = $request->filled('model') ? (string) $request->string('model') : null;
-            $image = $editor->create($request, $photos, (string) $request->string('prompt'), $requestedModel);
+            return $this->activityLock->run($key->user_id, function () use ($editor, $key, $publish, $request, $startedAt, &$image): JsonResponse {
+                if (! $key->fresh()) {
+                    throw new AccountDeletedException;
+                }
 
-            if ($publish) {
-                $image = $editor->publish($image, $request, requireOwner: false);
-            }
+                $files = $request->file('images', []);
+                $photos = is_array($files) ? array_values($files) : [$files];
+                $requestedModel = $request->filled('model') ? (string) $request->string('model') : null;
+                $image = $editor->create($request, $photos, (string) $request->string('prompt'), $requestedModel);
 
-            $key->increment('quota_used');
-            $key->refresh();
+                if ($publish) {
+                    $image = $editor->publish($image, $request, requireOwner: false);
+                }
 
-            $this->logRequest($key, $request, $startedAt, 201, 'succeeded', true, $image->id, null, $this->responseMeta($image, $publish));
+                $key->increment('quota_used');
+                $key->refresh();
 
-            return response()->json($this->responsePayload($image, $editor, $key, $publish), 201);
+                $this->logRequest($key, $request, $startedAt, 201, 'succeeded', true, $image->id, null, $this->responseMeta($image, $publish));
+
+                return response()->json($this->responsePayload($image, $editor, $key, $publish), 201);
+            });
+        } catch (AccountDeletedException) {
+            return response()->json(['message' => 'The API key is invalid.'], 401);
         } catch (\InvalidArgumentException $e) {
             $errorCode = match ($e->getCode()) {
                 ImageCreationService::ERROR_IMAGE_REVIEW_SEXUAL => 'IMAGE_REVIEW_BLOCKED_SEXUAL',
@@ -345,6 +357,10 @@ class AiImageController extends Controller
         ?string $error,
         array $responseMeta = [],
     ): void {
+        if (! $key->exists || ! ApiKey::query()->whereKey($key->id)->exists()) {
+            return;
+        }
+
         ApiRequest::create([
             'api_key_id' => $key->id,
             'user_id' => $key->user_id,

@@ -73,96 +73,100 @@ class StudioImageService extends ImageCreationService
             throw new \InvalidArgumentException('Hãy tải lên ảnh sản phẩm chính.');
         }
 
-        $createdPendingPaths = [];
+        return $this->activityLock->run($user->id, function () use ($request, $project, $outputs, $aspectRatio, $resolution, $imageDetail, $model, $inputPaths, $user): Collection {
+            $createdPendingPaths = [];
 
-        try {
-            return DB::transaction(function () use ($request, $project, $outputs, $aspectRatio, $resolution, $imageDetail, $model, $inputPaths, $user, &$createdPendingPaths): Collection {
-                $lockedProject = StudioProject::query()
-                    ->where('user_id', $user->id)
-                    ->lockForUpdate()
-                    ->find($project->id);
+            try {
+                return DB::transaction(function () use ($request, $project, $outputs, $aspectRatio, $resolution, $imageDetail, $model, $inputPaths, $user, &$createdPendingPaths): Collection {
+                    if (! User::query()->whereKey($user->id)->lockForUpdate()->exists()) {
+                        throw new \InvalidArgumentException('Tài khoản không còn tồn tại.');
+                    }
 
-                if (! $lockedProject) {
-                    throw new \InvalidArgumentException('Không tìm thấy dự án.');
-                }
+                    $lockedProject = StudioProject::query()
+                        ->where('user_id', $user->id)
+                        ->lockForUpdate()
+                        ->find($project->id);
 
-                User::query()->whereKey($user->id)->lockForUpdate()->first();
+                    if (! $lockedProject) {
+                        throw new \InvalidArgumentException('Không tìm thấy dự án.');
+                    }
 
-                $mediaQuery = (new GeneratedMedia)->disableModelCaching()->newQuery();
+                    $mediaQuery = (new GeneratedMedia)->disableModelCaching()->newQuery();
 
-                if ($mediaQuery->clone()->where('user_id', $user->id)->where('status', 'pending')->exists()) {
-                    throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
-                }
+                    if ($mediaQuery->clone()->where('user_id', $user->id)->where('status', 'pending')->exists()) {
+                        throw new \InvalidArgumentException('Bạn đang có ảnh đang tạo. Vui lòng chờ ảnh hiện tại hoàn tất.');
+                    }
 
-                $usedToday = $mediaQuery
-                    ->where('user_id', $user->id)
-                    ->whereIn('status', ['pending', 'succeeded'])
-                    ->where('created_at', '>=', now()->startOfDay())
-                    ->count();
+                    $usedToday = $mediaQuery
+                        ->where('user_id', $user->id)
+                        ->whereIn('status', ['pending', 'succeeded'])
+                        ->where('created_at', '>=', now()->startOfDay())
+                        ->count();
 
-                if (! $user->isAdmin() && $usedToday + count($outputs) > $this->dailyLimit()) {
-                    throw new \InvalidArgumentException('Bạn không còn đủ lượt tạo ảnh hôm nay cho dự án này.');
-                }
+                    if (! $user->isAdmin() && $usedToday + count($outputs) > $this->dailyLimit()) {
+                        throw new \InvalidArgumentException('Bạn không còn đủ lượt tạo ảnh hôm nay cho dự án này.');
+                    }
 
-                $provider = AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai'));
-                $size = GptImageOptions::size($aspectRatio, $resolution);
-                $version = max(0, (int) (new GeneratedMedia)->disableModelCaching()->newQuery()
-                    ->where('studio_project_id', $lockedProject->id)
-                    ->get(['request_meta'])
-                    ->max(fn (GeneratedMedia $media): int => max(1, (int) data_get($media->request_meta, 'version', 1)))) + 1;
-                $images = new Collection;
+                    $provider = AppSettings::string('ai.image_provider', (string) config('ai.default_for_images', 'openai'));
+                    $size = GptImageOptions::size($aspectRatio, $resolution);
+                    $version = max(0, (int) (new GeneratedMedia)->disableModelCaching()->newQuery()
+                        ->where('studio_project_id', $lockedProject->id)
+                        ->get(['request_meta'])
+                        ->max(fn (GeneratedMedia $media): int => max(1, (int) data_get($media->request_meta, 'version', 1)))) + 1;
+                    $images = new Collection;
 
-                foreach ($outputs as $output) {
-                    $pendingUploads = $this->copyInputs($inputPaths);
-                    $referenceRoles = array_column($pendingUploads, 'role');
-                    $createdPendingPaths = [...$createdPendingPaths, ...array_column($pendingUploads, 'path')];
-                    $image = GeneratedMedia::create([
-                        'user_id' => $user->id,
-                        'studio_project_id' => $lockedProject->id,
-                        'visitor_key' => $this->visitorKey($request),
-                        'ip_address' => $request->ip(),
-                        'title' => trim($output['title']),
-                        'preset' => $lockedProject->tool,
-                        'prompt' => trim($output['prompt']),
-                        'custom_prompt' => is_string(data_get($lockedProject->form_data, 'notes')) ? trim((string) data_get($lockedProject->form_data, 'notes')) : null,
-                        'source' => 'web',
-                        'provider' => $provider,
-                        'model' => $model,
-                        'status' => 'pending',
-                        'request_meta' => [
-                            'upload_count' => count($pendingUploads),
-                            'pending_uploads' => $pendingUploads,
-                            'generation_mode' => 'studio',
-                            'reference_roles' => $referenceRoles,
-                            'prompt_contract' => $lockedProject->tool === 'product-detail' ? 'product-detail-v2' : null,
-                            'aspect_ratio' => $aspectRatio,
-                            'resolution' => $resolution,
-                            'size' => $size,
-                            'image_detail' => $imageDetail,
-                            'tool' => $lockedProject->tool,
-                            'version' => $version,
-                            'output_type' => $output['output_type'],
-                            'progress' => 'queued',
-                        ],
-                    ]);
+                    foreach ($outputs as $output) {
+                        $pendingUploads = $this->copyInputs($inputPaths);
+                        $referenceRoles = array_column($pendingUploads, 'role');
+                        $createdPendingPaths = [...$createdPendingPaths, ...array_column($pendingUploads, 'path')];
+                        $image = GeneratedMedia::create([
+                            'user_id' => $user->id,
+                            'studio_project_id' => $lockedProject->id,
+                            'visitor_key' => $this->visitorKey($request),
+                            'ip_address' => $request->ip(),
+                            'title' => trim($output['title']),
+                            'preset' => $lockedProject->tool,
+                            'prompt' => trim($output['prompt']),
+                            'custom_prompt' => is_string(data_get($lockedProject->form_data, 'notes')) ? trim((string) data_get($lockedProject->form_data, 'notes')) : null,
+                            'source' => 'web',
+                            'provider' => $provider,
+                            'model' => $model,
+                            'status' => 'pending',
+                            'request_meta' => [
+                                'upload_count' => count($pendingUploads),
+                                'pending_uploads' => $pendingUploads,
+                                'generation_mode' => 'studio',
+                                'reference_roles' => $referenceRoles,
+                                'prompt_contract' => $lockedProject->tool === 'product-detail' ? 'product-detail-v2' : null,
+                                'aspect_ratio' => $aspectRatio,
+                                'resolution' => $resolution,
+                                'size' => $size,
+                                'image_detail' => $imageDetail,
+                                'tool' => $lockedProject->tool,
+                                'version' => $version,
+                                'output_type' => $output['output_type'],
+                                'progress' => 'queued',
+                            ],
+                        ]);
 
-                    CreateAiImage::dispatch($image->id, $image->user_id)->afterCommit();
-                    $images->push($image);
-                }
+                        CreateAiImage::dispatch($image->id, $image->user_id)->afterCommit();
+                        $images->push($image);
+                    }
 
-                if ($lockedProject->submitted_at === null) {
-                    $lockedProject->submitted_at = Carbon::now();
-                }
+                    if ($lockedProject->submitted_at === null) {
+                        $lockedProject->submitted_at = Carbon::now();
+                    }
 
-                $lockedProject->save();
+                    $lockedProject->save();
 
-                return $images;
-            });
-        } catch (Throwable $e) {
-            Storage::disk('public')->delete($createdPendingPaths);
+                    return $images;
+                });
+            } catch (Throwable $e) {
+                Storage::disk('public')->delete($createdPendingPaths);
 
-            throw $e;
-        }
+                throw $e;
+            }
+        });
     }
 
     /**
