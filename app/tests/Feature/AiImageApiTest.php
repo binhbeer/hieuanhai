@@ -12,6 +12,8 @@ use App\Models\Setting;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\AppSettings;
+use App\Support\UserActivityLock;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\UploadedFile;
@@ -110,6 +112,36 @@ class AiImageApiTest extends TestCase
             'status' => 'succeeded',
             'quota_charged' => true,
         ]);
+    }
+
+    public function test_api_returns_conflict_for_overlapping_image_request_without_charging_quota(): void
+    {
+        [$plain, $key] = $this->apiKey(quotaLimit: 2);
+        $this->mock(UserActivityLock::class, function ($mock) use ($key): void {
+            $mock->shouldReceive('deleting')->once()->with($key->user_id)->andReturnFalse();
+            $mock->shouldReceive('run')
+                ->once()
+                ->with($key->user_id, \Mockery::type('callable'))
+                ->andThrow(new LockTimeoutException);
+        });
+
+        $this
+            ->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images/publish', ['prompt' => 'Create a public portrait'])
+            ->assertConflict()
+            ->assertJson([
+                'message' => 'Another image request is already in progress. Please try again later.',
+                'error_code' => 'IMAGE_CREATION_IN_PROGRESS',
+            ]);
+
+        $this->assertSame(0, $key->refresh()->quota_used);
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
+            'status_code' => 409,
+            'status' => 'conflict',
+            'quota_charged' => false,
+        ]);
+        $this->assertSame('IMAGE_CREATION_IN_PROGRESS', data_get(ApiRequest::query()->latest('id')->firstOrFail()->response_meta, 'error_code'));
     }
 
     public function test_api_accepts_enabled_model_and_rejects_disabled_model_without_charging_quota(): void

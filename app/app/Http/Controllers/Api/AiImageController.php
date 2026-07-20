@@ -13,6 +13,7 @@ use App\Services\ImageCreationService;
 use App\Support\AppSettings;
 use App\Support\LocalizedRoute;
 use App\Support\UserActivityLock;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -173,6 +174,16 @@ class AiImageController extends Controller
             });
         } catch (AccountDeletedException) {
             return response()->json(['message' => 'The API key is invalid.'], 401);
+        } catch (LockTimeoutException) {
+            $message = 'Another image request is already in progress. Please try again later.';
+            $this->logRequest($key, $request, $startedAt, 409, 'conflict', false, null, $message, [
+                'error_code' => 'IMAGE_CREATION_IN_PROGRESS',
+            ]);
+
+            return response()->json([
+                'message' => $message,
+                'error_code' => 'IMAGE_CREATION_IN_PROGRESS',
+            ], 409);
         } catch (\InvalidArgumentException $e) {
             $errorCode = match ($e->getCode()) {
                 ImageCreationService::ERROR_IMAGE_REVIEW_SEXUAL => 'IMAGE_REVIEW_BLOCKED_SEXUAL',
