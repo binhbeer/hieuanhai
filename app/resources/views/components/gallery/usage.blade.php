@@ -48,7 +48,7 @@ new class extends Component {
 @auth
     @if ($buttonOnly)
         <flux:sidebar.item :href="route('history.index')" :current="\App\Support\LocalizedRoute::is('history.*')" wire:navigate>
-            <x-slot name="icon"><x-iconsax-two-gallery-tick class="size-4" /></x-slot>
+            <x-slot name="icon"><x-iconsax-two-direct-inbox class="size-4" /></x-slot>
             {{ __(':count images created', ['count' => number_format($this->userImageCount)]) }}
         </flux:sidebar.item>
     @else

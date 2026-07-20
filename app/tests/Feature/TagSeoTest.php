@@ -60,6 +60,20 @@ class TagSeoTest extends TestCase
         $this->assertSame('Mô tả ngắn nhưng hợp lệ.', $tag->fresh()->description);
     }
 
+    public function test_tag_description_job_uses_safe_copy_when_ai_returns_empty_output(): void
+    {
+        Setting::putValue('ai.openai_api_key', 'test-key');
+        TagDescriptionAgent::fake([[]]);
+        $tag = Tag::create(['name' => 'brownie', 'slug' => 'brownie']);
+        $tag->setTranslation('name', 'en', 'brownie')->save();
+
+        (new GenerateTagDescription($tag->id))->handle();
+
+        $tag->refresh();
+        $this->assertSame('Bộ sưu tập brownie tổng hợp hình ảnh theo chủ đề, giúp bạn tham khảo phong cách, bố cục và ý tưởng sáng tạo phù hợp.', $tag->getTranslationWithoutFallback('description', 'vi'));
+        $this->assertSame('The brownie collection brings together themed images to help you explore useful styles, compositions, and creative ideas.', $tag->getTranslationWithoutFallback('description', 'en'));
+    }
+
     public function test_publishing_queues_descriptions_only_for_new_tags(): void
     {
         Bus::fake([GenerateTagDescription::class]);

@@ -95,13 +95,13 @@
 				<flux:sidebar.group class="grid">
 					@auth
 						<flux:sidebar.item :href="route('favorites.index')" :current="\App\Support\LocalizedRoute::is('favorites.*')" wire:navigate>
-							<x-slot name="icon"><x-iconsax-two-gallery-favorite class="size-4" /></x-slot>
+							<x-slot name="icon"><x-iconsax-two-heart-tick class="size-4" /></x-slot>
 							{{ __('Favorite images') }}
 						</flux:sidebar.item>
 						<livewire:gallery.usage :button-only="true" />
 					@else
 						<flux:sidebar.item as="button" type="button" x-data x-on:click="$dispatch('open-account-modal', { component: 'auth.login' })">
-							<x-slot name="icon"><x-iconsax-two-gallery-favorite class="size-4" /></x-slot>
+							<x-slot name="icon"><x-iconsax-two-heart-tick class="size-4" /></x-slot>
 							{{ __('Favorite images') }}
 						</flux:sidebar.item>
 					@endauth

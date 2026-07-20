@@ -93,7 +93,12 @@ class GenerateTagDescription implements ShouldBeUnique, ShouldQueue
             ->toString();
 
         if ($description === '') {
-            throw new RuntimeException('AI trả về description tag rỗng.');
+            $description = Str::limit("Bộ sưu tập {$tag->name} tổng hợp hình ảnh theo chủ đề, giúp bạn tham khảo phong cách, bố cục và ý tưởng sáng tạo phù hợp.", 160, '');
+        }
+
+        if ($descriptionEn === '') {
+            $name = $tag->getTranslationWithoutFallback('name', 'en') ?: $tag->name;
+            $descriptionEn = Str::limit("The {$name} collection brings together themed images to help you explore useful styles, compositions, and creative ideas.", 160, '');
         }
 
         $tag->refresh();
