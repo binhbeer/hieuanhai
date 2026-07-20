@@ -142,7 +142,7 @@ class AiImageController extends Controller
         $audit = null;
 
         try {
-            return $this->activityLock->runApi($key->user_id, $key->user->api_image_concurrency_limit, function () use ($editor, $key, $publish, $request, $startedAt, &$audit, &$image): JsonResponse {
+            return $this->activityLock->runApi($key->user_id, $key->user->api_image_concurrency_limit ?? 1, function () use ($editor, $key, $publish, $request, $startedAt, &$audit, &$image): JsonResponse {
                 $audit = $this->reserveQuota($key, $request, $startedAt);
 
                 if (! $audit) {

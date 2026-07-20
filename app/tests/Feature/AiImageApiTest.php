@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Ai\ImageMetadataAgent;
 use App\Ai\ImageReviewAgent;
+use App\Http\Controllers\Api\AiImageController;
 use App\Models\ApiKey;
 use App\Models\ApiRequest;
 use App\Models\Category;
@@ -11,11 +12,13 @@ use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\Tag;
 use App\Models\User;
+use App\Services\ImageCreationService;
 use App\Support\AppSettings;
 use App\Support\UserActivityLock;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -72,6 +75,25 @@ class AiImageApiTest extends TestCase
             ->postJson('/api/ai/images')
             ->assertUnprocessable()
             ->assertJsonValidationErrors('prompt');
+    }
+
+    public function test_api_defaults_null_user_concurrency_limit_to_one(): void
+    {
+        $user = User::factory()->make(['id' => 10]);
+        $user->forceFill(['api_image_concurrency_limit' => null]);
+        $key = new ApiKey(['user_id' => $user->id]);
+        $key->setRelation('user', $user);
+        $request = Request::create('/api/ai/images/publish', 'POST', ['prompt' => 'Create a public portrait']);
+        $request->attributes->set('ai_api_key', $key);
+        $lock = \Mockery::mock(UserActivityLock::class);
+        $lock->shouldReceive('runApi')
+            ->once()
+            ->with($user->id, 1, \Mockery::type('callable'))
+            ->andReturn(response()->json(['status' => 'accepted'], 202));
+
+        $response = (new AiImageController($lock))->storeAndPublish($request, \Mockery::mock(ImageCreationService::class));
+
+        $this->assertSame(202, $response->getStatusCode());
     }
 
     public function test_valid_api_key_creates_image_and_logs_request(): void
