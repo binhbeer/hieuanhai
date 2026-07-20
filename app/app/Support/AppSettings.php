@@ -107,18 +107,9 @@ class AppSettings
     /**
      * @return array<int, mixed>
      */
-    public static function promptRules(string $tooManyWordsMessage): array
+    public static function promptRules(): array
     {
-        return [
-            'required',
-            'string',
-            'max:12000',
-            function (string $attribute, mixed $value, \Closure $fail) use ($tooManyWordsMessage): void {
-                if (preg_match_all('/[\p{L}\p{N}]+/u', (string) $value) > 1200) {
-                    $fail($tooManyWordsMessage);
-                }
-            },
-        ];
+        return ['required', 'string', 'max:2000'];
     }
 
     /** @return list<string> */

@@ -16,6 +16,7 @@ use App\Support\UserActivityLock;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -118,17 +119,6 @@ class AiImageController extends Controller
             return response()->json(['message' => 'The API key is invalid.'], 401);
         }
 
-        if (! $key->hasQuota()) {
-            $this->logRequest($key, $request, $startedAt, 429, 'quota_exceeded', false, null, 'The API key quota has been exhausted.', [
-                'quota' => $this->quotaPayload($key),
-            ]);
-
-            return response()->json([
-                'message' => 'The API key quota has been exhausted.',
-                'quota' => $this->quotaPayload($key),
-            ], 429);
-        }
-
         $validator = Validator::make($request->all(), [
             'prompt' => $this->promptRules(),
             'source' => ['sometimes', 'nullable', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:-]+$/'],
@@ -149,11 +139,22 @@ class AiImageController extends Controller
         }
 
         $image = null;
+        $audit = null;
 
         try {
-            return $this->activityLock->run($key->user_id, function () use ($editor, $key, $publish, $request, $startedAt, &$image): JsonResponse {
-                if (! $key->fresh()) {
-                    throw new AccountDeletedException;
+            return $this->activityLock->runApi($key->user_id, $key->user->api_image_concurrency_limit, function () use ($editor, $key, $publish, $request, $startedAt, &$audit, &$image): JsonResponse {
+                $audit = $this->reserveQuota($key, $request, $startedAt);
+
+                if (! $audit) {
+                    $key->refresh();
+                    $this->logRequest($key, $request, $startedAt, 429, 'quota_exceeded', false, null, 'The API key quota has been exhausted.', [
+                        'quota' => $this->quotaPayload($key),
+                    ]);
+
+                    return response()->json([
+                        'message' => 'The API key quota has been exhausted.',
+                        'quota' => $this->quotaPayload($key),
+                    ], 429);
                 }
 
                 $files = $request->file('images', []);
@@ -165,10 +166,7 @@ class AiImageController extends Controller
                     $image = $editor->publish($image, $request, requireOwner: false);
                 }
 
-                $key->increment('quota_used');
-                $key->refresh();
-
-                $this->logRequest($key, $request, $startedAt, 201, 'succeeded', true, $image->id, null, $this->responseMeta($image, $publish));
+                $key = $this->chargeAndFinalize($key, $audit, $image, $request, $startedAt, $publish);
 
                 return response()->json($this->responsePayload($image, $editor, $key, $publish), 201);
             });
@@ -194,7 +192,7 @@ class AiImageController extends Controller
             $statusCode = $errorCode === 'IMAGE_REVIEW_UNAVAILABLE' ? 503 : 422;
             $status = $statusCode === 503 ? 'failed' : 'validation_failed';
             $responseMeta = $errorCode ? ['error_code' => $errorCode] : [];
-            $this->logRequest($key, $request, $startedAt, $statusCode, $status, false, $image?->id, $e->getMessage(), $responseMeta);
+            $this->finalizeRequest($audit, $request, $startedAt, $statusCode, $status, $image?->id, $e->getMessage(), $responseMeta);
 
             $message = match ($errorCode) {
                 'IMAGE_REVIEW_BLOCKED_SEXUAL', 'IMAGE_REVIEW_BLOCKED_POLITICAL' => 'The prompt is not eligible for image generation or publication.',
@@ -208,8 +206,7 @@ class AiImageController extends Controller
             ]), $statusCode);
         } catch (Throwable $e) {
             report($e);
-
-            $this->logRequest($key, $request, $startedAt, 500, 'failed', false, $image?->id, $e->getMessage());
+            $this->finalizeRequest($audit, $request, $startedAt, 500, 'failed', $image?->id, $e->getMessage());
 
             return response()->json(['message' => 'Could not create an image right now. Please try again later.'], 500);
         }
@@ -256,7 +253,7 @@ class AiImageController extends Controller
      */
     private function promptRules(): array
     {
-        return AppSettings::promptRules('The prompt may not exceed 1200 words.');
+        return AppSettings::promptRules();
     }
 
     /**
@@ -349,9 +346,109 @@ class AiImageController extends Controller
         ];
     }
 
+    private function reserveQuota(ApiKey $key, Request $request, float $startedAt): ?ApiRequest
+    {
+        return DB::transaction(function () use ($key, $request, $startedAt): ?ApiRequest {
+            $lockedKey = (new ApiKey)
+                ->disableModelCaching()
+                ->newQuery()
+                ->lockForUpdate()
+                ->find($key->id);
+
+            if (! $lockedKey) {
+                throw new AccountDeletedException;
+            }
+
+            $processing = ApiRequest::query()
+                ->where('api_key_id', $lockedKey->id)
+                ->where('status', 'processing')
+                ->count();
+
+            if ($lockedKey->quota_used + $processing >= $lockedKey->quota_limit) {
+                return null;
+            }
+
+            return ApiRequest::create([
+                'api_key_id' => $lockedKey->id,
+                'user_id' => $lockedKey->user_id,
+                'media_id' => null,
+                'ip_address' => $request->ip(),
+                'status_code' => 102,
+                'status' => 'processing',
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'quota_charged' => false,
+                'error' => null,
+                'request_meta' => $this->requestMeta($request),
+                'response_meta' => [],
+            ]);
+        });
+    }
+
+    private function chargeAndFinalize(ApiKey $key, ApiRequest $audit, GeneratedMedia $image, Request $request, float $startedAt, bool $publish): ApiKey
+    {
+        DB::transaction(function () use ($audit, $image, $request, $startedAt, $publish): void {
+            $lockedAudit = ApiRequest::query()->lockForUpdate()->findOrFail($audit->id);
+
+            if ($lockedAudit->status !== 'processing' || $lockedAudit->quota_charged) {
+                return;
+            }
+
+            $lockedKey = (new ApiKey)
+                ->disableModelCaching()
+                ->newQuery()
+                ->lockForUpdate()
+                ->findOrFail($lockedAudit->api_key_id);
+            $lockedKey->increment('quota_used');
+            $lockedAudit->update([
+                'media_id' => $image->id,
+                'status_code' => 201,
+                'status' => 'succeeded',
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'quota_charged' => true,
+                'error' => null,
+                'request_meta' => $this->requestMeta($request),
+                'response_meta' => $this->responseMeta($image, $publish),
+            ]);
+        });
+
+        return (new ApiKey)->disableModelCaching()->newQuery()->findOrFail($key->id);
+    }
+
+    /** @param array<string, mixed> $responseMeta */
+    private function finalizeRequest(?ApiRequest $audit, Request $request, float $startedAt, int $statusCode, string $status, ?int $imageId, ?string $error, array $responseMeta = []): void
+    {
+        if (! $audit || ! $audit->exists) {
+            return;
+        }
+
+        ApiRequest::query()
+            ->whereKey($audit->id)
+            ->where('status', 'processing')
+            ->update([
+                'media_id' => $imageId,
+                'status_code' => $statusCode,
+                'status' => $status,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'quota_charged' => false,
+                'error' => $error ? Str::limit($error, 2000, '') : null,
+                'request_meta' => json_encode($this->requestMeta($request), JSON_THROW_ON_ERROR),
+                'response_meta' => json_encode($responseMeta, JSON_THROW_ON_ERROR),
+                'updated_at' => now(),
+            ]);
+    }
+
     private function uploadCount(Request $request): int
     {
         return count((array) $request->file('images', []));
+    }
+
+    /** @return array<string, mixed> */
+    private function requestMeta(Request $request): array
+    {
+        return [
+            'upload_count' => $this->uploadCount($request),
+            'model' => $request->filled('model') ? (string) $request->string('model') : AppSettings::defaultImageModel(),
+        ];
     }
 
     /**
@@ -382,10 +479,7 @@ class AiImageController extends Controller
             'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             'quota_charged' => $quotaCharged,
             'error' => $error ? Str::limit($error, 2000, '') : null,
-            'request_meta' => [
-                'upload_count' => $this->uploadCount($request),
-                'model' => $request->filled('model') ? (string) $request->string('model') : AppSettings::defaultImageModel(),
-            ],
+            'request_meta' => $this->requestMeta($request),
             'response_meta' => $responseMeta,
         ]);
     }

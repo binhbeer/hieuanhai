@@ -37,6 +37,8 @@ use Illuminate\Support\Carbon;
 ])]
 class ApiRequest extends BaseModel
 {
+    public const STALE_AFTER_MINUTES = 25;
+
     /**
      * @return BelongsTo<ApiKey, $this>
      */

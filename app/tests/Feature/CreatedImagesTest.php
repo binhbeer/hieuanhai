@@ -10,6 +10,7 @@ use App\Ai\PromptTranslationAgent;
 use App\Events\AiImageCompleted;
 use App\Jobs\CreateAiImage;
 use App\Models\ApiKey;
+use App\Models\ApiRequest;
 use App\Models\GeneratedMedia;
 use App\Models\Setting;
 use App\Models\User;
@@ -670,6 +671,35 @@ class CreatedImagesTest extends TestCase
         $this->artisan('ai-images:recover-stale')->assertSuccessful();
 
         $this->assertSame('pending', $image->fresh()->status);
+    }
+
+    public function test_recover_stale_command_releases_processing_api_reservation(): void
+    {
+        $user = User::factory()->create();
+        $key = ApiKey::create([
+            'user_id' => $user->id,
+            'token_hash' => ApiKey::hashToken('stale-key'),
+            'token_prefix' => 'stale-key',
+            'quota_limit' => 2,
+            'quota_used' => 0,
+        ]);
+        ApiRequest::create([
+            'api_key_id' => $key->id,
+            'user_id' => $user->id,
+            'status_code' => 102,
+            'status' => 'processing',
+            'duration_ms' => 10,
+            'quota_charged' => false,
+        ])->forceFill(['updated_at' => now()->subMinutes(ApiRequest::STALE_AFTER_MINUTES + 1)])->save();
+
+        $this->artisan('ai-images:recover-stale')->assertSuccessful();
+
+        $this->assertDatabaseHas('api_requests', [
+            'api_key_id' => $key->id,
+            'status' => 'failed',
+            'status_code' => 500,
+            'quota_charged' => false,
+        ]);
     }
 
     public function test_create_image_job_broadcasts_completion_to_user(): void

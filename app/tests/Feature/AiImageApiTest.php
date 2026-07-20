@@ -119,9 +119,9 @@ class AiImageApiTest extends TestCase
         [$plain, $key] = $this->apiKey(quotaLimit: 2);
         $this->mock(UserActivityLock::class, function ($mock) use ($key): void {
             $mock->shouldReceive('deleting')->once()->with($key->user_id)->andReturnFalse();
-            $mock->shouldReceive('run')
+            $mock->shouldReceive('runApi')
                 ->once()
-                ->with($key->user_id, \Mockery::type('callable'))
+                ->with($key->user_id, 1, \Mockery::type('callable'))
                 ->andThrow(new LockTimeoutException);
         });
 
@@ -492,15 +492,12 @@ class AiImageApiTest extends TestCase
         ]);
     }
 
-    public function test_api_rejects_prompt_over_1200_words_without_charging_quota(): void
+    public function test_api_accepts_2000_character_prompt_and_rejects_2001_without_charging_quota(): void
     {
         [$plain, $key] = $this->apiKey(quotaLimit: 1);
 
-        $this
-            ->withHeader('Authorization', 'Bearer '.$plain)
-            ->postJson('/api/ai/images', [
-                'prompt' => str_repeat('mèo ', 1201),
-            ])
+        $this->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images', ['prompt' => str_repeat('a', 2001)])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('prompt');
 
@@ -512,6 +509,10 @@ class AiImageApiTest extends TestCase
             'status' => 'validation_failed',
             'quota_charged' => false,
         ]);
+        $this->assertFalse(validator(
+            ['prompt' => str_repeat('a', 2000)],
+            ['prompt' => AppSettings::promptRules()],
+        )->fails());
     }
 
     public function test_api_rejected_prompt_does_not_charge_quota_or_call_image_api(): void
@@ -607,6 +608,29 @@ class AiImageApiTest extends TestCase
             ->withHeader('Authorization', 'Bearer '.$token)
             ->postJson('/api/ai/images')
             ->assertTooManyRequests();
+    }
+
+    public function test_processing_reservation_blocks_last_quota_before_provider_call(): void
+    {
+        Http::fake();
+        [$plain, $key] = $this->apiKey(quotaLimit: 1);
+        ApiRequest::create([
+            'api_key_id' => $key->id,
+            'user_id' => $key->user_id,
+            'status_code' => 102,
+            'status' => 'processing',
+            'duration_ms' => 10,
+            'quota_charged' => false,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$plain)
+            ->postJson('/api/ai/images', ['prompt' => 'Try reserved quota'])
+            ->assertTooManyRequests()
+            ->assertJsonPath('quota.remaining', 1);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, $key->refresh()->quota_used);
+        $this->assertSame(1, ApiRequest::query()->where('status', 'processing')->count());
     }
 
     public function test_api_stops_when_lifetime_quota_is_exhausted(): void
@@ -711,6 +735,25 @@ class AiImageApiTest extends TestCase
         $key->refresh();
         $this->assertSame(20, $key->quota_limit);
         $this->assertSame(18, $key->quotaRemaining());
+    }
+
+    public function test_admin_can_set_user_api_image_concurrency_limit_from_one_to_ten(): void
+    {
+        $admin = User::factory()->create(['id' => 1]);
+        $user = User::factory()->create();
+
+        $component = Livewire::actingAs($admin)
+            ->test('pages::manage.user-edit', ['user' => $user])
+            ->assertSet('apiImageConcurrencyLimit', 1)
+            ->set('apiImageConcurrencyLimit', 10)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame(10, $user->refresh()->api_image_concurrency_limit);
+
+        $component->set('apiImageConcurrencyLimit', 0)->call('save')->assertHasErrors('apiImageConcurrencyLimit');
+        $component->set('apiImageConcurrencyLimit', 11)->call('save')->assertHasErrors('apiImageConcurrencyLimit');
+        $this->assertSame(10, $user->refresh()->api_image_concurrency_limit);
     }
 
     public function test_manage_users_list_shows_api_key_usage(): void
@@ -1235,7 +1278,7 @@ class AiImageApiTest extends TestCase
         Livewire::actingAs($key->user)
             ->test('settings.api-key')
             ->assertSee('Hướng dẫn sử dụng API')
-            ->assertSee('API chỉ nhận request qua subdomain API.')
+            ->assertSee('Request chạy đồng bộ và chỉ nhận qua subdomain API.')
             ->assertSee('POST')
             ->assertSee('https://api.'.parse_url((string) config('app.url'), PHP_URL_HOST).'/api/ai/images')
             ->assertDontSee(config('app.url').'/api/ai/images')

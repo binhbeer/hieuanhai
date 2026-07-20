@@ -26,6 +26,8 @@ new #[Title('Edit user')] class extends Component
 
     public string $role = 'user';
 
+    public int $apiImageConcurrencyLimit = 1;
+
     public bool $banned = false;
 
     public bool $verified = false;
@@ -52,6 +54,7 @@ new #[Title('Edit user')] class extends Component
         $this->name = $user->name;
         $this->email = $user->email;
         $this->role = $user->role?->value ?? 'user';
+        $this->apiImageConcurrencyLimit = $user->api_image_concurrency_limit;
         $this->banned = $user->banned_at !== null;
         $this->verified = $user->email_verified_at !== null;
         $this->syncApiKeyQuotaLimit();
@@ -88,6 +91,7 @@ new #[Title('Edit user')] class extends Component
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($this->user->id)],
             'role' => ['required', Rule::in(['admin', 'mod', 'user'])],
+            'apiImageConcurrencyLimit' => ['required', 'integer', 'min:1', 'max:10'],
             'banned' => ['boolean'],
             'verified' => ['boolean'],
             'password' => ['nullable', 'string', Password::default(), 'confirmed'],
@@ -97,6 +101,7 @@ new #[Title('Edit user')] class extends Component
             'name' => $validated['name'],
             'email' => $validated['email'],
             'role' => $validated['role'],
+            'api_image_concurrency_limit' => $validated['apiImageConcurrencyLimit'],
         ]);
 
         if ($this->user->id !== auth()->id() && $this->user->id !== 1) {
@@ -332,11 +337,14 @@ new #[Title('Edit user')] class extends Component
 			<flux:input wire:model="name" :label="__('Name')" required />
 			<flux:input wire:model="email" type="email" label="Email" required />
 
-			<flux:select wire:model="role" label="Role">
-				@foreach (['admin', 'mod', 'user'] as $roleOption)
-					<flux:select.option value="{{ $roleOption }}">{{ $this->roleLabel($roleOption) }}</flux:select.option>
-				@endforeach
-			</flux:select>
+			<div class="grid gap-4 sm:grid-cols-2">
+				<flux:select wire:model="role" label="Role">
+					@foreach (['admin', 'mod', 'user'] as $roleOption)
+						<flux:select.option value="{{ $roleOption }}">{{ $this->roleLabel($roleOption) }}</flux:select.option>
+					@endforeach
+				</flux:select>
+				<flux:input wire:model="apiImageConcurrencyLimit" type="number" min="1" max="10" :label="__('Concurrent image API requests')" :description="__('Maximum simultaneous create or publish requests for this account, from 1 to 10.')" required />
+			</div>
 
 			<div class="grid gap-4 sm:grid-cols-2">
 				<flux:checkbox wire:model="verified" :label="__('Verified')" />

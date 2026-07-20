@@ -15,6 +15,8 @@ use App\Models\User;
 use App\Services\ImageCreationService;
 use App\Support\UserActivityLock;
 use App\Support\UserSessionData;
+use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -156,6 +158,48 @@ class AccountDeletionTest extends TestCase
                 $ran = true;
             });
             $this->fail('Expected account deletion marker to block activity.');
+        } catch (AccountDeletedException) {
+            $this->assertFalse($ran);
+        } finally {
+            $cache->forget('user-deleting:42');
+        }
+    }
+
+    public function test_api_permit_limit_and_deletion_marker_are_enforced(): void
+    {
+        config(['cache.stores.deletion-test' => ['driver' => 'array']]);
+        $cache = Cache::store('deletion-test');
+        $lock = new UserActivityLock($cache);
+        $store = $cache->getStore();
+        $this->assertInstanceOf(LockProvider::class, $store);
+        $slotZero = $store->lock('user-api-image:42:0', UserActivityLock::SECONDS);
+        $slotOne = $store->lock('user-api-image:42:1', UserActivityLock::SECONDS);
+        $slotZero->get();
+        $this->assertTrue($lock->runApi(42, 2, fn (): bool => true));
+        $slotOne->get();
+
+        try {
+            $this->expectException(LockTimeoutException::class);
+            $lock->runApi(42, 2, fn (): bool => true);
+        } finally {
+            $slotOne->release();
+            $slotZero->release();
+        }
+    }
+
+    public function test_deletion_marker_blocks_new_api_permits(): void
+    {
+        config(['cache.stores.deletion-test' => ['driver' => 'array']]);
+        $cache = Cache::store('deletion-test');
+        $lock = new UserActivityLock($cache);
+        $ran = false;
+        $cache->put('user-deleting:42', true, 60);
+
+        try {
+            $lock->runApi(42, 2, function () use (&$ran): void {
+                $ran = true;
+            });
+            $this->fail('Expected account deletion marker to block API activity.');
         } catch (AccountDeletedException) {
             $this->assertFalse($ran);
         } finally {

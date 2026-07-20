@@ -220,7 +220,7 @@ new class extends Component
      */
     private function promptRules(): array
     {
-        return AppSettings::promptRules(__('Prompt must not exceed 1200 words.'));
+        return AppSettings::promptRules();
     }
 
     public function createImage(CreatorImageService $editor): void

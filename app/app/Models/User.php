@@ -34,6 +34,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $password
  * @property string|null $avatar_path
  * @property UserRole $role
+ * @property int $api_image_concurrency_limit
  * @property Carbon|null $banned_at
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
@@ -42,10 +43,15 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'password', 'role', 'banned_at'])]
+#[Fillable(['name', 'email', 'password', 'role', 'api_image_concurrency_limit', 'banned_at'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends BaseModel implements AuthenticatableContract, AuthorizableContract, CanResetPasswordContract, HasMedia, MustVerifyEmailContract, PasskeyUser
 {
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'api_image_concurrency_limit' => 1,
+    ];
+
     /** @use HasFactory<UserFactory> */
     use Authenticatable, Authorizable, CanResetPassword, HasFactory, InteractsWithMedia, MustVerifyEmail, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
@@ -65,6 +71,7 @@ class User extends BaseModel implements AuthenticatableContract, AuthorizableCon
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
+            'api_image_concurrency_limit' => 'integer',
             'banned_at' => 'datetime',
         ];
     }

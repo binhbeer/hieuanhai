@@ -127,7 +127,7 @@ new class extends Component {
                     </div>
 
                     @if ($newApiToken)
-                        <flux:callout variant="success" icon="check-circle" class="!py-2">
+                        <flux:callout variant="success" icon="check-circle" class="py-2!">
                             <flux:callout.text>{{ __('This replaces your old API key immediately.') }}</flux:callout.text>
                         </flux:callout>
                     @endif
@@ -236,8 +236,12 @@ new class extends Component {
         <div class="space-y-6">
             <div>
                 <flux:heading size="xl">{{ __('API usage guide') }}</flux:heading>
-                <flux:text class="mt-2">{{ __('Send JSON to create an image from a prompt, or multipart when reference images are included. Requests are accepted only through the API subdomain. Each successful request costs 1 quota.') }}</flux:text>
+                <flux:text class="mt-2">{{ __('Send JSON to create an image from a prompt, or multipart when reference images are included. Requests are synchronous and accepted only through the API subdomain. Concurrent create and publish requests share your account limit. Each successful request costs 1 quota; HTTP 409 responses do not consume quota.') }}</flux:text>
             </div>
+
+            <flux:callout variant="secondary" icon="bolt">
+                <flux:callout.text>{{ __('Concurrent request limit: :count', ['count' => auth()->user()->api_image_concurrency_limit ?? 1]) }}</flux:callout.text>
+            </flux:callout>
 
             <flux:callout variant="secondary" icon="code-bracket">
                 <flux:callout.heading>POST https://api.{{ parse_url((string) config('app.url'), PHP_URL_HOST) }}/api/ai/images</flux:callout.heading>
@@ -249,7 +253,7 @@ new class extends Component {
                 <div class="space-y-3 rounded-xl border border-zinc-200 p-4 dark:border-white/10">
                     <div class="flex items-start gap-3">
                         <flux:badge color="blue" size="sm">required</flux:badge>
-                        <flux:text><code class="font-medium text-zinc-800 dark:text-white">prompt</code> — {{ __('Image generation request, maximum 1200 words.') }}</flux:text>
+                        <flux:text><code class="font-medium text-zinc-800 dark:text-white">prompt</code> — {{ __('Image generation request, maximum 2,000 characters.') }}</flux:text>
                     </div>
                     <flux:separator />
                     <div class="flex items-start gap-3">

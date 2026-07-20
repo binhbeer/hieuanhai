@@ -212,10 +212,11 @@ new #[Title('User guide')] class extends Component {
                     'id' => 'request',
                     'number' => '02',
                     'title' => __('Send a generation request'),
-                    'body' => __('Use JSON for prompt-only requests or multipart form data when you include reference images. Requests are accepted only through the API subdomain. The prompt is required and accepts up to 1200 words.'),
+                    'body' => __('Use JSON for prompt-only requests or multipart form data when you include reference images. Requests are accepted only through the API subdomain. The prompt is required and accepts up to 2,000 characters.'),
                     'tips' => [
                         __('POST /api/ai/images creates a private image.'),
                         __('POST /api/ai/images/publish creates and publishes the result.'),
+                        __('Image API requests are synchronous. Concurrent requests share the account limit, and HTTP 409 responses do not consume quota.'),
                     ],
                 ],
                 [

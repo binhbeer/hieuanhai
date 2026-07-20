@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\CreateAiImage;
+use App\Models\ApiRequest;
 use App\Models\GeneratedMedia;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -33,11 +34,21 @@ class RecoverStaleAiImages extends Command
                 }
             });
 
-        if ($count > 0) {
-            Log::warning('Recovered stale AI image tasks.', ['count' => $count]);
+        $apiCount = ApiRequest::query()
+            ->where('status', 'processing')
+            ->where('updated_at', '<', now()->subMinutes(ApiRequest::STALE_AFTER_MINUTES))
+            ->update([
+                'status_code' => 500,
+                'status' => 'failed',
+                'error' => 'Image API request was interrupted.',
+                'updated_at' => now(),
+            ]);
+
+        if ($count > 0 || $apiCount > 0) {
+            Log::warning('Recovered stale AI image tasks.', ['count' => $count, 'api_request_count' => $apiCount]);
         }
 
-        $this->info("Recovered {$count} stale AI image task(s).");
+        $this->info("Recovered {$count} stale AI image task(s) and {$apiCount} API request(s).");
 
         return self::SUCCESS;
     }
