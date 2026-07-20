@@ -72,6 +72,8 @@ new #[Title('Studio')] class extends Component
 
     public ?string $errorMessage = null;
 
+    public bool $aiDataConsent = false;
+
     public function mount(): void
     {
         $this->imageModel = AppSettings::defaultImageModel();
@@ -295,6 +297,7 @@ new #[Title('Studio')] class extends Component
 
     public function submit(StudioImageService $generator, ImagePromptService $editor): void
     {
+        $this->requireAiDataConsent();
         $this->validateBasics();
 
         if ($this->tool === 'product-detail') {
@@ -722,6 +725,15 @@ new #[Title('Studio')] class extends Component
         }
 
         $this->validate($rules);
+    }
+
+    private function requireAiDataConsent(): void
+    {
+        $this->validate([
+            'aiDataConsent' => ['accepted'],
+        ], [
+            'aiDataConsent.accepted' => __('Confirm that GenAnh may send your prompt and images to the third-party AI image service before continuing.'),
+        ]);
     }
 
     private function validateImageTypes(): void

@@ -32,6 +32,30 @@ class LegalPagesTest extends TestCase
         }
     }
 
+    public function test_privacy_policy_discloses_third_party_ai_and_face_data(): void
+    {
+        $this->get(route('legal.privacy'))
+            ->assertOk()
+            ->assertSee(__('Third-party AI image processing'))
+            ->assertSee(__('Face data in uploaded photos'))
+            ->assertSee(__('Before GenAnh sends prompt or image data to the AI service, the app asks for your permission with an in-app consent control. If you do not agree, GenAnh will not send that request. Providers may process data in other countries under their safeguards and applicable law, and must use the data only to deliver contracted services.'))
+            ->assertSee(__('GenAnh does not use Face ID, TrueDepth, face geometry APIs, biometric templates, or facial recognition to identify people. The app does not create a faceprint or use face data for authentication, advertising, or surveillance.'))
+            ->assertSee(__('Last updated: July 20, 2026'));
+    }
+
+    public function test_creator_requires_ai_data_consent_before_create(): void
+    {
+        $user = User::factory()->create();
+
+        Livewire::actingAs($user)
+            ->test('gallery.creator')
+            ->set('showComposer', true)
+            ->set('prompt', 'a red bicycle on a sunny street')
+            ->set('aiDataConsent', false)
+            ->call('createImage')
+            ->assertHasErrors(['aiDataConsent']);
+    }
+
     public function test_english_legal_routes_use_public_slugs(): void
     {
         Setting::putValue('locales.en.enabled', true);

@@ -138,6 +138,7 @@ class QuickTest extends TestCase
             ->test('quick.composer')
             ->call('openComposer', 'restore-old-photo')
             ->set('photos', [UploadedFile::fake()->image('clear-photo.jpg')])
+            ->set('aiDataConsent', true)
             ->call('analyzeImages')
             ->assertHasNoErrors()
             ->assertSet('suggestions.0.tool', 'replace-background')
@@ -222,6 +223,7 @@ class QuickTest extends TestCase
             ->test('quick.composer')
             ->call('openComposer')
             ->set('photos', [UploadedFile::fake()->image('source.jpg')])
+            ->set('aiDataConsent', true)
             ->call('analyzeImages')
             ->assertSet('analyzed', true)
             ->set('newPhotos', [UploadedFile::fake()->image('reference.jpg')])
@@ -240,6 +242,7 @@ class QuickTest extends TestCase
             ->test('quick.composer')
             ->set('photos', [UploadedFile::fake()->image('source.jpg')])
             ->set('request', 'Đổi nền thành văn phòng sáng tự nhiên')
+            ->set('aiDataConsent', true)
             ->call('createImage')
             ->assertSet('errorMessage', __('Analyze the images before creating.'));
 
@@ -264,6 +267,7 @@ class QuickTest extends TestCase
             ->test('quick.composer')
             ->call('openComposer', 'remove-object')
             ->set('photos', [UploadedFile::fake()->image('source.jpg')])
+            ->set('aiDataConsent', true)
             ->call('analyzeImages')
             ->call('createImage')
             ->assertHasNoErrors()

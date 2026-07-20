@@ -155,6 +155,9 @@
                     </flux:menu>
                 </flux:dropdown>
             </div>
+            @if ($step >= $page->lastStep())
+                <x-ai-data-consent />
+            @endif
             <div class="flex gap-3">
                 @if ($step > 1)<flux:button class="w-28" type="button" wire:click="previousStep">{{ __('Back') }}</flux:button>@endif
                 @if ($step < $page->lastStep())

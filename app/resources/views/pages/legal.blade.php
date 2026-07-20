@@ -103,8 +103,19 @@ new #[Title('Legal information')] class extends Component {};
                 [__('Why we use information'), [
                     __('We use information to provide and secure accounts, create and deliver images, manage projects and quotas, operate public Gallery features, provide support, prevent abuse, diagnose failures, and comply with law.'),
                 ]],
+                [__('Third-party AI image processing'), [
+                    __('When you create, edit, analyze, rewrite, or translate image content, GenAnh sends the data needed for that request to a third-party AI image service that GenAnh configures. That data can include your text prompt or edit instruction and any images you upload or select as references for the request.'),
+                    __('The AI service receives this data only to run the model inference you requested and return a result to GenAnh. GenAnh does not sell this data. Hosting, storage, cache, email, security, and analytics providers may also process limited data on our behalf to operate the service.'),
+                    __('Before GenAnh sends prompt or image data to the AI service, the app asks for your permission with an in-app consent control. If you do not agree, GenAnh will not send that request. Providers may process data in other countries under their safeguards and applicable law, and must use the data only to deliver contracted services.'),
+                ]],
+                [__('Face data in uploaded photos'), [
+                    __('GenAnh does not use Face ID, TrueDepth, face geometry APIs, biometric templates, or facial recognition to identify people. The app does not create a faceprint or use face data for authentication, advertising, or surveillance.'),
+                    __('If you upload or select a photo that shows a person, that photo may contain a visible face or likeness. GenAnh treats this only as image pixels you chose to process for creative generation or editing. We do not extract biometric identifiers from faces.'),
+                    __('Use: face-containing photos are used only to fulfill the generation or edit you request, such as style changes, restoration, background changes, authorized face swap tools, or similar creative edits. Sharing: the photo and related prompt are sent to the third-party AI image service only for that request, and may be stored on GenAnh servers as your private content. Retention: content remains while your account exists or until you delete the image, project, or account; limited encrypted backups may remain until normal rotation or when law requires. Deletion: you can delete individual images or projects, or delete your account to remove active account content and associated files.'),
+                    __('You must only upload photos you own or are allowed to use. Do not upload another person’s photo for face-related edits without their permission.'),
+                ]],
                 [__('Service providers and transfers'), [
-                    __('Prompts and reference images needed for generation are sent to the AI provider configured by GenAnh. Hosting, storage, cache, email, security, and analytics providers may process limited data on our behalf.'),
+                    __('Besides the AI image service described above, hosting, storage, cache, email, security, and analytics providers may process limited data on our behalf.'),
                     __('Providers may process data in other countries under their safeguards and applicable law. We require providers to use data only to deliver contracted services.'),
                 ]],
                 [__('Sharing and public content'), [
@@ -116,7 +127,7 @@ new #[Title('Legal information')] class extends Component {};
                     __('Deleting your account removes active account data and associated files. Limited backup copies may remain until backup rotation completes or when retention is legally required.'),
                 ]],
                 [__('Your choices and contact'), [
-                    __('You can update account details, keep images private, unpublish content, delete individual images or projects, regenerate API keys, and permanently delete your account.'),
+                    __('You can decline AI processing consent and skip a request, update account details, keep images private, unpublish content, delete individual images or projects, regenerate API keys, and permanently delete your account.'),
                     __('Privacy questions and requests can be sent to info@genanh.com.'),
                 ]],
             ],
@@ -129,7 +140,7 @@ new #[Title('Legal information')] class extends Component {};
         <flux:badge color="amber">{{ $content['eyebrow'] }}</flux:badge>
         <h1 id="legal-title" class="text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl dark:text-white">{{ $content['title'] }}</h1>
         <p class="max-w-3xl text-base leading-7 text-zinc-600 dark:text-zinc-300">{{ $content['intro'] }}</p>
-        <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Last updated: July 19, 2026') }}</p>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Last updated: July 20, 2026') }}</p>
     </header>
 
     <nav aria-label="{{ __('Legal pages') }}" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

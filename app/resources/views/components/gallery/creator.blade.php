@@ -52,6 +52,8 @@ new class extends Component
 
     public string $imageModel = '';
 
+    public bool $aiDataConsent = false;
+
     public function mount(): void
     {
         $defaults = GptImageOptions::defaultsFromSettings();
@@ -178,6 +180,13 @@ new class extends Component
             return;
         }
 
+        if (! $this->aiDataConsent) {
+            $this->promptSourcePhoto = null;
+            $this->addError('aiDataConsent', __('Confirm that GenAnh may send your prompt and images to the third-party AI image service before continuing.'));
+
+            return;
+        }
+
         try {
             $this->prompt = $editor->promptFromImage($this->promptSourcePhoto);
             $this->errorMessage = null;
@@ -215,6 +224,15 @@ new class extends Component
         return AppSettings::maxReferencePhotos();
     }
 
+    private function requireAiDataConsent(): void
+    {
+        $this->validate([
+            'aiDataConsent' => ['accepted'],
+        ], [
+            'aiDataConsent.accepted' => __('Confirm that GenAnh may send your prompt and images to the third-party AI image service before continuing.'),
+        ]);
+    }
+
     /**
      * @return array<int, mixed>
      */
@@ -240,6 +258,8 @@ new class extends Component
 
         $this->errorMessage = null;
         $this->publishMessage = null;
+
+        $this->requireAiDataConsent();
 
         $this->validate([
             'prompt' => $this->promptRules(),
@@ -319,6 +339,8 @@ new class extends Component
             return;
         }
 
+        $this->requireAiDataConsent();
+
         $this->validate([
             'prompt' => array_replace($this->promptRules(), ['nullable']),
             'rewriteInstruction' => ['required_without:prompt', 'nullable', 'string', 'max:1000'],
@@ -349,6 +371,8 @@ new class extends Component
 
             return;
         }
+
+        $this->requireAiDataConsent();
 
         $this->validate(['prompt' => $this->promptRules()]);
 
@@ -778,6 +802,8 @@ new class extends Component
                             <flux:radio value="original" :label="__('High')" />
                         </flux:radio.group>
                     @endif
+
+                    <x-ai-data-consent />
 
                     <flux:button class="w-full" type="submit" variant="primary" color="emerald" wire:loading.attr="disabled" wire:target="newPhotos,createImage">
                         <span wire:loading.remove wire:target="newPhotos,createImage">{{ __('Create image') }}</span>

@@ -43,6 +43,8 @@ new class extends Component
 
     public ?string $errorMessage = null;
 
+    public bool $aiDataConsent = false;
+
     public function mount(): void
     {
         if (request()->boolean('composer')) {
@@ -94,6 +96,7 @@ new class extends Component
             return;
         }
 
+        $this->requireAiDataConsent();
         $this->validatePhotos();
         $this->resetAnalysis();
 
@@ -161,6 +164,7 @@ new class extends Component
             return;
         }
 
+        $this->requireAiDataConsent();
         $this->validateBaseInputs();
 
         try {
@@ -218,6 +222,15 @@ new class extends Component
         $this->analyzed = true;
         $this->errorMessage = null;
         $this->applyDefaultRoles($this->resolvedTool, true);
+    }
+
+    private function requireAiDataConsent(): void
+    {
+        $this->validate([
+            'aiDataConsent' => ['accepted'],
+        ], [
+            'aiDataConsent.accepted' => __('Confirm that GenAnh may send your prompt and images to the third-party AI image service before continuing.'),
+        ]);
     }
 
     private function validatePhotos(): void
@@ -317,6 +330,7 @@ new class extends Component
                     <flux:error name="photos.*" />
 
                     @if ($photos !== [])
+                        <x-ai-data-consent class="mb-3" />
                         <flux:button class="w-full" type="button" variant="outline" icon="sparkles" wire:click="analyzeImages" wire:loading.attr="disabled" wire:target="analyzeImages,newPhotos">
                             <span wire:loading.remove wire:target="analyzeImages">{{ $analyzed ? __('Analyze again') : __('Analyze image') }}</span>
                             <span wire:loading wire:target="analyzeImages">{{ __('Finding suitable edits...') }}</span>
